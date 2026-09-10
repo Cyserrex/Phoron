@@ -1,0 +1,91 @@
+using System;
+using System.IO;
+using System.Text;
+
+namespace Phoron.Core
+{
+    /// <summary>
+    /// Membuat sertifikat self-signed untuk *.test supaya situs lokal bisa
+    /// diakses lewat https tanpa peringatan (setelah dipasang ke Trusted Root).
+    /// </summary>
+    public static class SslTool
+    {
+        public static string CrtPath { get { return Path.Combine(Paths.EtcSsl, "phoron.crt"); } }
+        public static string KeyPath { get { return Path.Combine(Paths.EtcSsl, "phoron.key"); } }
+
+        public static bool Exists { get { return File.Exists(CrtPath) && File.Exists(KeyPath); } }
+
+        /// <summary>openssl.exe ikut dalam paket Apache; tidak perlu unduhan terpisah.</summary>
+        public static string FindOpenSsl(BinPackage apache)
+        {
+            if (apache == null) return null;
+            var p = Path.Combine(apache.Path, "bin", "openssl.exe");
+            return File.Exists(p) ? p : null;
+        }
+
+        /// <summary>
+        /// Buat sertifikat wildcard untuk akhiran situs (mis. *.test) plus localhost.
+        /// Mengembalikan pesan kesalahan, atau null bila berhasil.
+        /// </summary>
+        public static string Generate(BinPackage apache, string siteSuffix)
+        {
+            var openssl = FindOpenSsl(apache);
+            if (openssl == null) return "openssl.exe tidak ditemukan di paket Apache yang dipilih.";
+
+            var suffix = string.IsNullOrWhiteSpace(siteSuffix) ? "test" : siteSuffix.Trim().TrimStart('.');
+            Directory.CreateDirectory(Paths.EtcSsl);
+
+            // Ekstensi ditulis lewat berkas konfigurasi, bukan -addext: opsi itu
+            // baru ada di OpenSSL 1.1.1, sedangkan paket Apache lama membawa 1.0.2.
+            // Tanpa subjectAltName, browser modern menolak sertifikatnya mentah-mentah.
+            var cnf = Path.Combine(Paths.Tmp, "phoron-ssl.cnf");
+            var sb = new StringBuilder();
+            sb.AppendLine("[req]");
+            sb.AppendLine("default_bits = 2048");
+            sb.AppendLine("prompt = no");
+            sb.AppendLine("default_md = sha256");
+            sb.AppendLine("distinguished_name = dn");
+            sb.AppendLine("x509_extensions = ext");
+            sb.AppendLine();
+            sb.AppendLine("[dn]");
+            sb.AppendLine("C = ID");
+            sb.AppendLine("O = Phoron Local Development");
+            sb.AppendLine("CN = *." + suffix);
+            sb.AppendLine();
+            sb.AppendLine("[ext]");
+            sb.AppendLine("basicConstraints = critical, CA:TRUE");
+            sb.AppendLine("keyUsage = critical, keyCertSign, cRLSign, digitalSignature, keyEncipherment");
+            sb.AppendLine("subjectAltName = @alt");
+            sb.AppendLine();
+            sb.AppendLine("[alt]");
+            sb.AppendLine("DNS.1 = *." + suffix);
+            sb.AppendLine("DNS.2 = " + suffix);
+            sb.AppendLine("DNS.3 = localhost");
+            sb.AppendLine("IP.1 = 127.0.0.1");
+            File.WriteAllText(cnf, sb.ToString(), new UTF8Encoding(false));
+
+            var args = "req -x509 -nodes -days 3650 -newkey rsa:2048"
+                     + " -keyout \"" + KeyPath + "\""
+                     + " -out \"" + CrtPath + "\""
+                     + " -config \"" + cnf + "\"";
+            var env = new System.Collections.Generic.Dictionary<string, string>
+            {
+                // Tanpa OPENSSL_CONF, openssl bawaan Apache mencari berkas config di
+                // jalur build-nya (c:\...\ssl) dan gagal dengan pesan yang membingungkan.
+                { "OPENSSL_CONF", cnf },
+            };
+            var res = Shell.Run(openssl, args, Path.GetDirectoryName(openssl), 120000, env);
+            if (!Exists) return "openssl gagal: " + res.All;
+            return null;
+        }
+
+        /// <summary>Pasang sertifikat ke Trusted Root Windows. Butuh hak admin.</summary>
+        public static string Trust()
+        {
+            if (!Exists) return "Sertifikat belum dibuat.";
+            if (!HostsFile.IsAdmin()) return "Perlu menjalankan Phoron sebagai Administrator.";
+            var res = Shell.Run("certutil.exe", "-addstore -f Root \"" + CrtPath + "\"", Paths.Root, 60000);
+            return res.Ok ? null : "certutil gagal: " + res.All;
+        }
+    }
+}

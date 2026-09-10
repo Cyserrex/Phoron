@@ -1,0 +1,111 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>Phoron</AssemblyName>
+    <RootNamespace>Phoron.App</RootNamespace>
+    <Version>1.0.0</Version>
+    <ApplicationIcon>..\..\assets\phoron.ico</ApplicationIcon>
+    <AssemblyTitle>Phoron</AssemblyTitle>
+    <Product>Phoron</Product>
+    <Description>Lingkungan pengembangan PHP/Apache/MySQL dengan profil versi yang bisa di-switch</Description>
+    <Company>Phoron</Company>
+    <StartupObject>Phoron.App.Program</StartupObject>
+  </PropertyGroup>
+
+  <!--
+    App.xaml diturunkan dari ApplicationDefinition jadi Page supaya WPF tidak
+    membangkitkan Main sendiri. Main harus milik kita: pencari assembly tertanam
+    wajib terpasang sebelum tipe apa pun dari Core atau WPF UI disentuh.
+  -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Phoron.Core\Phoron.Core.csproj" />
+  </ItemGroup>
+
+  <!-- WPF UI (lepoco): tema Fluent ala Windows 11, ikut mode gelap sistem. -->
+  <ItemGroup>
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <!-- NotifyIcon (baki sistem) dan FolderBrowserDialog: WPF tidak punya
+       padanannya, dan keduanya ada di BCL jadi tidak menambah berkas kiriman. -->
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <!--
+    Tanam SEMUA DLL pendamping (Phoron.Core, Wpf.Ui, dan dependensinya) ke dalam
+    exe supaya distribusinya tetap SATU berkas: folder Phoron sering dipindah
+    atau disalin, dan exe yang menuntut DLL di sebelahnya gagal dengan pesan
+    yang tidak menjelaskan apa pun begitu ada satu berkas tertinggal.
+  -->
+  <Target Name="EmbedDependencies" AfterTargets="ResolveReferences">
+    <!--
+      AfterTargets="ResolveReferences" bukan pilihan sembarangan. Hook yang lebih
+      awal tidak pernah dijalankan pada proyek WPF, dan kegagalannya SENYAP:
+      build tetap sukses, exe tetap terbentuk, hanya isinya tidak bertambah.
+    -->
+    <ItemGroup>
+      <EmbedDll Include="@(ReferenceCopyLocalPaths)"
+                Condition="'%(Extension)' == '.dll'" />
+    </ItemGroup>
+    <Error Condition="'@(EmbedDll)' == ''"
+           Text="Tidak ada DLL pendamping yang ditemukan untuk ditanam." />
+    <GzipFiles Files="@(EmbedDll)" OutputDir="$(IntermediateOutputPath)gz\">
+      <Output TaskParameter="Compressed" ItemName="EmbedGz" />
+    </GzipFiles>
+    <ItemGroup>
+      <EmbeddedResource Include="@(EmbedGz)">
+        <Visible>false</Visible>
+      </EmbeddedResource>
+    </ItemGroup>
+    <Message Importance="high" Text="Ditanam ke exe (gzip): @(EmbedDll->'%(Filename)%(Extension)', ', ')" />
+  </Target>
+
+  <!-- Kompres tiap DLL ke obj\gz\<nama>.dll.gz, hanya bila sumbernya lebih baru. -->
+  <UsingTask TaskName="GzipFiles" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Files ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <OutputDir ParameterType="System.String" Required="true" />
+      <Compressed ParameterType="Microsoft.Build.Framework.ITaskItem[]" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Collections.Generic" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        Directory.CreateDirectory(OutputDir);
+        var list = new List<ITaskItem>();
+        foreach (var f in Files)
+        {
+            string src = f.ItemSpec;
+            string dst = Path.Combine(OutputDir, Path.GetFileName(src) + ".gz");
+            if (!File.Exists(dst)
+                || File.GetLastWriteTimeUtc(dst) < File.GetLastWriteTimeUtc(src))
+            {
+                using (var input = File.OpenRead(src))
+                using (var output = File.Create(dst))
+                using (var zip = new GZipStream(output, CompressionLevel.Optimal))
+                    input.CopyTo(zip);
+            }
+            var item = new TaskItem(dst);
+            item.SetMetadata("LogicalName", "Phoron.App." + Path.GetFileName(src) + ".gz");
+            list.Add(item);
+        }
+        Compressed = list.ToArray();
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+</Project>

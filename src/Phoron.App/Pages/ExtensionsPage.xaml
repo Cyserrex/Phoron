@@ -1,0 +1,66 @@
+<UserControl x:Class="Phoron.App.Pages.ExtensionsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <Grid Margin="4,8,4,4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Ekstensi PHP" Style="{StaticResource Judul}"/>
+            <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"
+                       Text="Centang ekstensi yang dipakai profil aktif."/>
+        </StackPanel>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="320"/>
+            </Grid.ColumnDefinitions>
+
+            <DockPanel Grid.Column="0" Margin="0,0,12,0">
+                <ui:TextBox x:Name="TxtCari" DockPanel.Dock="Top" Margin="0,0,0,8"
+                            PlaceholderText="Cari ekstensi..." TextChanged="TxtCari_Changed"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl x:Name="DaftarExt">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Setelan php.ini yang sering diubah" Style="{StaticResource Label}"/>
+                    <TextBlock Text="memory_limit" Style="{StaticResource Label}"/>
+                    <ui:TextBox x:Name="TxtMemory" PlaceholderText="512M"/>
+                    <TextBlock Text="upload_max_filesize" Style="{StaticResource Label}"/>
+                    <ui:TextBox x:Name="TxtUpload" PlaceholderText="128M"/>
+                    <TextBlock Text="post_max_size" Style="{StaticResource Label}"/>
+                    <ui:TextBox x:Name="TxtPost" PlaceholderText="128M"/>
+                    <TextBlock Text="max_execution_time" Style="{StaticResource Label}"/>
+                    <ui:TextBox x:Name="TxtExec" PlaceholderText="120"/>
+                    <TextBlock Text="date.timezone" Style="{StaticResource Label}"/>
+                    <ui:TextBox x:Name="TxtTz" PlaceholderText="Asia/Makassar"/>
+                    <!-- Teks di dalam TextBlock supaya garis bawahnya tidak dimakan
+                         sebagai penanda tombol akses. -->
+                    <CheckBox x:Name="ChkErrors" Margin="0,14,0,0">
+                        <TextBlock Text="display_errors"/>
+                    </CheckBox>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <WrapPanel Grid.Row="2" Margin="0,12,0,0">
+            <ui:Button Content="Simpan ke profil" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
+            <ui:Button Content="Buka php.ini hasil" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+            <ui:Button Content="Uji: php -m" Click="BtnUji_Click"/>
+        </WrapPanel>
+    </Grid>
+</UserControl>

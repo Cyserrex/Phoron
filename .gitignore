@@ -1,0 +1,24 @@
+# Hasil build
+bin/
+obj/
+dist/
+installer/Output/
+
+# Isi runtime instalasi - milik mesin, bukan milik repo
+/bin/
+/www/
+/etc/
+/data/
+/logs/
+/tmp/
+/profiles/
+/phoron.ini
+
+# Ikon dibangkitkan assets\make_icon.ps1
+/assets/phoron.ico
+
+# Tangkapan layar README ikut disimpan
+!/docs/
+
+.vs/
+*.user

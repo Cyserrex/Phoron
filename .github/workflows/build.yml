@@ -1,0 +1,154 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # dibutuhkan oleh langkah Terbitkan rilis di bawah
+
+jobs:
+  test:
+    name: Uji
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nomor versi ditulis di enam berkas. Rilis diterbitkan otomatis
+      # berdasarkan angka di Models.cs, jadi satu berkas yang tertinggal akan
+      # menghasilkan rilis "v1.1.0" berisi installer bernama 1.0.0 - kesalahan
+      # yang baru ketahuan setelah orang mengunduhnya. Diperiksa sebelum apa
+      # pun dibangun. Naikkan versi lewat set_version.bat, jangan cari-ganti.
+      - name: Periksa nomor versi seragam
+        id: version
+        shell: pwsh
+        run: |
+          $models = Get-Content src/Phoron.Core/Models.cs -Raw
+          if ($models -notmatch 'public const string Version = "(\d+\.\d+\.\d+)"') {
+              throw "Versi tidak terbaca di src/Phoron.Core/Models.cs"
+          }
+          $version = $Matches[1]
+          Write-Host "Versi menurut Models.cs: $version"
+
+          $expected = @{
+              'src/Phoron.App/Phoron.App.csproj'     = "<Version>$version</Version>"
+              'src/Phoron.Core/Phoron.Core.csproj'   = "<Version>$version</Version>"
+              'src/Phoron.Tests/Phoron.Tests.csproj' = "<Version>$version</Version>"
+              'installer/setup.iss'                  = "#define MyAppVersion `"$version`""
+              'build_installer.bat'                  = "set `"VERSION=$version`""
+          }
+          $bad = @()
+          foreach ($file in $expected.Keys) {
+              # .Contains, bukan -like: operator -like memperlakukan [ dan ]
+              # sebagai wildcard, dan pola yang dicari memuat kurung siku XML.
+              if (-not (Get-Content $file -Raw).Contains($expected[$file])) {
+                  $bad += "  $file  (harusnya memuat: $($expected[$file]))"
+              }
+          }
+          if ($bad.Count -gt 0) {
+              throw "Nomor versi tidak seragam dengan $version di:`n" + ($bad -join "`n")
+          }
+          Write-Host "Semua berkas memakai $version."
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Runner GitHub tidak punya PHP/Apache/MySQL versi Windows, jadi uji yang
+      # menghakimi dengan httpd.exe dan php.exe sungguhan MELEWATI diri sendiri
+      # di sini (harness melaporkannya sebagai "dilewati"). Yang tetap jalan:
+      # INI, profil, pemindai situs, hosts, port, autostart. Uji penuh
+      # dijalankan di mesin pengembang lewat "build.bat test" dan "build.bat
+      # live" - memasang Apache+PHP di CI hanya menguji paket Chocolatey, bukan
+      # kombinasi versi yang benar-benar dipakai orang.
+      - name: Jalankan tes
+        run: dotnet run --project src/Phoron.Tests -c Release --nologo
+
+  build:
+    name: Bangun exe + installer
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Pasang Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Bangun
+        env:
+          PHORON_NOPAUSE: "1"   # tanpa ini skrip berhenti menunggu tombol
+        run: .\build_installer.bat
+
+      - name: Unggah exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoron-exe
+          path: |
+            dist/Phoron.exe
+            dist/Phoron.exe.config
+
+      - name: Unggah installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phoron-installer
+          path: installer/Output/*.exe
+
+      # Rilis terbit sendiri begitu nomor versi di Models.cs naik dan
+      # perubahannya sampai di main - tidak perlu menandai tag manual. Tag yang
+      # sudah ada berarti versi itu sudah pernah dirilis, jadi push berikutnya
+      # yang tidak menaikkan versi tidak menerbitkan apa-apa (dan tidak menimpa
+      # rilis yang sudah diunduh orang). Mendorong tag "v..." sendiri tetap
+      # bekerja seperti biasa.
+      - name: Tentukan perlu rilis atau tidak
+        id: rilis
+        shell: pwsh
+        run: |
+          $version = "${{ needs.test.outputs.version }}"
+          if ("${{ github.ref }}" -like "refs/tags/v*") {
+              $tag = "${{ github.ref_name }}"
+              Write-Host "Dipicu oleh tag $tag - rilis diterbitkan."
+              "publish=true" >> $env:GITHUB_OUTPUT
+              "tag=$tag"      >> $env:GITHUB_OUTPUT
+              exit 0
+          }
+          if ("${{ github.event_name }}" -ne "push") {
+              Write-Host "Bukan push ke cabang - tidak ada rilis."
+              "publish=false" >> $env:GITHUB_OUTPUT
+              exit 0
+          }
+          $tag = "v$version"
+          # Ditanya ke remote, bukan ke salinan lokal: actions/checkout tidak
+          # mengambil tag sama sekali dengan fetch-depth bawaan, sehingga
+          # "git tag -l" di sini selalu kosong dan setiap push akan terlihat
+          # seperti versi yang belum pernah dirilis.
+          $ada = git ls-remote --tags origin "refs/tags/$tag"
+          if ($ada) {
+              Write-Host "$tag sudah ada - versi ini sudah dirilis, dilewati."
+              "publish=false" >> $env:GITHUB_OUTPUT
+          } else {
+              Write-Host "$tag belum ada - menerbitkan rilis baru."
+              "publish=true" >> $env:GITHUB_OUTPUT
+              "tag=$tag"      >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Terbitkan rilis
+        if: steps.rilis.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.rilis.outputs.tag }}
+          name: Phoron ${{ needs.test.outputs.version }}
+          files: |
+            dist/Phoron.exe
+            dist/Phoron.exe.config
+            installer/Output/*.exe
+          generate_release_notes: true

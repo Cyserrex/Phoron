@@ -1,0 +1,64 @@
+<UserControl x:Class="Phoron.App.Pages.VersionsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <Grid Margin="4,8,4,4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Versi terpasang" Style="{StaticResource Judul}"/>
+            <TextBlock Style="{StaticResource SubJudul}"
+                       Text="Semua folder versi yang ditemukan di folder bin yang terdaftar. Folder bin Laragon ikut dipindai bila ada."/>
+        </StackPanel>
+
+        <ListView x:Name="Daftar" Grid.Row="1" Margin="0,0,0,10">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Jenis" Width="80" DisplayMemberBinding="{Binding Jenis}"/>
+                    <GridViewColumn Header="Versi" Width="90" DisplayMemberBinding="{Binding Versi}"/>
+                    <GridViewColumn Header="Toolset" Width="80" DisplayMemberBinding="{Binding Toolset}"/>
+                    <GridViewColumn Header="Arsitektur" Width="90" DisplayMemberBinding="{Binding Arsitektur}"/>
+                    <GridViewColumn Header="Folder" Width="290" DisplayMemberBinding="{Binding Folder}"/>
+                    <GridViewColumn Header="Sumber" Width="200" DisplayMemberBinding="{Binding Sumber}"/>
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <StackPanel Grid.Row="2">
+            <WrapPanel Margin="0,0,0,10">
+                <ui:Button Content="Pindai ulang" Margin="0,0,8,0" Click="BtnPindai_Click"/>
+                <ui:Button Content="Tambah folder bin" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>
+                <ui:Button Content="Buka folder versi" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+                <ui:Button Content="Katalog unduhan (etc\catalog.ini)" Click="BtnKatalog_Click"/>
+            </WrapPanel>
+
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8" Padding="14">
+                <StackPanel>
+                    <TextBlock Text="Pasang versi baru" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="CmbSumber" Grid.Column="0" Margin="0,0,8,0"
+                                  SelectionChanged="CmbSumber_Changed">
+                            <ComboBoxItem Content="PHP (windows.php.net)" Tag="php" IsSelected="True"/>
+                            <ComboBoxItem Content="Katalog lokal" Tag="katalog"/>
+                        </ComboBox>
+                        <ComboBox x:Name="CmbPaket" Grid.Column="1" Margin="0,0,8,0"/>
+                        <ui:Button x:Name="BtnPasang" Grid.Column="2" Content="Unduh &amp; pasang"
+                                   Appearance="Primary" Click="BtnPasang_Click"/>
+                    </Grid>
+                    <ProgressBar x:Name="Bar" Height="4" Margin="0,10,0,0" Visibility="Collapsed"/>
+                    <TextBlock x:Name="TxtStatus" Margin="0,8,0,0" Opacity="0.75" TextWrapping="Wrap"
+                               Text="Paket diunduh ke folder bin milik Phoron, tidak menyentuh folder Laragon."/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

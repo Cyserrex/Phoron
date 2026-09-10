@@ -1,0 +1,111 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
+
+namespace Phoron.Core
+{
+    /// <summary>Pembungkus tipis untuk menjalankan proses luar.</summary>
+    public static class Shell
+    {
+        public class RunResult
+        {
+            public int ExitCode;
+            public string StdOut = "";
+            public string StdErr = "";
+            public bool TimedOut;
+            public string All { get { return (StdOut + "\n" + StdErr).Trim(); } }
+            public bool Ok { get { return ExitCode == 0 && !TimedOut; } }
+        }
+
+        /// <summary>Jalankan dan tunggu sampai selesai. Dipakai untuk perintah singkat (uji konfigurasi, init data).</summary>
+        public static RunResult Run(string exe, string args, string workDir = null,
+                                    int timeoutMs = 120000, IDictionary<string, string> env = null)
+        {
+            var psi = new ProcessStartInfo(exe, args)
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                WorkingDirectory = workDir ?? Path.GetDirectoryName(exe) ?? Paths.Root,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
+            };
+            if (env != null) foreach (var kv in env) psi.EnvironmentVariables[kv.Key] = kv.Value;
+
+            var result = new RunResult();
+            var so = new StringBuilder();
+            var se = new StringBuilder();
+            using (var p = new Process { StartInfo = psi })
+            {
+                p.OutputDataReceived += (s, e) => { if (e.Data != null) so.AppendLine(e.Data); };
+                p.ErrorDataReceived += (s, e) => { if (e.Data != null) se.AppendLine(e.Data); };
+                p.Start();
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                if (!p.WaitForExit(timeoutMs))
+                {
+                    result.TimedOut = true;
+                    KillTree(p.Id);
+                }
+                else
+                {
+                    // WaitForExit tanpa argumen setelah versi bertimeout: memastikan
+                    // pembaca stdout/stderr asinkron sudah menguras seluruh keluaran.
+                    p.WaitForExit();
+                    result.ExitCode = p.ExitCode;
+                }
+            }
+            result.StdOut = so.ToString();
+            result.StdErr = se.ToString();
+            return result;
+        }
+
+        /// <summary>
+        /// Matikan proses beserta anak-anaknya. httpd dan mysqld memunculkan proses
+        /// anak; membunuh induknya saja meninggalkan anak yang tetap memegang port,
+        /// dan start berikutnya gagal dengan "address already in use".
+        /// </summary>
+        public static void KillTree(int pid)
+        {
+            try
+            {
+                Run("taskkill.exe", "/PID " + pid + " /T /F", Paths.Root, 15000);
+            }
+            catch { }
+        }
+
+        /// <summary>Buka berkas/folder/URL dengan aplikasi bawaan Windows.</summary>
+        public static void Open(string target)
+        {
+            try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+            catch { }
+        }
+
+        /// <summary>Buka terminal dengan PATH yang sudah berisi PHP, MySQL, dan Composer profil aktif.</summary>
+        public static void OpenTerminal(string kind, string workDir, IDictionary<string, string> env)
+        {
+            string exe, args;
+            switch ((kind ?? "cmd").ToLowerInvariant())
+            {
+                case "powershell": exe = "powershell.exe"; args = "-NoExit -NoLogo"; break;
+                case "wt": exe = "wt.exe"; args = "-d \"" + workDir + "\""; break;
+                default: exe = "cmd.exe"; args = "/K title Phoron"; break;
+            }
+            var psi = new ProcessStartInfo(exe, args)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Directory.Exists(workDir) ? workDir : Paths.Root,
+            };
+            if (env != null) foreach (var kv in env) psi.EnvironmentVariables[kv.Key] = kv.Value;
+            try { Process.Start(psi); }
+            catch
+            {
+                // wt.exe belum tentu terpasang; jatuh ke cmd daripada gagal diam-diam.
+                if (exe != "cmd.exe") OpenTerminal("cmd", workDir, env);
+            }
+        }
+    }
+}

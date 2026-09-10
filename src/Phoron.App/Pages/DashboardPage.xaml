@@ -1,0 +1,98 @@
+<UserControl x:Class="Phoron.App.Pages.DashboardPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <UserControl.Resources>
+        <Style x:Key="Kartu" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
+        <StackPanel Margin="4,8,4,4">
+            <TextBlock Text="Beranda" Style="{StaticResource Judul}"/>
+            <TextBlock Style="{StaticResource SubJudul}"
+                       Text="Pilih profil, lalu nyalakan. Ganti profil berarti ganti versi PHP, Apache, dan MySQL sekaligus."/>
+
+            <!-- Pemilih profil: inti dari seluruh aplikasi, jadi ditaruh paling atas. -->
+            <Border Style="{StaticResource Kartu}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="Profil aktif" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                        <ComboBox x:Name="CmbProfil" SelectionChanged="CmbProfil_Changed"
+                                  HorizontalAlignment="Stretch"/>
+                    </StackPanel>
+                    <ui:Button Grid.Column="1" x:Name="BtnSwitch" Content="Switch" Appearance="Primary"
+                               VerticalAlignment="Bottom" Margin="0,0,8,0" Click="BtnSwitch_Click"/>
+                    <ui:Button Grid.Column="2" Content="Tulis ulang konfigurasi"
+                               VerticalAlignment="Bottom" Click="BtnApply_Click"/>
+                </Grid>
+            </Border>
+
+            <UniformGrid Columns="3" Margin="0,0,0,0">
+                <Border Style="{StaticResource Kartu}" Margin="0,0,6,12">
+                    <StackPanel>
+                        <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
+                        <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
+                    <StackPanel>
+                        <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
+                        <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
+                        <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border x:Name="PanelPeringatan" Style="{StaticResource Kartu}" Visibility="Collapsed"
+                    Background="#33E0A020">
+                <StackPanel>
+                    <TextBlock Text="Perhatian" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="TxtPeringatan" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Kartu}">
+                <StackPanel>
+                    <TextBlock Text="Pintasan" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                    <WrapPanel>
+                        <ui:Button Content="Buka www" Margin="0,0,8,8" Click="BtnWww_Click"/>
+                        <ui:Button Content="Buka localhost" Margin="0,0,8,8" Click="BtnLocalhost_Click"/>
+                        <ui:Button Content="Terminal" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
+                        <ui:Button Content="phpinfo()" Margin="0,0,8,8" Click="BtnPhpInfo_Click"/>
+                        <ui:Button Content="Uji konfigurasi Apache" Margin="0,0,8,8" Click="BtnTest_Click"/>
+                        <ui:Button Content="Buat sertifikat SSL" Margin="0,0,8,8" Click="BtnSsl_Click"/>
+                        <ui:Button Content="Folder etc" Margin="0,0,8,8" Click="BtnEtc_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Kartu}">
+                <StackPanel>
+                    <TextBlock Text="Aktivitas" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                    <TextBox x:Name="TxtLog" IsReadOnly="True" AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto" Height="150"
+                             FontFamily="Consolas" FontSize="11" TextWrapping="NoWrap"
+                             HorizontalScrollBarVisibility="Auto"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

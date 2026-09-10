@@ -1,0 +1,121 @@
+<ui:FluentWindow x:Class="Phoron.App.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="Phoron" Width="1120" Height="740"
+                 MinWidth="900" MinHeight="600"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round">
+    <ui:FluentWindow.Resources>
+        <!-- Ikon navigasi memakai Segoe MDL2 Assets, bukan ikon paket tema:
+             fontnya ada di tiap Windows 10/11 dan namanya tidak berubah
+             antarversi pustaka. -->
+        <Style x:Key="NavIcon" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Ikonnya dipasang dari kode, diambil dari ikon Win32 exe-nya sendiri;
+             lihat PasangIkon() di code-behind. -->
+        <ui:TitleBar x:Name="BilahJudul" Grid.Row="0" Title="Phoron" ShowMaximize="True"/>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Panel kiri: navigasi di atas, ringkasan status + tombol besar di
+                 bawah. Statusnya sengaja selalu terlihat: pertanyaan pertama
+                 pengguna aplikasi semacam ini selalu "ini lagi nyala atau tidak". -->
+            <Border Grid.Column="0" Margin="8,0,4,8" CornerRadius="8"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <ListBox x:Name="Nav" Grid.Row="0" Margin="6,10,6,0"
+                             BorderThickness="0" Background="Transparent"
+                             SelectionChanged="Nav_SelectionChanged">
+                        <ListBoxItem Tag="beranda">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE80F;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Beranda" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="profil">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE81E;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Profil" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="versi">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE7B8;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Versi" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="situs">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE774;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Situs" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="ekstensi">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE71D;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Ekstensi PHP" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="log">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8A5;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Log" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                        <ListBoxItem Tag="setelan">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE713;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Pengaturan" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="1" Margin="12,10,12,12">
+                        <TextBlock x:Name="TxtProfil" Text="-" FontSize="12" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Ellipse x:Name="DotWeb" Width="10" Height="10" Fill="Gray"
+                                     VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TxtWeb" Text="Apache berhenti" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Ellipse x:Name="DotDb" Width="10" Height="10" Fill="Gray"
+                                     VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="TxtDb" Text="MySQL berhenti" FontSize="12"/>
+                        </StackPanel>
+                        <ui:Button x:Name="BtnPower" Content="Nyalakan semua"
+                                   Appearance="Primary" HorizontalAlignment="Stretch"
+                                   HorizontalContentAlignment="Center"
+                                   Click="BtnPower_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <ContentControl x:Name="Host" Grid.Column="1" Margin="8,0,12,12"/>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Phoron.Core</RootNamespace>
+    <AssemblyName>Phoron.Core</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <!--
+    Sengaja tanpa satu pun PackageReference. Seluruh isi Core hanya menyentuh
+    berkas teks, proses, dan soket - semuanya ada di BCL. Nol dependensi berarti
+    exe akhirnya tetap satu berkas tanpa perlu menanam DLL pihak ketiga.
+  -->
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+
+</Project>

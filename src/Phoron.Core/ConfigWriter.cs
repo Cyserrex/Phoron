@@ -1,0 +1,502 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace Phoron.Core
+{
+    /// <summary>
+    /// Membangun seluruh berkas konfigurasi untuk sebuah profil di folder etc\.
+    /// Prinsipnya: JANGAN pernah menyunting berkas di dalam folder bin. Bin bisa
+    /// milik Laragon atau dipakai bersama, dan menulis ke sana berarti dua
+    /// pengelola saling menimpa. Semua yang dihasilkan Phoron ada di etc\.
+    /// </summary>
+    public static class ConfigWriter
+    {
+        public const string GeneratedHeader =
+            "# Berkas ini DIBUAT OTOMATIS oleh Phoron. Suntingan tangan akan hilang\n" +
+            "# saat profil di-switch. Ubah lewat profil atau folder etc\\apache2\\alias.";
+
+        public class Result
+        {
+            public string HttpdConf;
+            public string MyIni;
+            public string PhpIniDir;
+            public string NginxConf;
+            public readonly List<string> Warnings = new List<string>();
+            public bool PhpFastCgi;
+            public int FastCgiPort = 9123;
+        }
+
+        public static Result Build(Profile profile, BinPackage php, BinPackage apache,
+                                   BinPackage mysql, BinPackage nginx, List<Site> sites)
+        {
+            var r = new Result();
+            if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r);
+            if (profile.WebServer == "nginx" && nginx != null)
+                r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
+            else if (apache != null)
+                r.HttpdConf = WriteApache(profile, apache, php, sites, r);
+            else
+                r.Warnings.Add("Profil belum menunjuk versi Apache mana pun.");
+            if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
+            return r;
+        }
+
+        // ---------------------------------------------------------------- Apache
+
+        static string WriteApache(Profile profile, BinPackage apache, BinPackage php,
+                                  List<Site> sites, Result r)
+        {
+            var baseConf = PristineConf(apache);
+            if (baseConf == null)
+            {
+                r.Warnings.Add("httpd.conf bawaan tidak ditemukan di " + apache.Id + ".");
+                return null;
+            }
+
+            var sb = new StringBuilder();
+            var srvroot = Paths.Fwd(apache.Path);
+            bool listenReplaced = false;
+            foreach (var line in baseConf)
+            {
+                var t = line.TrimStart();
+                if (t.StartsWith("Define SRVROOT", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine("Define SRVROOT \"" + srvroot + "\"");
+                    continue;
+                }
+                if (t.StartsWith("ServerRoot", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Build lama menaruh jalur harfiah di ServerRoot, bukan ${SRVROOT}.
+                    sb.AppendLine("ServerRoot \"" + srvroot + "\"");
+                    continue;
+                }
+                if (t.StartsWith("Listen ", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!listenReplaced) { sb.AppendLine("Listen " + profile.HttpPort); listenReplaced = true; }
+                    continue;
+                }
+                // Include milik pengelola lain (mis. Laragon) dibuang: jalur mutlak
+                // ke luar folder Apache pasti bukan milik kita.
+                if (Regex.IsMatch(t, "^Include(Optional)?\\s+\"?[A-Za-z]:", RegexOptions.IgnoreCase)) continue;
+                sb.AppendLine(line);
+            }
+            if (!listenReplaced) sb.AppendLine("Listen " + profile.HttpPort);
+
+            sb.AppendLine();
+            sb.AppendLine("### ================= Phoron =================");
+            sb.AppendLine("# Blok ini ditambahkan di akhir dengan sengaja: direktif Apache yang");
+            sb.AppendLine("# muncul belakangan menimpa yang di atasnya, jadi bawaan vendor tidak");
+            sb.AppendLine("# perlu diobrak-abrik sama sekali.");
+            foreach (var mod in ApacheModules(php))
+            {
+                var so = Path.Combine(apache.Path, "modules", "mod_" + mod + ".so");
+                // LoadModule untuk berkas yang tidak ada = Apache gagal start total,
+                // jadi tiap modul dicek dulu ada berkasnya.
+                if (File.Exists(so)) sb.AppendLine("LoadModule " + mod + "_module modules/mod_" + mod + ".so");
+            }
+
+            var docRoot = Paths.Fwd(SiteScanner.DocumentRoot(profile));
+            sb.AppendLine("DefaultRuntimeDir \"" + Paths.Fwd(Paths.Tmp) + "/\"");
+            sb.AppendLine("PidFile \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "httpd.pid")) + "\"");
+            sb.AppendLine("ErrorLog \"" + Paths.Fwd(Path.Combine(Paths.Logs, "apache-error.log")) + "\"");
+            sb.AppendLine("CustomLog \"" + Paths.Fwd(Path.Combine(Paths.Logs, "apache-access.log")) + "\" common");
+            sb.AppendLine("ServerName localhost:" + profile.HttpPort);
+            sb.AppendLine("ServerSignature Off");
+            sb.AppendLine("DocumentRoot \"" + docRoot + "\"");
+            sb.AppendLine("<Directory \"" + docRoot + "\">");
+            sb.AppendLine("    Options Indexes FollowSymLinks ExecCGI");
+            sb.AppendLine("    AllowOverride All");
+            sb.AppendLine("    Require all granted");
+            sb.AppendLine("</Directory>");
+            sb.AppendLine("<IfModule dir_module>");
+            sb.AppendLine("    DirectoryIndex index.php index.html index.htm");
+            sb.AppendLine("</IfModule>");
+            sb.AppendLine("AddDefaultCharset UTF-8");
+            sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "mod_php.conf")) + "\"");
+            sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "ssl.conf")) + "\"");
+            sb.AppendLine("IncludeOptional \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "alias")) + "/*.conf\"");
+            sb.AppendLine("IncludeOptional \"" + Paths.Fwd(Paths.SitesEnabled) + "/*.conf\"");
+
+            var confPath = Path.Combine(Paths.EtcApache, "httpd.conf");
+            Directory.CreateDirectory(Path.Combine(Paths.EtcApache, "alias"));
+            WriteIfChanged(confPath, sb.ToString());
+
+            WriteModPhp(profile, apache, php, r);
+            WriteSslConf(profile, apache, r);
+            WriteVhosts(profile, sites, r);
+            return confPath;
+        }
+
+        /// <summary>Salinan pristine (conf\original) lebih disukai: conf\httpd.conf mungkin sudah diacak pengelola lain.</summary>
+        static string[] PristineConf(BinPackage apache)
+        {
+            foreach (var rel in new[] { "conf\\original\\httpd.conf", "conf\\httpd.conf" })
+            {
+                var p = Path.Combine(apache.Path, rel);
+                if (File.Exists(p)) return File.ReadAllLines(p);
+            }
+            return null;
+        }
+
+        static IEnumerable<string> ApacheModules(BinPackage php)
+        {
+            var mods = new List<string> { "rewrite", "deflate", "expires", "headers", "ssl", "socache_shmcb", "vhost_alias" };
+            // PHP non-thread-safe tidak punya modul Apache; satu-satunya jalan
+            // adalah FastCGI, yang butuh mod_proxy + mod_proxy_fcgi.
+            if (php != null && !php.ThreadSafe) { mods.Add("proxy"); mods.Add("proxy_fcgi"); }
+            return mods;
+        }
+
+        static void WriteModPhp(Profile profile, BinPackage apache, BinPackage php, Result r)
+        {
+            var path = Path.Combine(Paths.EtcApache, "mod_php.conf");
+            var sb = new StringBuilder();
+            sb.AppendLine(GeneratedHeader);
+            if (php == null)
+            {
+                sb.AppendLine("# Profil ini tidak memakai PHP.");
+                WriteIfChanged(path, sb.ToString());
+                return;
+            }
+
+            if (php.ThreadSafe && !string.IsNullOrEmpty(php.ApacheModuleDll))
+            {
+                sb.AppendLine("LoadModule " + BinScanner.ApacheModuleName(php)
+                              + " \"" + Paths.Fwd(php.ApacheModuleDll) + "\"");
+                sb.AppendLine("PHPIniDir \"" + Paths.Fwd(r.PhpIniDir ?? php.Path) + "\"");
+                sb.AppendLine("<IfModule mime_module>");
+                sb.AppendLine("    AddType application/x-httpd-php .php");
+                sb.AppendLine("    AddType application/x-httpd-php-source .phps");
+                sb.AppendLine("</IfModule>");
+            }
+            else
+            {
+                // Jalur FastCGI. php-cgi.exe dijalankan ServiceManager sebagai
+                // proses terpisah di port ini.
+                r.PhpFastCgi = true;
+                sb.AppendLine("# Build PHP ini NTS (tanpa modul Apache) - dilayani lewat FastCGI.");
+                sb.AppendLine("<FilesMatch \\.php$>");
+                sb.AppendLine("    SetHandler \"proxy:fcgi://127.0.0.1:" + r.FastCgiPort + "\"");
+                sb.AppendLine("</FilesMatch>");
+                if (!File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
+                    r.Warnings.Add("php-cgi.exe tidak ada di " + php.Id + "; PHP tidak akan jalan lewat Apache.");
+            }
+            WriteIfChanged(path, sb.ToString());
+        }
+
+        static void WriteSslConf(Profile profile, BinPackage apache, Result r)
+        {
+            var crt = Path.Combine(Paths.EtcSsl, "phoron.crt");
+            var key = Path.Combine(Paths.EtcSsl, "phoron.key");
+            var sb = new StringBuilder();
+            sb.AppendLine(GeneratedHeader);
+            sb.AppendLine("<IfModule ssl_module>");
+            if (File.Exists(crt) && File.Exists(key))
+            {
+                sb.AppendLine("    Listen " + profile.HttpsPort);
+                sb.AppendLine("    SSLCipherSuite HIGH:MEDIUM:!MD5:!RC4:!3DES");
+                sb.AppendLine("    SSLProtocol all -SSLv3");
+                sb.AppendLine("    SSLSessionCache \"shmcb:" + Paths.Fwd(Path.Combine(Paths.Tmp, "ssl_scache")) + "(512000)\"");
+                sb.AppendLine("    SSLCertificateFile \"" + Paths.Fwd(crt) + "\"");
+                sb.AppendLine("    SSLCertificateKeyFile \"" + Paths.Fwd(key) + "\"");
+            }
+            else
+            {
+                // Tanpa sertifikat, "Listen 443" tetap membuka port tapi tiap
+                // permintaan HTTPS gagal - lebih baik port-nya tidak dibuka.
+                sb.AppendLine("    # Sertifikat belum dibuat; HTTPS dimatikan.");
+            }
+            sb.AppendLine("</IfModule>");
+            WriteIfChanged(Path.Combine(Paths.EtcApache, "ssl.conf"), sb.ToString());
+        }
+
+        static void WriteVhosts(Profile profile, List<Site> sites, Result r)
+        {
+            Directory.CreateDirectory(Paths.SitesEnabled);
+            var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            bool ssl = File.Exists(Path.Combine(Paths.EtcSsl, "phoron.crt"));
+
+            foreach (var s in sites ?? new List<Site>())
+            {
+                var file = SiteScanner.VhostPath(s);
+                wanted.Add(Path.GetFileName(file));
+                var root = Paths.Fwd(s.DocRoot ?? s.Path);
+                var sb = new StringBuilder();
+                sb.AppendLine(GeneratedHeader);
+                sb.AppendLine("define ROOT \"" + root + "\"");
+                sb.AppendLine("define SITE \"" + s.HostName + "\"");
+                sb.AppendLine();
+                sb.AppendLine(VhostBlock(profile.HttpPort, false));
+                if (ssl) sb.AppendLine(VhostBlock(profile.HttpsPort, true));
+                WriteIfChanged(file, sb.ToString());
+            }
+
+            // Vhost otomatis milik folder yang sudah dihapus harus ikut hilang,
+            // kalau tidak Apache menolak start karena DocumentRoot tidak ada.
+            foreach (var f in Directory.GetFiles(Paths.SitesEnabled, "auto.*.conf"))
+                if (!wanted.Contains(Path.GetFileName(f)))
+                    try { File.Delete(f); } catch { }
+        }
+
+        static string VhostBlock(int port, bool ssl)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<VirtualHost *:" + port + ">");
+            sb.AppendLine("    DocumentRoot \"${ROOT}\"");
+            sb.AppendLine("    ServerName ${SITE}");
+            sb.AppendLine("    ServerAlias *.${SITE}");
+            sb.AppendLine("    <Directory \"${ROOT}\">");
+            sb.AppendLine("        Options Indexes FollowSymLinks ExecCGI");
+            sb.AppendLine("        AllowOverride All");
+            sb.AppendLine("        Require all granted");
+            sb.AppendLine("    </Directory>");
+            if (ssl)
+            {
+                sb.AppendLine("    SSLEngine on");
+                sb.AppendLine("    SSLCertificateFile \"" + Paths.Fwd(Path.Combine(Paths.EtcSsl, "phoron.crt")) + "\"");
+                sb.AppendLine("    SSLCertificateKeyFile \"" + Paths.Fwd(Path.Combine(Paths.EtcSsl, "phoron.key")) + "\"");
+            }
+            sb.AppendLine("</VirtualHost>");
+            return sb.ToString();
+        }
+
+        // ------------------------------------------------------------------ PHP
+
+        /// <summary>
+        /// Menulis php.ini milik profil ke etc\php\&lt;versi&gt;\php.ini dan mengembalikan
+        /// foldernya (dipakai PHPIniDir). php.ini di dalam folder bin tidak disentuh.
+        /// </summary>
+        public static string WritePhpIni(Profile profile, BinPackage php, Result r)
+        {
+            var dir = Path.Combine(Paths.Etc, "php", php.Id);
+            Directory.CreateDirectory(dir);
+            var target = Path.Combine(dir, "php.ini");
+
+            var baseText = PhpIniTemplate(php);
+            if (baseText == null)
+            {
+                r.Warnings.Add("Tidak ada php.ini contoh di " + php.Id + "; dibuat dari nol.");
+                baseText = "";
+            }
+
+            var lines = baseText.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+            var extDir = Paths.Fwd(Path.Combine(php.Path, "ext"));
+
+            var set = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "extension_dir", "\"" + extDir + "\"" },
+                { "error_log", "\"" + Paths.Fwd(Path.Combine(Paths.Logs, "php-error.log")) + "\"" },
+                { "upload_tmp_dir", "\"" + Paths.Fwd(Paths.Tmp) + "\"" },
+                { "sys_temp_dir", "\"" + Paths.Fwd(Paths.Tmp) + "\"" },
+                { "session.save_path", "\"" + Paths.Fwd(Paths.Tmp) + "\"" },
+                { "date.timezone", "Asia/Makassar" },
+                { "display_errors", "On" },
+                { "log_errors", "On" },
+            };
+            var cacert = Path.Combine(Paths.EtcSsl, "cacert.pem");
+            if (File.Exists(cacert))
+            {
+                set["curl.cainfo"] = "\"" + Paths.Fwd(cacert) + "\"";
+                set["openssl.cafile"] = "\"" + Paths.Fwd(cacert) + "\"";
+            }
+            foreach (var kv in profile.PhpIniOverrides) set[kv.Key] = kv.Value;
+
+            var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var t = lines[i].TrimStart();
+                // Baris ekstensi bawaan dinonaktifkan seluruhnya; daftar yang
+                // berlaku hanya yang di profil, supaya switch profil benar-benar
+                // menentukan keadaan akhir dan bukan menumpuk.
+                if (Regex.IsMatch(t, "^;?\\s*(zend_)?extension\\s*=", RegexOptions.IgnoreCase))
+                {
+                    if (!t.StartsWith(";")) lines[i] = ";" + lines[i];
+                    continue;
+                }
+                var m = Regex.Match(t, "^;?\\s*([A-Za-z0-9_.]+)\\s*=");
+                if (!m.Success) continue;
+                var key = m.Groups[1].Value;
+                string val;
+                if (!set.TryGetValue(key, out val)) continue;
+                // Kunci yang sama muncul berkali-kali di php.ini contoh (sekali per
+                // seksi); hanya kemunculan pertama yang disetel, sisanya dimatikan
+                // supaya tidak ada nilai belakangan yang menimpa diam-diam.
+                if (!applied.Add(key))
+                {
+                    if (!t.StartsWith(";")) lines[i] = ";" + lines[i];
+                    continue;
+                }
+                lines[i] = key + " = " + val;
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("; php.ini untuk profil \"" + profile.Name + "\" - dibuat otomatis oleh Phoron.");
+            sb.AppendLine("; Sunting lewat Phoron; berkas ini ditulis ulang tiap kali profil dipakai.");
+            sb.AppendLine(string.Join(Environment.NewLine, lines));
+            sb.AppendLine();
+            sb.AppendLine("; --- disetel Phoron ---");
+            foreach (var kv in set)
+                if (!applied.Contains(kv.Key)) sb.AppendLine(kv.Key + " = " + kv.Value);
+
+            sb.AppendLine();
+            sb.AppendLine("; --- ekstensi profil ---");
+            foreach (var ext in profile.PhpExtensions.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                var dll = Path.Combine(php.Path, "ext", "php_" + ext + ".dll");
+                if (!File.Exists(dll))
+                {
+                    r.Warnings.Add("Ekstensi " + ext + " tidak ada di " + php.Id + " - dilewati.");
+                    continue;
+                }
+                var directive = ext.Equals("opcache", StringComparison.OrdinalIgnoreCase)
+                    ? "zend_extension" : "extension";
+                sb.AppendLine(directive + " = " + ExtensionValue(php, ext));
+            }
+            WriteIfChanged(target, sb.ToString());
+            return dir;
+        }
+
+        /// <summary>
+        /// PHP 7.2 ke atas menerima nama ekstensi telanjang; sebelum itu nilainya
+        /// harus nama berkas DLL lengkap. Menulis bentuk yang salah membuat PHP
+        /// diam-diam tidak memuat ekstensinya.
+        /// </summary>
+        public static string ExtensionValue(BinPackage php, string ext)
+        {
+            var v = php.Parsed;
+            bool modern = v.Major > 7 || (v.Major == 7 && v.Minor >= 2);
+            return modern ? ext : "php_" + ext + ".dll";
+        }
+
+        static string PhpIniTemplate(BinPackage php)
+        {
+            foreach (var name in new[] { "php.ini-development", "php.ini-production", "php.ini" })
+            {
+                var p = Path.Combine(php.Path, name);
+                if (File.Exists(p)) return File.ReadAllText(p);
+            }
+            return null;
+        }
+
+        /// <summary>Daftar ekstensi yang tersedia di sebuah build PHP (nama tanpa awalan php_).</summary>
+        public static List<string> AvailableExtensions(BinPackage php)
+        {
+            if (php == null) return new List<string>();
+            var dir = Path.Combine(php.Path, "ext");
+            if (!Directory.Exists(dir)) return new List<string>();
+            return Directory.GetFiles(dir, "php_*.dll")
+                .Select(f => Path.GetFileNameWithoutExtension(f).Substring(4).ToLowerInvariant())
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        // ---------------------------------------------------------------- MySQL
+
+        public static string WriteMyIni(Profile profile, BinPackage mysql, Result r)
+        {
+            var dataDir = MySqlDataDir(mysql);
+            var path = Path.Combine(Paths.EtcMysql, "my.ini");
+            var sb = new StringBuilder();
+            sb.AppendLine("# Dibuat otomatis oleh Phoron untuk profil \"" + profile.Name + "\".");
+            sb.AppendLine("[client]");
+            sb.AppendLine("port=" + profile.MySqlPort);
+            sb.AppendLine("default-character-set=utf8mb4");
+            sb.AppendLine();
+            sb.AppendLine("[mysqld]");
+            sb.AppendLine("port=" + profile.MySqlPort);
+            sb.AppendLine("basedir=\"" + Paths.Fwd(mysql.Path) + "\"");
+            sb.AppendLine("datadir=\"" + Paths.Fwd(dataDir) + "\"");
+            sb.AppendLine("tmpdir=\"" + Paths.Fwd(Paths.Tmp) + "\"");
+            sb.AppendLine("log-error=\"" + Paths.Fwd(Path.Combine(Paths.Logs, "mysql-error.log")) + "\"");
+            sb.AppendLine("character-set-server=utf8mb4");
+            sb.AppendLine("collation-server=utf8mb4_general_ci");
+            sb.AppendLine("max_allowed_packet=64M");
+            sb.AppendLine("# sql_mode dilonggarkan: banyak proyek PHP lama menulis kolom");
+            sb.AppendLine("# tanggal '0000-00-00' yang ditolak mode ketat bawaan MySQL 5.7+.");
+            sb.AppendLine("sql_mode=\"NO_ENGINE_SUBSTITUTION\"");
+            WriteIfChanged(path, sb.ToString());
+            return path;
+        }
+
+        /// <summary>Tiap versi database punya folder data sendiri - tabel sistem MySQL 5.7 dan 8.0 tidak saling baca.</summary>
+        public static string MySqlDataDir(BinPackage mysql)
+        {
+            return Path.Combine(Paths.Data, mysql.Id);
+        }
+
+        // ---------------------------------------------------------------- Nginx
+
+        static string WriteNginx(Profile profile, BinPackage nginx, BinPackage php,
+                                 List<Site> sites, Result r)
+        {
+            if (php == null || !File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
+                r.Warnings.Add("Nginx melayani PHP lewat FastCGI; php-cgi.exe tidak ditemukan.");
+            r.PhpFastCgi = true;
+
+            var dir = Paths.EtcNginx;
+            Directory.CreateDirectory(dir);
+            var docRoot = Paths.Fwd(SiteScanner.DocumentRoot(profile));
+            var sb = new StringBuilder();
+            sb.AppendLine("# Dibuat otomatis oleh Phoron.");
+            sb.AppendLine("worker_processes  1;");
+            sb.AppendLine("error_log \"" + Paths.Fwd(Path.Combine(Paths.Logs, "nginx-error.log")) + "\";");
+            sb.AppendLine("pid \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx.pid")) + "\";");
+            sb.AppendLine("events { worker_connections 1024; }");
+            sb.AppendLine("http {");
+            sb.AppendLine("    include \"" + Paths.Fwd(Path.Combine(nginx.Path, "conf", "mime.types")) + "\";");
+            sb.AppendLine("    default_type application/octet-stream;");
+            sb.AppendLine("    sendfile on;");
+            sb.AppendLine("    client_max_body_size 128m;");
+            sb.AppendLine("    access_log \"" + Paths.Fwd(Path.Combine(Paths.Logs, "nginx-access.log")) + "\";");
+            sb.AppendLine("    client_body_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-body")) + "\";");
+            sb.AppendLine("    proxy_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-proxy")) + "\";");
+            sb.AppendLine("    fastcgi_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-fcgi")) + "\";");
+            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort));
+            foreach (var s in sites ?? new List<Site>())
+                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort));
+            sb.AppendLine("}");
+            var path = Path.Combine(dir, "nginx.conf");
+            WriteIfChanged(path, sb.ToString());
+            return path;
+        }
+
+        static string NginxServer(int port, string name, string root, int fcgiPort)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("    server {");
+            sb.AppendLine("        listen       " + port + ";");
+            sb.AppendLine("        server_name  " + name + ";");
+            sb.AppendLine("        root         \"" + root + "\";");
+            sb.AppendLine("        index        index.php index.html index.htm;");
+            sb.AppendLine("        location / { try_files $uri $uri/ /index.php?$query_string; }");
+            sb.AppendLine("        location ~ \\.php$ {");
+            sb.AppendLine("            fastcgi_pass   127.0.0.1:" + fcgiPort + ";");
+            sb.AppendLine("            fastcgi_index  index.php;");
+            sb.AppendLine("            fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;");
+            sb.AppendLine("            include        fastcgi_params;");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            return sb.ToString();
+        }
+
+        // --------------------------------------------------------------- Utilitas
+
+        /// <summary>
+        /// Tulis hanya kalau isinya berubah. Menyentuh berkas konfigurasi tanpa
+        /// perubahan isi memicu editor dan pengawas berkas tanpa alasan, dan
+        /// mengaburkan jejak "kapan konfigurasi ini terakhir berubah".
+        /// </summary>
+        public static bool WriteIfChanged(string path, string content)
+        {
+            content = content.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
+            if (File.Exists(path) && File.ReadAllText(path) == content) return false;
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(path, content, new UTF8Encoding(false));
+            return true;
+        }
+    }
+}

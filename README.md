@@ -1,1 +1,222 @@
 # Phoron
+
+Lingkungan pengembangan web lokal untuk Windows — Apache/Nginx, PHP, dan MySQL —
+dengan satu kelebihan yang jadi alasan utamanya dibuat: **kombinasi versi disimpan
+sebagai profil, dan berpindah antar profil cukup satu klik.**
+
+Mau menjalankan PHP 5.6 dengan Apache VC11 hari ini, lalu pindah ke PHP 8.3 dengan
+Apache VS16 lima detik kemudian? Pilih profilnya, tekan Switch. Seluruh berkas
+konfigurasi (httpd.conf, php.ini, my.ini, vhost, hosts) ditulis ulang sesuai profil,
+lalu layanan dinyalakan ulang.
+
+![Beranda](docs/beranda.png)
+![Profil](docs/profil.png)
+
+---
+
+## Kenapa bukan Laragon saja
+
+Laragon bisa berganti versi PHP, tapi setelan lain (versi Apache, port, ekstensi
+PHP, `memory_limit`) ikut menempel di satu konfigurasi global. Phoron menyimpan
+semuanya per profil:
+
+| | Laragon | Phoron |
+|---|---|---|
+| Ganti versi PHP | ya | ya |
+| Ganti versi Apache sekalian | manual | ikut profil |
+| Ekstensi PHP per versi | satu php.ini per folder PHP | per profil |
+| Port berbeda per profil | tidak | ya |
+| Beberapa kombinasi tersimpan | tidak | sebanyak yang mau |
+
+Phoron **tidak pernah menulis ke dalam folder `bin`**. Semua konfigurasi hasil
+generate ada di `etc\`, jadi folder `bin` Laragon boleh dipakai bersama tanpa
+kedua aplikasi saling menimpa.
+
+---
+
+## Pemasangan
+
+Unduh `Phoron-<versi>-Setup.exe` dari [halaman Releases](https://github.com/Cyserrex/Phoron/releases),
+atau ambil `Phoron.exe` saja — satu berkas, bisa dijalankan langsung dari mana pun.
+
+Installer menawarkan dua cara:
+
+- **Untuk semua pengguna** (butuh admin) → dipasang ke `C:\Phoron`.
+- **Hanya untuk saya** (tanpa admin) → dipasang ke folder pengguna.
+
+Sengaja **bukan** ke Program Files: folder Phoron memuat `www\`, `data\`, dan `etc\`
+yang ditulis terus-menerus, dan di bawah Program Files tulisan itu dialihkan Windows
+atau ditolak.
+
+Mencopot Phoron **tidak** menghapus proyek dan basis data Anda — installer
+menanyakannya terpisah, dan pencopotan senyap tidak pernah menghapusnya.
+
+## Jalan otomatis saat Windows menyala
+
+Ada di **Pengaturan → Jalankan Phoron saat Windows dinyalakan**, atau bisa dicentang
+saat pemasangan. Phoron mulai langsung mengecil ke baki sistem (`--tray`) tanpa
+memunculkan jendela; kalau **Nyalakan layanan otomatis** juga aktif, Apache dan MySQL
+ikut menyala sendiri — jadi server lokal sudah siap sebelum Anda membuka apa pun.
+
+Caranya lewat kunci `Run` milik pengguna di registri, bukan Windows Service atau
+Scheduled Task: keduanya butuh hak admin untuk dipasang, sedangkan Phoron dirancang
+jalan tanpa admin. Sakelar di aplikasi dan centang di installer menulis entri yang
+sama persis, jadi keduanya tidak pernah menggandakan diri.
+
+## Cara pakai
+
+1. Jalankan `Phoron.exe`.
+2. Pada jalan pertama, Phoron memindai folder bin (miliknya sendiri **dan**
+   `C:\laragon\bin` kalau ada), lalu membuatkan satu profil per versi PHP —
+   masing-masing sudah dipasangkan dengan Apache bertoolset sama.
+3. Pilih profil di halaman **Beranda**, tekan **Nyalakan semua**.
+4. Buka `http://localhost/`.
+
+Ganti versi: pilih profil lain → **Switch**. Kalau layanan sedang jalan, Phoron
+mematikannya, menulis ulang konfigurasi, lalu menyalakannya kembali.
+
+### Situs otomatis
+
+Tiap subfolder di `www\` otomatis dapat vhost dan nama sendiri, mis.
+`www\toko-online` → `http://toko-online.test`. Folder `public/` yang berisi
+`index.php` (Laravel, Symfony) otomatis dipakai sebagai DocumentRoot.
+
+Nama `.test` perlu masuk ke berkas hosts Windows, dan itu butuh hak Administrator.
+Phoron menulisnya di dalam blok bertanda sendiri, jadi baris milik aplikasi lain
+tidak pernah tersentuh:
+
+```
+# === Phoron mulai ===
+127.0.0.1	toko-online.test
+::1	toko-online.test
+# === Phoron selesai ===
+```
+
+### Halaman yang tersedia
+
+- **Beranda** — pilih profil, nyalakan/matikan, pintasan (www, localhost, terminal
+  dengan PATH profil aktif, `phpinfo()`, uji konfigurasi Apache, buat sertifikat SSL).
+- **Profil** — sunting kombinasi versi, port, folder proyek, akhiran nama situs.
+- **Versi** — daftar semua versi terpasang; tambah folder bin; unduh & pasang
+  versi PHP baru langsung dari windows.php.net, atau Apache/MySQL/Nginx dari
+  katalog di `etc\catalog.ini`.
+- **Situs** — daftar situs, buat proyek baru, status hosts & vhost.
+- **Ekstensi PHP** — centang ekstensi per profil, plus setelan php.ini yang sering
+  diubah. Tombol **Uji: php -m** memperlihatkan apa yang benar-benar dimuat.
+- **Log** — pembaca log Apache/MySQL/PHP/Phoron yang ikut mengekor otomatis.
+- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray.
+
+---
+
+## Struktur folder
+
+```
+C:\Claude\Phoron\
+  Phoron.exe          satu berkas, semua DLL tertanam di dalamnya
+  phoron.ini          setelan global (juga penanda akar instalasi)
+  bin\                versi milik Phoron sendiri (php\, apache\, mysql\, nginx\)
+  profiles\*.ini      satu berkas per profil, enak disunting tangan
+  www\                folder proyek
+  etc\                SELURUH konfigurasi hasil generate
+    apache2\httpd.conf, mod_php.conf, ssl.conf, sites-enabled\*.conf
+    php\<versi>\php.ini
+    mysql\my.ini
+    ssl\phoron.crt, phoron.key
+    catalog.ini       daftar unduhan, boleh ditambah sendiri
+  data\<versi>\       folder data MySQL, terpisah per versi
+  logs\               apache-error, apache-access, mysql-error, php-error, phoron
+  tmp\
+```
+
+Profil hanyalah berkas INI:
+
+```ini
+[profil]
+nama=PHP 8.3 + Apache 2.4.57
+web_server=apache
+php=php-8.3.12-Win32-vs16-x64
+apache=httpd-2.4.57-win64-VS16
+mysql=mysql-5.7.38-winx64
+port_http=80
+port_https=443
+port_mysql=3306
+
+[php]
+ekstensi=curl,mbstring,openssl,pdo_mysql,gd
+
+[php.ini]
+memory_limit=512M
+```
+
+---
+
+## Catatan teknis
+
+**Toolset harus cocok.** Modul PHP yang dibangun dengan VC11 tidak akan dimuat
+oleh httpd VS16 — dan gagalnya berupa Apache yang mati seketika tanpa pesan yang
+menjelaskan. Phoron memasangkan otomatis berdasarkan toolset, dan memperingatkan
+kalau Anda memilih kombinasi yang berbeda.
+
+**PHP NTS dilayani lewat FastCGI.** Build Non Thread Safe tidak punya modul Apache.
+Phoron mendeteksinya dari ada/tidaknya `php*apache2_4.dll`, lalu menjalankan
+`php-cgi.exe` sebagai proses terpisah dan mengarahkan Apache ke sana lewat
+`mod_proxy_fcgi`.
+
+**httpd.conf dibangun dari salinan pristine.** Basisnya `conf\original\httpd.conf`
+milik paket Apache, bukan `conf\httpd.conf` yang mungkin sudah diacak pengelola
+lain. Yang diubah hanya `SRVROOT` dan `Listen`; sisanya ditambahkan sebagai blok
+di akhir berkas — direktif Apache yang muncul belakangan menimpa yang di atasnya,
+jadi bawaan vendor tidak perlu diobrak-abrik.
+
+**Konflik port dijelaskan, bukan dibiarkan.** Sebelum menyalakan, Phoron memeriksa
+port dan menyebut nama proses beserta PID yang memegangnya. "Port 80 sedang dipakai
+httpd (PID 23972)" jauh lebih berguna daripada Apache yang keluar dengan kode 1.
+
+**Layanan berjalan sebagai proses biasa**, bukan Windows Service — tidak butuh hak
+admin, tidak tertinggal hidup setelah aplikasi ditutup, dan dua versi berbeda bisa
+ditukar tanpa pasang/copot service.
+
+---
+
+## Membangun dari sumber
+
+Butuh .NET SDK (build menargetkan .NET Framework 4.8, yang sudah ada di tiap
+Windows 10/11).
+
+```
+build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
+build.bat run          build Debug lalu jalankan
+build.bat test         harness uji (88 uji)
+build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
+build.bat clean
+build_installer.bat    exe + installer (butuh Inno Setup 6)
+set_version.bat 1.1.0  naikkan versi di keenam berkas sekaligus
+```
+
+**Rilis otomatis.** Push ke `main` dengan nomor versi baru di `Models.cs` membuat
+GitHub Actions menerbitkan rilis `v<versi>` sendiri, lengkap dengan exe dan installer.
+Tag yang sudah ada dilewati, jadi push biasa tidak menimpa rilis yang sudah diunduh
+orang. Naikkan versi lewat `set_version.bat`, jangan cari-ganti manual — CI menolak
+build kalau nomornya tidak seragam di keenam berkas.
+
+Uji di sini sengaja bukan uji unit murni. `build.bat test` menyuruh **httpd.exe
+sungguhan** memvalidasi tiap httpd.conf yang dihasilkan (`httpd -t` dan `httpd -S`)
+dan **php.exe sungguhan** memuat tiap php.ini yang ditulis (`php -m`, `php -l`).
+`build.bat live` melangkah lebih jauh: menyalakan Apache untuk tiap kombinasi
+PHP+Apache yang ada, mengambil halaman PHP lewat HTTP, dan memastikan versi yang
+menjawab persis versi yang diminta profil — lalu menyalakan MySQL dari folder data
+kosong dan menjalankan `SELECT VERSION()`.
+
+Ikon aplikasi dirakit oleh `assets\make_icon.ps1` dari `assets\phoron-logo.png`:
+pinggiran tembus pandang dipotong, hasilnya dijadikan bujur sangkar, lalu
+diperkecil ke 16/24/32/48/64/128/256 dan dibungkus jadi `assets\phoron.ico`.
+Ganti logonya, jalankan ulang skripnya, build — `phoron.ico` sendiri tidak
+disimpan di repo karena bisa dibangkitkan ulang kapan saja.
+
+---
+
+## Yang belum ada
+
+- Manajer basis data bawaan (pakai HeidiSQL/phpMyAdmin sendiri).
+- Pengelolaan sertifikat per situs (sekarang satu sertifikat wildcard `*.test`).
+- Nginx belum diuji seluas Apache.
