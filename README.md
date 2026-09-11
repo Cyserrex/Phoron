@@ -81,6 +81,25 @@ Tiap subfolder di `www\` otomatis dapat vhost dan nama sendiri, mis.
 `www\toko-online` → `http://toko-online.test`. Folder `public/` yang berisi
 `index.php` (Laravel, Symfony) otomatis dipakai sebagai DocumentRoot.
 
+### Folder proyek tidak harus www
+
+Di **Profil → Folder proyek**, isi sebanyak yang perlu — satu folder per baris:
+
+```
+C:\Phoron\www
+C:\laragon\www
+D:\kerjaan\klien-a
+```
+
+Semuanya dipindai, dan tiap subfolder di mana pun dapat alamatnya sendiri. Folder
+paling atas jadi **akar utama**: itulah yang dilayani `http://localhost` dan yang
+dibuka tombol "Buka www". Daftarnya per profil, jadi profil PHP 5.6 bisa menunjuk
+folder proyek lama sementara profil PHP 8.3 menunjuk folder yang baru.
+
+Kalau dua folder berisi proyek bernama sama, yang pertama memegang nama aslinya dan
+yang berikutnya diberi angka (`api.test`, `api-2.test`) — tidak ada yang dibuang
+diam-diam, dan Phoron memberi tahu pasangan mana yang bentrok.
+
 Nama `.test` perlu masuk ke berkas hosts Windows, dan itu butuh hak Administrator.
 Phoron menulisnya di dalam blok bertanda sendiri, jadi baris milik aplikasi lain
 tidak pernah tersentuh:
@@ -140,6 +159,7 @@ mysql=mysql-5.7.38-winx64
 port_http=80
 port_https=443
 port_mysql=3306
+folder_proyek=C:\Phoron\www;C:\laragon\www
 
 [php]
 ekstensi=curl,mbstring,openssl,pdo_mysql,gd
@@ -168,6 +188,13 @@ lain. Yang diubah hanya `SRVROOT` dan `Listen`; sisanya ditambahkan sebagai blok
 di akhir berkas — direktif Apache yang muncul belakangan menimpa yang di atasnya,
 jadi bawaan vendor tidak perlu diobrak-abrik.
 
+**localhost punya VirtualHost sendiri.** Apache memakai VirtualHost *pertama*
+sebagai jawaban baku untuk permintaan yang tidak cocok dengan `ServerName` mana pun.
+Tanpa penjaga, `http://localhost` akan dilayani situs yang kebetulan pertama menurut
+abjad, bukan folder proyek utama — gejala yang baru muncul setelah situs pertama
+dibuat, jadi mudah disangka kesalahan lain. Phoron selalu menulis
+`sites-enabled\000-default.conf` yang urutannya dijamin paling awal.
+
 **Konflik port dijelaskan, bukan dibiarkan.** Sebelum menyalakan, Phoron memeriksa
 port dan menyebut nama proses beserta PID yang memegangnya. "Port 80 sedang dipakai
 httpd (PID 23972)" jauh lebih berguna daripada Apache yang keluar dengan kode 1.
@@ -186,7 +213,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (88 uji)
+build.bat test         harness uji (100 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

@@ -81,7 +81,7 @@ namespace Phoron.App.Pages
             TxtPortHttp.Text = p.HttpPort.ToString();
             TxtPortHttps.Text = p.HttpsPort.ToString();
             TxtPortMysql.Text = p.MySqlPort.ToString();
-            TxtDocRoot.Text = p.DocumentRoot ?? "";
+            TxtDocRoot.Text = string.Join(Environment.NewLine, p.ProjectRoots);
             TxtSuffix.Text = p.SiteSuffix ?? "test";
             TxtCatatan.Text = p.Notes ?? "";
             _loading = false;
@@ -144,7 +144,14 @@ namespace Phoron.App.Pages
             p.HttpPort = http;
             p.HttpsPort = https;
             p.MySqlPort = mysql;
-            p.DocumentRoot = TxtDocRoot.Text.Trim();
+            p.ProjectRoots = (TxtDocRoot.Text ?? "")
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim().TrimEnd('\\')).Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var hilang = p.ProjectRoots.Where(r => !System.IO.Directory.Exists(r)).ToList();
+            if (hilang.Count > 0
+                && !AppState.Ask("Folder ini belum ada:\n\n" + string.Join("\n", hilang)
+                                 + "\n\nTetap simpan?")) return false;
             p.SiteSuffix = string.IsNullOrWhiteSpace(TxtSuffix.Text) ? "test" : TxtSuffix.Text.Trim();
             p.Notes = TxtCatatan.Text;
 
@@ -237,9 +244,23 @@ namespace Phoron.App.Pages
         {
             using (var dlg = new Forms.FolderBrowserDialog())
             {
-                dlg.Description = "Pilih folder proyek untuk profil ini";
-                dlg.SelectedPath = string.IsNullOrWhiteSpace(TxtDocRoot.Text) ? Paths.Www : TxtDocRoot.Text;
-                if (dlg.ShowDialog() == Forms.DialogResult.OK) TxtDocRoot.Text = dlg.SelectedPath;
+                dlg.Description = "Pilih folder proyek untuk ditambahkan ke profil ini";
+                dlg.SelectedPath = Paths.Www;
+                if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
+                // Ditambahkan sebagai baris baru, bukan menimpa: tombol ini ada
+                // justru untuk menyusun daftar berisi beberapa folder.
+                var ada = (TxtDocRoot.Text ?? "").TrimEnd();
+                if (ada.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                       .Any(x => string.Equals(x.Trim().TrimEnd('\\'),
+                                               dlg.SelectedPath.TrimEnd('\\'),
+                                               StringComparison.OrdinalIgnoreCase)))
+                {
+                    AppState.Info("Folder itu sudah ada di daftar.");
+                    return;
+                }
+                TxtDocRoot.Text = ada.Length == 0
+                    ? dlg.SelectedPath
+                    : ada + Environment.NewLine + dlg.SelectedPath;
             }
         }
     }

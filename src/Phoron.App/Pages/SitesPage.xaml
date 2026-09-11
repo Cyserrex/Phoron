@@ -22,10 +22,15 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <ui:TextBox x:Name="TxtSitusBaru" Grid.Column="0" Margin="0,0,8,0"
                             PlaceholderText="nama-proyek-baru"/>
-                <ui:Button Grid.Column="1" Content="Buat situs" Appearance="Primary" Click="BtnBuat_Click"/>
+                <!-- Pemilih folder hanya muncul kalau profil punya lebih dari satu;
+                     dengan satu folder, pertanyaannya tidak ada gunanya. -->
+                <ComboBox x:Name="CmbRootBaru" Grid.Column="1" Margin="0,0,8,0" MinWidth="180"
+                          Visibility="Collapsed"/>
+                <ui:Button Grid.Column="2" Content="Buat situs" Appearance="Primary" Click="BtnBuat_Click"/>
             </Grid>
         </Border>
 
@@ -33,9 +38,10 @@
                   MouseDoubleClick="Daftar_DoubleClick">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="Alamat" Width="230" DisplayMemberBinding="{Binding Alamat}"/>
-                    <GridViewColumn Header="Folder" Width="180" DisplayMemberBinding="{Binding Folder}"/>
-                    <GridViewColumn Header="Document root" Width="270" DisplayMemberBinding="{Binding DocRoot}"/>
+                    <GridViewColumn Header="Alamat" Width="215" DisplayMemberBinding="{Binding Alamat}"/>
+                    <GridViewColumn Header="Folder" Width="150" DisplayMemberBinding="{Binding Folder}"/>
+                    <GridViewColumn Header="Folder proyek" Width="185" DisplayMemberBinding="{Binding Root}"/>
+                    <GridViewColumn Header="Document root" Width="150" DisplayMemberBinding="{Binding DocRoot}"/>
                     <GridViewColumn Header="hosts" Width="70" DisplayMemberBinding="{Binding Hosts}"/>
                     <GridViewColumn Header="vhost" Width="70" DisplayMemberBinding="{Binding Vhost}"/>
                 </GridView>

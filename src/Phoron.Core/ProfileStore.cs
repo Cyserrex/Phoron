@@ -33,10 +33,16 @@ namespace Phoron.Core
                 HttpPort = ini.GetInt("profil", "port_http", 80),
                 HttpsPort = ini.GetInt("profil", "port_https", 443),
                 MySqlPort = ini.GetInt("profil", "port_mysql", 3306),
-                DocumentRoot = ini.Get("profil", "document_root", ""),
                 SiteSuffix = ini.Get("profil", "akhiran_situs", "test"),
                 Notes = ini.Get("profil", "catatan", ""),
             };
+            // folder_proyek menggantikan document_root sejak dukungan banyak
+            // folder. Berkas profil lama tetap dibaca lewat kunci lamanya -
+            // menghapusnya diam-diam berarti proyek pengguna hilang dari daftar
+            // tanpa penjelasan apa pun.
+            var roots = ini.Get("profil", "folder_proyek", null)
+                       ?? ini.Get("profil", "document_root", "");
+            p.ProjectRoots = SplitRoots(roots);
             var ext = ini.Get("php", "ekstensi", "");
             p.PhpExtensions = ext.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                                  .Select(x => x.Trim().ToLowerInvariant())
@@ -59,7 +65,7 @@ namespace Phoron.Core
             ini.Set("profil", "port_http", p.HttpPort.ToString());
             ini.Set("profil", "port_https", p.HttpsPort.ToString());
             ini.Set("profil", "port_mysql", p.MySqlPort.ToString());
-            ini.Set("profil", "document_root", p.DocumentRoot ?? "");
+            ini.Set("profil", "folder_proyek", string.Join(";", p.ProjectRoots));
             ini.Set("profil", "akhiran_situs", p.SiteSuffix ?? "test");
             ini.Set("profil", "catatan", (p.Notes ?? "").Replace("\r", " ").Replace("\n", " "));
             ini.Set("php", "ekstensi", string.Join(",", p.PhpExtensions));
@@ -72,6 +78,21 @@ namespace Phoron.Core
             if (p == null || string.IsNullOrEmpty(p.FileName)) return;
             var path = Path.Combine(Paths.Profiles, p.FileName + ".ini");
             if (File.Exists(path)) File.Delete(path);
+        }
+
+        /// <summary>
+        /// Pemisahnya titik koma, sama seperti bin_roots di phoron.ini. Jalur
+        /// Windows tidak pernah memuat titik koma, jadi tidak ada yang perlu
+        /// di-escape - dan satu baris tetap enak disunting tangan.
+        /// </summary>
+        public static List<string> SplitRoots(string value)
+        {
+            return (value ?? "")
+                .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim().TrimEnd('\\'))
+                .Where(x => x.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public static string Slug(string name)

@@ -40,15 +40,23 @@ $edits = @(
        Replace = "`${1}$Version`${2}" }
 )
 
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+
 foreach ($e in $edits) {
     $path = Join-Path $root $e.File
     if (-not (Test-Path $path)) { throw "Berkas tidak ada: $($e.File)" }
-    $text = Get-Content $path -Raw
+    # ReadAllText, bukan Get-Content -Raw: di Windows PowerShell 5.1, Get-Content
+    # tanpa -Encoding memakai codepage ANSI mesin. Berkas sumber di sini UTF-8,
+    # jadi karakter seperti "·" terbaca sebagai dua aksara lalu ditulis ulang
+    # sebagai "Â·" - kerusakan senyap yang hanya terlihat di layar aplikasi,
+    # jauh dari skrip yang menyebabkannya. Ini bukan hipotesis: naik ke 1.1.0
+    # sempat merusak label versi di Models.cs.
+    $text = [System.IO.File]::ReadAllText($path, $utf8)
     if ($text -notmatch $e.Pattern) { throw "Pola versi tidak ditemukan di $($e.File)" }
     $baru = [regex]::Replace($text, $e.Pattern, $e.Replace)
     if ($baru -ne $text) {
         # Tanpa BOM: berkas sumber dibaca juga oleh compiler dan ISCC.
-        [System.IO.File]::WriteAllText($path, $baru, (New-Object System.Text.UTF8Encoding($false)))
+        [System.IO.File]::WriteAllText($path, $baru, $utf8)
         Write-Output "  diperbarui  $($e.File)"
     } else {
         Write-Output "  sudah $Version  $($e.File)"

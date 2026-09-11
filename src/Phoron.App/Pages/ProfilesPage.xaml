@@ -81,15 +81,14 @@
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Folder proyek (kosongkan untuk memakai www bawaan)" Style="{StaticResource Label}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <ui:TextBox x:Name="TxtDocRoot" Grid.Column="0"/>
-                        <ui:Button Grid.Column="1" Content="..." Margin="6,0,0,0" Click="BtnPilihFolder_Click"/>
-                    </Grid>
+                    <TextBlock Text="Folder proyek" Style="{StaticResource Label}"/>
+                    <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
+                               Text="Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan."/>
+                    <ui:TextBox x:Name="TxtDocRoot" AcceptsReturn="True" Height="80"
+                                TextWrapping="NoWrap" VerticalContentAlignment="Top"
+                                VerticalScrollBarVisibility="Auto"/>
+                    <ui:Button Content="Tambah folder..." Margin="0,6,0,0"
+                               HorizontalAlignment="Left" Click="BtnPilihFolder_Click"/>
 
                     <TextBlock Text="Akhiran nama situs" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtSuffix" PlaceholderText="test"/>

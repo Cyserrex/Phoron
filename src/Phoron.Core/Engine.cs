@@ -82,9 +82,13 @@ namespace Phoron.Core
                 .FirstOrDefault();
         }
 
+        /// <summary>Peringatan dari pemindaian situs terakhir (folder hilang, nama bentrok).</summary>
+        public List<string> SiteWarnings { get; private set; }
+
         public void RefreshSites()
         {
-            Sites = Active != null ? SiteScanner.Scan(Active) : new List<Site>();
+            SiteWarnings = new List<string>();
+            Sites = Active != null ? SiteScanner.Scan(Active, SiteWarnings) : new List<Site>();
         }
 
         // ------------------------------------------------------------- Resolusi
@@ -147,6 +151,10 @@ namespace Phoron.Core
             RefreshSites();
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>());
+            // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
+            // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
+            // hilang dari daftar tanpa sebab yang terlihat.
+            LastBuild.Warnings.AddRange(SiteWarnings);
             if (Settings.ManageHosts) SyncHosts(LastBuild.Warnings);
             foreach (var w in LastBuild.Warnings) Say("Peringatan: " + w);
             Say("Konfigurasi profil \"" + Active.Name + "\" ditulis ulang.");

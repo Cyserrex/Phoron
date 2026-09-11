@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.0.0";
+        public const string Version = "1.1.0";
     }
 
     public enum BinKind { Php, Apache, Nginx, MySql }
@@ -92,7 +92,12 @@ namespace Phoron.Core
         public int HttpPort = 80;
         public int HttpsPort = 443;
         public int MySqlPort = 3306;
-        public string DocumentRoot = "";        // kosong = pakai <root>\www
+        /// <summary>
+        /// Folder-folder yang dipindai untuk mencari situs. Kosong = pakai
+        /// &lt;root&gt;\www. Yang pertama jadi akar utama: itulah yang dilayani
+        /// http://localhost dan yang dibuka tombol "Buka www".
+        /// </summary>
+        public List<string> ProjectRoots = new List<string>();
         public string SiteSuffix = "test";
         /// <summary>Ekstensi PHP yang dinyalakan profil ini (nama tanpa awalan php_).</summary>
         public List<string> PhpExtensions = new List<string>();
@@ -118,7 +123,7 @@ namespace Phoron.Core
                 HttpPort = HttpPort,
                 HttpsPort = HttpsPort,
                 MySqlPort = MySqlPort,
-                DocumentRoot = DocumentRoot,
+                ProjectRoots = new List<string>(ProjectRoots),
                 SiteSuffix = SiteSuffix,
                 PhpExtensions = new List<string>(PhpExtensions),
                 PhpIniOverrides = new Dictionary<string, string>(PhpIniOverrides, StringComparer.OrdinalIgnoreCase),
@@ -135,6 +140,8 @@ namespace Phoron.Core
         public string HostName;
         public bool InHosts;
         public bool HasVhost;
+        /// <summary>Folder proyek asal situs ini - berguna saat ada lebih dari satu.</summary>
+        public string Root;
         /// <summary>Subfolder public/ atau web/ dipakai sebagai DocumentRoot bila ada (Laravel, Symfony).</summary>
         public string DocRoot;
     }

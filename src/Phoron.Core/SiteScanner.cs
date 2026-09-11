@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Phoron.Core
 {
-    /// <summary>Menerjemahkan isi folder www menjadi daftar situs beserta status vhost/hosts.</summary>
+    /// <summary>Menerjemahkan isi folder proyek menjadi daftar situs beserta status vhost/hosts.</summary>
     public static class SiteScanner
     {
         /// <summary>Subfolder yang lazim dipakai framework sebagai akar web.</summary>
@@ -13,30 +13,82 @@ namespace Phoron.Core
 
         public static List<Site> Scan(Profile profile)
         {
-            var root = DocumentRoot(profile);
-            var suffix = string.IsNullOrWhiteSpace(profile == null ? null : profile.SiteSuffix)
-                ? "test" : profile.SiteSuffix.Trim().TrimStart('.');
+            return Scan(profile, null);
+        }
+
+        /// <summary>
+        /// Pindai seluruh folder proyek profil. Peringatan (folder hilang, nama
+        /// situs bentrok) ditambahkan ke <paramref name="warnings"/> bila diberikan.
+        /// </summary>
+        public static List<Site> Scan(Profile profile, List<string> warnings)
+        {
+            var suffix = Suffix(profile);
             var hosts = HostsFile.AllNames();
             var list = new List<Site>();
-            if (!Directory.Exists(root)) return list;
+            // Nama host harus unik di seluruh folder proyek: dua vhost dengan
+            // ServerName sama membuat Apache selalu melayani yang pertama, dan
+            // folder kedua seolah-olah tidak pernah ada.
+            var terpakai = new Dictionary<string, Site>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var dir in Directory.GetDirectories(root).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            foreach (var root in Roots(profile))
             {
-                var name = Path.GetFileName(dir);
-                if (name.StartsWith(".") || name.StartsWith("_")) continue;
-                var host = SafeHost(name) + "." + suffix;
-                var site = new Site
+                if (!Directory.Exists(root))
                 {
-                    Folder = name,
-                    Path = dir,
-                    HostName = host,
-                    DocRoot = FindDocRoot(dir),
-                    InHosts = hosts.Contains(host),
-                };
-                site.HasVhost = File.Exists(VhostPath(site));
-                list.Add(site);
+                    if (warnings != null) warnings.Add("Folder proyek tidak ada: " + root);
+                    continue;
+                }
+
+                string[] dirs;
+                try { dirs = Directory.GetDirectories(root); }
+                catch (Exception ex)
+                {
+                    if (warnings != null)
+                        warnings.Add("Folder proyek tidak terbaca (" + root + "): " + ex.Message);
+                    continue;
+                }
+
+                foreach (var dir in dirs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (name.StartsWith(".") || name.StartsWith("_")) continue;
+
+                    var dasar = SafeHost(name);
+                    var host = dasar + "." + suffix;
+                    if (terpakai.ContainsKey(host))
+                    {
+                        // Diberi angka, bukan dibuang: folder yang dilewati
+                        // diam-diam adalah hal yang hampir mustahil ditebak
+                        // sebabnya dari sisi pengguna.
+                        var asli = host;
+                        int n = 2;
+                        while (terpakai.ContainsKey(dasar + "-" + n + "." + suffix)) n++;
+                        host = dasar + "-" + n + "." + suffix;
+                        if (warnings != null)
+                            warnings.Add("Nama " + asli + " sudah dipakai " + terpakai[asli].Path
+                                         + "; folder " + dir + " memakai " + host + " sebagai gantinya.");
+                    }
+
+                    var site = new Site
+                    {
+                        Folder = name,
+                        Path = dir,
+                        Root = root,
+                        HostName = host,
+                        DocRoot = FindDocRoot(dir),
+                        InHosts = hosts.Contains(host),
+                    };
+                    site.HasVhost = File.Exists(VhostPath(site));
+                    terpakai[host] = site;
+                    list.Add(site);
+                }
             }
             return list;
+        }
+
+        public static string Suffix(Profile profile)
+        {
+            var s = profile == null ? null : profile.SiteSuffix;
+            return string.IsNullOrWhiteSpace(s) ? "test" : s.Trim().TrimStart('.');
         }
 
         public static string VhostPath(Site site)
@@ -69,11 +121,26 @@ namespace Phoron.Core
             return dir;
         }
 
+        /// <summary>Semua folder proyek profil. Selalu berisi minimal satu entri.</summary>
+        public static List<string> Roots(Profile profile)
+        {
+            var list = profile == null
+                ? new List<string>()
+                : profile.ProjectRoots.Where(r => !string.IsNullOrWhiteSpace(r))
+                                      .Select(r => r.Trim()).ToList();
+            if (list.Count == 0) list.Add(Paths.Www);
+            return list;
+        }
+
+        /// <summary>
+        /// Akar utama: yang dilayani http://localhost dan yang dibuka tombol
+        /// "Buka www". Folder proyek tambahan hanya dijangkau lewat nama situsnya
+        /// masing-masing - Apache tidak bisa menggabungkan beberapa folder di
+        /// bawah satu DocumentRoot tanpa alias per folder.
+        /// </summary>
         public static string DocumentRoot(Profile profile)
         {
-            if (profile != null && !string.IsNullOrWhiteSpace(profile.DocumentRoot))
-                return profile.DocumentRoot;
-            return Paths.Www;
+            return Roots(profile)[0];
         }
     }
 }

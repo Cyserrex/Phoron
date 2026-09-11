@@ -220,6 +220,8 @@ namespace Phoron.Core
             var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool ssl = File.Exists(Path.Combine(Paths.EtcSsl, "phoron.crt"));
 
+            WriteDefaultVhost(profile, ssl);
+
             foreach (var s in sites ?? new List<Site>())
             {
                 var file = SiteScanner.VhostPath(s);
@@ -240,6 +242,51 @@ namespace Phoron.Core
             foreach (var f in Directory.GetFiles(Paths.SitesEnabled, "auto.*.conf"))
                 if (!wanted.Contains(Path.GetFileName(f)))
                     try { File.Delete(f); } catch { }
+        }
+
+        /// <summary>
+        /// VirtualHost bawaan untuk permintaan yang tidak cocok dengan nama situs
+        /// mana pun - http://localhost dan http://127.0.0.1.
+        ///
+        /// Wajib ada, dan namanya wajib diurutkan paling awal: Apache memakai
+        /// VirtualHost PERTAMA sebagai jawaban baku, jadi tanpa berkas ini
+        /// localhost akan dilayani situs yang kebetulan pertama menurut abjad -
+        /// bukan folder proyek utama. Gejalanya membingungkan (localhost tiba-tiba
+        /// menampilkan isi salah satu proyek) dan baru muncul setelah situs
+        /// pertama dibuat, jadi mudah disangka kesalahan lain.
+        /// </summary>
+        static void WriteDefaultVhost(Profile profile, bool ssl)
+        {
+            var root = Paths.Fwd(SiteScanner.DocumentRoot(profile));
+            var sb = new StringBuilder();
+            sb.AppendLine(GeneratedHeader);
+            sb.AppendLine("define ROOT \"" + root + "\"");
+            sb.AppendLine();
+            sb.AppendLine(DefaultBlock(profile.HttpPort, false));
+            if (ssl) sb.AppendLine(DefaultBlock(profile.HttpsPort, true));
+            // Awalan "000-" menjamin urutannya sebelum semua berkas "auto.*.conf".
+            WriteIfChanged(Path.Combine(Paths.SitesEnabled, "000-default.conf"), sb.ToString());
+        }
+
+        static string DefaultBlock(int port, bool ssl)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("<VirtualHost _default_:" + port + ">");
+            sb.AppendLine("    DocumentRoot \"${ROOT}\"");
+            sb.AppendLine("    ServerName localhost");
+            sb.AppendLine("    <Directory \"${ROOT}\">");
+            sb.AppendLine("        Options Indexes FollowSymLinks ExecCGI");
+            sb.AppendLine("        AllowOverride All");
+            sb.AppendLine("        Require all granted");
+            sb.AppendLine("    </Directory>");
+            if (ssl)
+            {
+                sb.AppendLine("    SSLEngine on");
+                sb.AppendLine("    SSLCertificateFile \"" + Paths.Fwd(Path.Combine(Paths.EtcSsl, "phoron.crt")) + "\"");
+                sb.AppendLine("    SSLCertificateKeyFile \"" + Paths.Fwd(Path.Combine(Paths.EtcSsl, "phoron.key")) + "\"");
+            }
+            sb.AppendLine("</VirtualHost>");
+            return sb.ToString();
         }
 
         static string VhostBlock(int port, bool ssl)

@@ -16,6 +16,7 @@ namespace Phoron.App.Pages
         {
             public string Alamat { get; set; }
             public string Folder { get; set; }
+            public string Root { get; set; }
             public string DocRoot { get; set; }
             public string Hosts { get; set; }
             public string Vhost { get; set; }
@@ -31,22 +32,35 @@ namespace Phoron.App.Pages
         void Isi()
         {
             _e.RefreshSites();
-            var root = SiteScanner.DocumentRoot(_e.Active);
-            TxtInfo.Text = "Tiap subfolder di " + root + " otomatis dapat alamat sendiri. "
-                         + "Klik ganda untuk membuka di browser.";
+            var roots = SiteScanner.Roots(_e.Active);
+            TxtInfo.Text = roots.Count == 1
+                ? "Tiap subfolder di " + roots[0] + " otomatis dapat alamat sendiri. "
+                  + "Klik ganda untuk membuka di browser."
+                : "Memindai " + roots.Count + " folder proyek: " + string.Join(", ", roots)
+                  + ". Klik ganda untuk membuka di browser.";
+
+            CmbRootBaru.ItemsSource = roots;
+            CmbRootBaru.SelectedIndex = 0;
+            CmbRootBaru.Visibility = roots.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+
             Daftar.ItemsSource = _e.Sites.Select(s => new Baris
             {
                 Alamat = _e.SiteUrl(s),
                 Folder = s.Folder,
-                // DocumentRoot ditampilkan relatif supaya kolomnya terbaca; yang
-                // penting terlihat adalah apakah Phoron memilih subfolder public/.
-                DocRoot = s.DocRoot != null && s.DocRoot.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-                    ? s.DocRoot.Substring(root.Length).TrimStart('\\')
-                    : s.DocRoot,
+                Root = s.Root,
+                // Ditampilkan relatif terhadap folder situsnya sendiri; yang perlu
+                // terlihat di kolom ini cuma apakah Phoron memilih subfolder public/.
+                DocRoot = s.DocRoot != null && s.Path != null
+                          && s.DocRoot.Length > s.Path.Length
+                          && s.DocRoot.StartsWith(s.Path, StringComparison.OrdinalIgnoreCase)
+                    ? s.DocRoot.Substring(s.Path.Length).TrimStart('\\')
+                    : "(akar folder)",
                 Hosts = s.InHosts ? "ada" : "-",
                 Vhost = s.HasVhost ? "ada" : "-",
                 Situs = s,
             }).ToList();
+
+            AppState.ShowWarnings(_e.SiteWarnings);
         }
 
         Site Terpilih()
@@ -100,13 +114,13 @@ namespace Phoron.App.Pages
             if (nama.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             { AppState.Warn("Nama folder mengandung karakter yang tidak boleh dipakai."); return; }
 
-            var dir = Path.Combine(SiteScanner.DocumentRoot(_e.Active), nama);
+            var root = CmbRootBaru.SelectedItem as string ?? SiteScanner.DocumentRoot(_e.Active);
+            var dir = Path.Combine(root, nama);
             if (Directory.Exists(dir)) { AppState.Warn("Folder itu sudah ada."); return; }
             try
             {
                 Directory.CreateDirectory(dir);
-                var host = SiteScanner.SafeHost(nama) + "."
-                           + (_e.Active != null ? _e.Active.SiteSuffix : "test");
+                var host = SiteScanner.SafeHost(nama) + "." + SiteScanner.Suffix(_e.Active);
                 File.WriteAllText(Path.Combine(dir, "index.php"),
                     "<?php\n"
                     + "// Dibuat oleh Phoron.\n"

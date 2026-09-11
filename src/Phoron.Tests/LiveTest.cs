@@ -22,6 +22,8 @@ namespace Phoron.Tests
     {
         const int Port = 8931;   // jauh dari 80/8080 supaya tidak menabrak apa pun
 
+        static string FolderKedua { get { return Path.Combine(Paths.Root, "proyek-lain"); } }
+
         public static int Jalankan()
         {
             var sandbox = Path.Combine(Path.GetTempPath(), "phoron-live-" + Guid.NewGuid().ToString("N").Substring(0, 8));
@@ -36,6 +38,13 @@ namespace Phoron.Tests
                 File.WriteAllText(Path.Combine(Paths.Www, "index.php"),
                     "<?php echo 'PHORON|' . PHP_VERSION . '|' . php_sapi_name();",
                     new UTF8Encoding(false));
+
+                // Folder proyek KEDUA, di luar www: inilah yang membuktikan
+                // dukungan banyak folder benar-benar sampai ke Apache, bukan
+                // sekadar muncul di daftar situs.
+                Directory.CreateDirectory(Path.Combine(FolderKedua, "tokolive"));
+                File.WriteAllText(Path.Combine(FolderKedua, "tokolive", "index.php"),
+                    "<?php echo 'KEDUA|' . __DIR__;", new UTF8Encoding(false));
 
                 var pkgs = BinScanner.ScanAll(Settings.DefaultBinRoots()
                     .Concat(new[] { @"C:\laragon\bin" }).Distinct());
@@ -86,6 +95,8 @@ namespace Phoron.Tests
                 HttpPort = Port,
                 HttpsPort = Port + 1,
             };
+            profil.ProjectRoots.Add(Paths.Www);
+            profil.ProjectRoots.Add(FolderKedua);
             var situs = SiteScanner.Scan(profil);
             var cfg = ConfigWriter.Build(profil, php, apache, null, null, situs);
             foreach (var w in cfg.Warnings) Console.WriteLine("   peringatan: " + w);
@@ -115,6 +126,18 @@ namespace Phoron.Tests
                     return false;
                 }
                 Console.WriteLine("   ok: PHP " + versi + " (" + body.Split('|')[2] + ") menjawab dari port " + Port);
+
+                // Vhost dari folder proyek kedua. Berkas hosts tidak disentuh -
+                // nama situsnya dikirim lewat header Host, yang persis itulah yang
+                // dipakai Apache untuk memilih VirtualHost.
+                var kedua = Ambil("http://127.0.0.1:" + Port + "/", "tokolive." + SiteScanner.Suffix(profil));
+                Console.WriteLine("   folder kedua: " + kedua);
+                if (!kedua.StartsWith("KEDUA|") || !kedua.Contains("proyek-lain"))
+                {
+                    Console.WriteLine("   GAGAL: situs di folder proyek kedua tidak dilayani.");
+                    return false;
+                }
+                Console.WriteLine("   ok: situs di luar www ikut dilayani Apache");
                 return true;
             }
             catch (Exception ex)
@@ -187,12 +210,13 @@ namespace Phoron.Tests
             }
         }
 
-        static string Ambil(string url)
+        static string Ambil(string url, string host = null)
         {
             try
             {
                 var req = (HttpWebRequest)WebRequest.Create(url);
                 req.Timeout = 15000;
+                if (host != null) req.Host = host;
                 using (var resp = req.GetResponse())
                 using (var r = new StreamReader(resp.GetResponseStream()))
                     return r.ReadToEnd().Trim();

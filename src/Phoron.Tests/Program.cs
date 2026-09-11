@@ -37,12 +37,14 @@ namespace Phoron.Tests
                 UjiPemindai();
                 UjiProfil();
                 UjiSitus();
+                UjiBanyakFolderProyek();
                 UjiPhpIni();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
                 UjiHosts();
                 UjiPortCheck();
                 UjiAutostart();
+                UjiLabelVersi();
             }
             catch (Exception ex)
             {
@@ -219,6 +221,79 @@ namespace Phoron.Tests
             var aset = situs.FirstOrDefault(s => s.Folder == "punya-aset");
             Ok("public/ tanpa index.php TIDAK jadi document root",
                 aset != null && !aset.DocRoot.EndsWith("public"));
+
+            Ok("Tanpa folder proyek, www bawaan yang dipakai",
+                SiteScanner.Roots(new Profile()).Single() == Paths.Www);
+        }
+
+        static void UjiBanyakFolderProyek()
+        {
+            Bagian("Banyak folder proyek");
+            var kedua = Path.Combine(Paths.Root, "proyek-lain");
+            Directory.CreateDirectory(Path.Combine(kedua, "toko"));
+            Directory.CreateDirectory(Path.Combine(kedua, "gudang"));
+            // Sengaja bernama sama dengan folder di www - inilah kasus yang
+            // membuat dua vhost berebut ServerName yang sama.
+            Directory.CreateDirectory(Path.Combine(kedua, "laravel-app"));
+
+            var profil = new Profile { SiteSuffix = "test" };
+            profil.ProjectRoots.Add(Paths.Www);
+            profil.ProjectRoots.Add(kedua);
+
+            var peringatan = new List<string>();
+            var situs = SiteScanner.Scan(profil, peringatan);
+
+            Ok("Situs dari folder kedua ikut terbaca",
+                situs.Any(s => s.HostName == "toko.test" && s.Root == kedua),
+                string.Join(", ", situs.Select(s => s.HostName)));
+            Ok("Situs dari folder pertama tetap ada",
+                situs.Any(s => s.HostName == "proyek-satu.test" && s.Root == Paths.Www));
+            Ok("Akar utama tetap yang pertama", SiteScanner.DocumentRoot(profil) == Paths.Www);
+
+            var bentrok = situs.Where(s => s.Folder == "laravel-app").ToList();
+            Ok("Folder bernama sama tidak saling menghapus", bentrok.Count == 2);
+            Ok("Folder pertama memegang nama aslinya",
+                bentrok.Any(s => s.HostName == "laravel-app.test" && s.Root == Paths.Www));
+            Ok("Folder kedua diberi nama berangka, bukan dibuang",
+                bentrok.Any(s => s.HostName == "laravel-app-2.test" && s.Root == kedua),
+                string.Join(", ", bentrok.Select(s => s.HostName)));
+            Ok("Bentrok nama dilaporkan sebagai peringatan",
+                peringatan.Any(w => w.Contains("laravel-app.test")),
+                string.Join(" | ", peringatan));
+            Ok("Nama host tetap unik seluruhnya",
+                situs.Select(s => s.HostName).Distinct(StringComparer.OrdinalIgnoreCase).Count() == situs.Count);
+
+            // Folder yang salah ketik harus berbunyi, bukan diam-diam kosong.
+            var salah = new Profile { SiteSuffix = "test" };
+            salah.ProjectRoots.Add(Path.Combine(Paths.Root, "tidak-ada-folder-ini"));
+            var p2 = new List<string>();
+            SiteScanner.Scan(salah, p2);
+            Ok("Folder proyek yang tidak ada dilaporkan",
+                p2.Any(w => w.Contains("tidak ada")), string.Join(" | ", p2));
+
+            // Bolak-balik ke berkas profil: daftar folder harus utuh.
+            profil.Name = "Uji banyak folder";
+            profil.FileName = ProfileStore.UniqueFileName(profil.Name);
+            ProfileStore.Save(profil);
+            var muat = ProfileStore.Load(Path.Combine(Paths.Profiles, profil.FileName + ".ini"));
+            Ok("Daftar folder proyek bolak-balik utuh",
+                muat.ProjectRoots.SequenceEqual(new[] { Paths.Www, kedua }),
+                string.Join(";", muat.ProjectRoots));
+            ProfileStore.Delete(muat);
+
+            // Profil lama memakai kunci document_root; membacanya harus tetap jalan.
+            var lama = Path.Combine(Paths.Profiles, "profil-lama.ini");
+            var ini = new Ini();
+            ini.Set("profil", "nama", "Profil lama");
+            ini.Set("profil", "document_root", kedua);
+            ini.Save(lama);
+            var dibaca = ProfileStore.Load(lama);
+            Ok("Profil lama dengan document_root tetap terbaca",
+                dibaca.ProjectRoots.SequenceEqual(new[] { kedua }),
+                string.Join(";", dibaca.ProjectRoots));
+            File.Delete(lama);
+
+            Directory.Delete(kedua, true);
         }
 
         static void UjiPhpIni()
@@ -378,6 +453,26 @@ namespace Phoron.Tests
                 && tanpaBlok.Contains("127.0.0.1 localhost"));
             Ok("Penanda blok tidak berubah bentuk",
                 HostsFile.Begin.StartsWith("#") && HostsFile.End.StartsWith("#"));
+        }
+
+        static void UjiLabelVersi()
+        {
+            Bagian("Label versi");
+            // Penjaga kerusakan pengodean: set_version.ps1 pernah membaca berkas
+            // sumber dengan codepage ANSI lalu menulisnya sebagai UTF-8, dan
+            // titik tengah di label ini berubah jadi "Â·". Kerusakannya hanya
+            // terlihat di layar aplikasi, jauh dari skrip penyebabnya.
+            var pkg = new BinPackage
+            {
+                Kind = BinKind.Php,
+                Version = "8.3.12",
+                Compiler = "vs16",
+                Arch = "x64",
+                ThreadSafe = true,
+            };
+            var label = pkg.Label;
+            Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
+            Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
         }
 
         static void UjiAutostart()
