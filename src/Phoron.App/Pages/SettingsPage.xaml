@@ -24,6 +24,11 @@
             <ui:ToggleSwitch x:Name="SwHosts" Margin="0,0,0,10"
                              Content="Sinkronkan berkas hosts Windows (butuh Administrator)"/>
 
+            <ui:ToggleSwitch x:Name="SwPhpIni" Margin="0,0,0,4"
+                             Content="Tulis php.ini ke dalam folder PHP"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                       Text="Baku: php.ini ditulis ke etc\php\&lt;versi&gt;\ dan folder PHP tidak disentuh. Nyalakan kalau Anda ingin php.exe dari editor atau Composer di luar Phoron ikut memakai setelan yang sama. Hati-hati bila versi PHP-nya dipinjam dari Laragon - berkasnya dipakai bersama. php.ini asli dicadangkan sekali ke php.ini.sebelum-phoron."/>
+
             <TextBlock Text="Terminal" Style="{StaticResource Label}"/>
             <ComboBox x:Name="CmbTerminal" Width="240" HorizontalAlignment="Left">
                 <ComboBoxItem Content="Command Prompt" Tag="cmd"/>

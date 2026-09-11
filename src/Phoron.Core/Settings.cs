@@ -19,6 +19,12 @@ namespace Phoron.Core
         public bool MinimizeToTray = true;
         public bool AutoVhost = true;       // buat vhost otomatis untuk tiap folder di www
         public bool ManageHosts = true;     // sinkronkan berkas hosts (butuh admin)
+        /// <summary>
+        /// Tulis php.ini langsung ke folder PHP, bukan ke etc\php\&lt;versi&gt;\.
+        /// Baku mati: folder PHP sering dipinjam dari Laragon, dan menimpanya
+        /// berarti dua pengelola berebut satu berkas yang sama.
+        /// </summary>
+        public bool PhpIniKeFolderPhp;
         public string Terminal = "cmd";     // cmd | powershell | wt
         public string Editor = "";          // kosong = notepad
 
@@ -35,6 +41,7 @@ namespace Phoron.Core
             s.MinimizeToTray = ini.GetBool("umum", "minimize_ke_tray", true);
             s.AutoVhost = ini.GetBool("umum", "auto_vhost", true);
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
+            s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.Terminal = ini.Get("umum", "terminal", "cmd");
             s.Editor = ini.Get("umum", "editor", "");
             return s;
@@ -61,6 +68,7 @@ namespace Phoron.Core
             ini.Set("umum", "minimize_ke_tray", MinimizeToTray ? "1" : "0");
             ini.Set("umum", "auto_vhost", AutoVhost ? "1" : "0");
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
+            ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "terminal", Terminal ?? "cmd");
             ini.Set("umum", "editor", Editor ?? "");
             ini.Save(Paths.SettingsFile,

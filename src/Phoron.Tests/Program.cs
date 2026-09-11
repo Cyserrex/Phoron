@@ -39,6 +39,7 @@ namespace Phoron.Tests
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
+                UjiPhpIniKeFolderPhp();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
                 UjiHosts();
@@ -335,6 +336,63 @@ namespace Phoron.Tests
                 Ok(v.Version + ": memory_limit terbaca PHP sebagai 333M",
                     limit.StdOut.Trim() == "333M", limit.All);
             }
+        }
+
+        static void UjiPhpIniKeFolderPhp()
+        {
+            Bagian("php.ini di dalam folder PHP");
+            // Folder PHP TIRUAN di dalam sandbox. Uji ini tidak boleh menyentuh
+            // folder PHP sungguhan: di mesin pengembang, folder itu milik Laragon.
+            var palsu = Path.Combine(Paths.Root, "php-palsu");
+            Directory.CreateDirectory(Path.Combine(palsu, "ext"));
+            File.WriteAllText(Path.Combine(palsu, "php.ini-development"),
+                "memory_limit = 128M\nextension=php_bawaan.dll\n");
+            File.WriteAllText(Path.Combine(palsu, "php.ini"),
+                "; punya pengelola lain\nmemory_limit = 999M\nextension=php_punya_orang.dll\n");
+            var php = new BinPackage { Kind = BinKind.Php, Id = "php-palsu", Path = palsu, Version = "8.3.0" };
+
+            var profil = new Profile { Name = "Uji ini" };
+            profil.PhpIniOverrides["memory_limit"] = "256M";
+
+            var r1 = new ConfigWriter.Result();
+            var dir = ConfigWriter.WritePhpIni(profil, php, r1, true);
+            Ok("php.ini ditulis ke folder PHP", dir == palsu, dir);
+
+            var cadangan = Path.Combine(palsu, "php.ini.sebelum-phoron");
+            Ok("php.ini asli dicadangkan", File.Exists(cadangan));
+            Ok("Cadangan berisi berkas asli, bukan hasil Phoron",
+                File.ReadAllText(cadangan).Contains("punya pengelola lain"));
+
+            var isi1 = File.ReadAllText(Path.Combine(palsu, "php.ini"));
+            Ok("Nilai dari profil dipakai", isi1.Contains("256M"));
+            Ok("Ekstensi pengelola lain dimatikan",
+                !isi1.Contains("\nextension=php_punya_orang.dll"));
+
+            // Ditulis dua kali: berkas tidak boleh menumpuk karena memakai
+            // keluarannya sendiri sebagai dasar.
+            ConfigWriter.WritePhpIni(profil, php, new ConfigWriter.Result(), true);
+            var isi2 = File.ReadAllText(Path.Combine(palsu, "php.ini"));
+            Ok("Penulisan kedua tidak menggandakan isi", isi1.Length == isi2.Length,
+                isi1.Length + " lalu " + isi2.Length);
+            Ok("Cadangan tidak ditimpa hasil Phoron",
+                File.ReadAllText(cadangan).Contains("punya pengelola lain"));
+
+            // Folder PHP di luar bin milik Phoron harus memicu peringatan.
+            var r3 = new ConfigWriter.Result();
+            ConfigWriter.WritePhpIni(profil, php, r3, true);
+            Ok("Folder PHP pinjaman diperingatkan",
+                r3.Warnings.Any(w => w.Contains("TIDAK milik Phoron")),
+                string.Join(" | ", r3.Warnings));
+
+            // Baku (mati) tetap menulis ke etc\ dan tidak menyentuh folder PHP.
+            File.WriteAllText(Path.Combine(palsu, "php.ini"), "; disentuh pengelola lain\n");
+            var r4 = new ConfigWriter.Result();
+            var dir4 = ConfigWriter.WritePhpIni(profil, php, r4, false);
+            Ok("Baku menulis ke etc\\php", dir4 == Path.Combine(Paths.Etc, "php", php.Id), dir4);
+            Ok("Baku tidak menyentuh php.ini folder PHP",
+                File.ReadAllText(Path.Combine(palsu, "php.ini")) == "; disentuh pengelola lain\n");
+
+            Directory.Delete(palsu, true);
         }
 
         static void UjiHalamanSambutan()

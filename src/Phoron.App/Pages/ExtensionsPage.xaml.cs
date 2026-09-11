@@ -119,11 +119,15 @@ namespace Phoron.App.Pages
 
         void BtnBuka_Click(object sender, RoutedEventArgs e)
         {
-            var php = _e.Php;
-            if (php == null) return;
-            var file = Path.Combine(Paths.Etc, "php", php.Id, "php.ini");
-            if (!File.Exists(file)) _e.Apply();
-            Shell.Open(file);
+            if (_e.Php == null) return;
+            // Jalurnya diambil dari hasil penulisan terakhir, bukan disusun ulang:
+            // php.ini bisa berada di etc\ atau di dalam folder PHP tergantung
+            // setelan, dan menebaknya di sini berarti tombol ini membuka berkas
+            // yang bukan yang sedang dipakai.
+            if (_e.LastBuild == null || _e.LastBuild.PhpIniDir == null) _e.Apply();
+            var dir = _e.LastBuild != null ? _e.LastBuild.PhpIniDir : null;
+            if (dir == null) { AppState.Warn("php.ini belum pernah ditulis."); return; }
+            Shell.Open(Path.Combine(dir, "php.ini"));
         }
 
         void BtnUji_Click(object sender, RoutedEventArgs e)

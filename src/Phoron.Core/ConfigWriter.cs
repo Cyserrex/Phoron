@@ -33,10 +33,11 @@ namespace Phoron.Core
         }
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
-                                   BinPackage mysql, BinPackage nginx, List<Site> sites)
+                                   BinPackage mysql, BinPackage nginx, List<Site> sites,
+                                   bool phpIniKeFolderPhp = false)
         {
             var r = new Result();
-            if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r);
+            if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp);
             if (profile.WebServer == "nginx" && nginx != null)
                 r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
             else if (apache != null)
@@ -320,13 +321,32 @@ namespace Phoron.Core
         /// Menulis php.ini milik profil ke etc\php\&lt;versi&gt;\php.ini dan mengembalikan
         /// foldernya (dipakai PHPIniDir). php.ini di dalam folder bin tidak disentuh.
         /// </summary>
-        public static string WritePhpIni(Profile profile, BinPackage php, Result r)
+        public static string WritePhpIni(Profile profile, BinPackage php, Result r,
+                                         bool keFolderPhp = false)
         {
-            var dir = Path.Combine(Paths.Etc, "php", php.Id);
+            var dir = keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Id);
             Directory.CreateDirectory(dir);
             var target = Path.Combine(dir, "php.ini");
 
-            var baseText = PhpIniTemplate(php);
+            string cadangan = null;
+            if (keFolderPhp)
+            {
+                // php.ini asli disalin sekali sebelum ditimpa. Tanpa ini, setelan
+                // yang sudah ditulis pengguna (atau Laragon) lenyap tanpa jejak
+                // pada penulisan pertama - dan tidak ada cara mengembalikannya.
+                cadangan = Path.Combine(php.Path, "php.ini.sebelum-phoron");
+                try
+                {
+                    if (File.Exists(target) && !File.Exists(cadangan)) File.Copy(target, cadangan);
+                }
+                catch (Exception ex) { r.Warnings.Add("Gagal mencadangkan php.ini asli: " + ex.Message); }
+
+                if (!EhUnderRoot(php.Path, Paths.Bin))
+                    r.Warnings.Add("php.ini ditulis ke " + php.Path + ", folder yang TIDAK milik Phoron. "
+                                   + "Pengelola lain (mis. Laragon) memakai berkas yang sama.");
+            }
+
+            var baseText = PhpIniTemplate(php, cadangan);
             if (baseText == null)
             {
                 r.Warnings.Add("Tidak ada php.ini contoh di " + php.Id + "; dibuat dari nol.");
@@ -422,14 +442,33 @@ namespace Phoron.Core
             return modern ? ext : "php_" + ext + ".dll";
         }
 
-        static string PhpIniTemplate(BinPackage php)
+        /// <summary>
+        /// Contoh php.ini yang jadi dasar. Kalau ada cadangan, itu yang dipakai:
+        /// menulis ke folder PHP berarti php.ini di sana adalah keluaran Phoron
+        /// sendiri, dan memakainya sebagai dasar membuat berkasnya menumpuk tiap
+        /// kali konfigurasi ditulis ulang.
+        /// </summary>
+        static string PhpIniTemplate(BinPackage php, string cadangan = null)
         {
+            if (cadangan != null && File.Exists(cadangan)) return File.ReadAllText(cadangan);
             foreach (var name in new[] { "php.ini-development", "php.ini-production", "php.ini" })
             {
                 var p = Path.Combine(php.Path, name);
                 if (File.Exists(p)) return File.ReadAllText(p);
             }
             return null;
+        }
+
+        /// <summary>Apakah sebuah folder berada di dalam folder lain.</summary>
+        static bool EhUnderRoot(string path, string root)
+        {
+            try
+            {
+                var a = Path.GetFullPath(path).TrimEnd('\\') + "\\";
+                var b = Path.GetFullPath(root).TrimEnd('\\') + "\\";
+                return a.StartsWith(b, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
         }
 
         /// <summary>Daftar ekstensi yang tersedia di sebuah build PHP (nama tanpa awalan php_).</summary>

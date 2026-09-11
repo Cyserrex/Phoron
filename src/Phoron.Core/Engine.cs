@@ -151,7 +151,8 @@ namespace Phoron.Core
             var awal = PastikanSertifikat();
             RefreshSites();
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
-                                           Settings.AutoVhost ? Sites : new List<Site>());
+                                           Settings.AutoVhost ? Sites : new List<Site>(),
+                                           Settings.PhpIniKeFolderPhp);
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.

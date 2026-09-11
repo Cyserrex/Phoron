@@ -196,6 +196,24 @@ memory_limit=512M
 
 ## Catatan teknis
 
+**php.ini ditulis ke `etc\php\<versi>\`, bukan ke folder PHP.** Folder PHP sering
+dipinjam dari Laragon atau XAMPP, dan php.ini di sana milik pengelola itu. Phoron
+mengarahkan `PHPIniDir` Apache dan variabel `PHPRC` ke berkasnya sendiri, jadi PHP
+tetap memakai setelan profil tanpa ada dua aplikasi yang berebut satu berkas.
+
+Kalau Anda ingin `php.exe` dari editor atau Composer **di luar** Phoron ikut memakai
+setelan yang sama, nyalakan **Pengaturan → Tulis php.ini ke dalam folder PHP**.
+php.ini asli dicadangkan sekali ke `php.ini.sebelum-phoron`, dan cadangan itulah yang
+dipakai sebagai dasar penulisan berikutnya — kalau tidak, berkasnya akan menumpuk
+karena memakai keluarannya sendiri. Phoron memperingatkan bila folder PHP-nya bukan
+miliknya.
+
+**Halaman localhost adalah isi folder proyek Anda.** Phoron hanya menulis halaman
+sambutannya sendiri kalau folder itu benar-benar kosong. Kalau Anda mengarahkan folder
+proyek ke `C:\laragon\www`, yang muncul di `http://localhost` adalah `index.php`
+milik Laragon yang sudah ada di sana — bukan tanda Phoron tidak bekerja. Menimpa
+berkas di folder kerja orang bukan urusan Phoron.
+
 **Toolset harus cocok.** Modul PHP yang dibangun dengan VC11 tidak akan dimuat
 oleh httpd VS16 — dan gagalnya berupa Apache yang mati seketika tanpa pesan yang
 menjelaskan. Phoron memasangkan otomatis berdasarkan toolset, dan memperingatkan
@@ -242,7 +260,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (100 uji)
+build.bat test         harness uji (112 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)
