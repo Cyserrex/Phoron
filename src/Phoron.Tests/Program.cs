@@ -366,6 +366,43 @@ namespace Phoron.Tests
                 Regex.IsMatch(isi, @"(?m)^max_input_vars\s*=\s*5000"),
                 Baris(isi, "max_input_vars"));
 
+            // Ekstensi ikut diambil alih ketika profil belum punya daftar sendiri.
+            File.WriteAllText(Path.Combine(palsu, "php.ini"),
+                "short_open_tag = On\nmax_input_vars = 5000\n"
+                + "extension=php_mbstring.dll\n"
+                + "extension=php_exif.dll   ; harus setelah mbstring\n"
+                + ";extension=php_tidak_dipakai.dll\n"
+                + "extension=php_oci8_12c.dll\n");
+            foreach (var e in new[] { "mbstring", "exif", "oci8_12c" })
+                File.WriteAllText(Path.Combine(palsu, "ext", "php_" + e + ".dll"), "x");
+
+            var profilKosong = new Profile { Name = "Belum punya daftar" };
+            var r2 = new ConfigWriter.Result();
+            var isiAdopsi = File.ReadAllText(Path.Combine(
+                ConfigWriter.WritePhpIni(profilKosong, php, r2), "php.ini"));
+            Ok("Ekstensi aktif diambil alih dari php.ini dasar",
+                r2.AdoptedExtensions != null
+                && r2.AdoptedExtensions.SequenceEqual(new[] { "mbstring", "exif", "oci8_12c" }),
+                r2.AdoptedExtensions == null ? "null" : string.Join(",", r2.AdoptedExtensions));
+            Ok("Ekstensi yang dikomentari tidak ikut",
+                r2.AdoptedExtensions != null && !r2.AdoptedExtensions.Contains("tidak_dipakai"));
+            Ok("mbstring benar-benar ditulis ke php.ini hasil",
+                Regex.IsMatch(isiAdopsi, @"(?m)^extension\s*=\s*php_mbstring\.dll"),
+                Baris(isiAdopsi, "extension = php_mbstring"));
+            Ok("Urutan dipertahankan (exif setelah mbstring)",
+                isiAdopsi.IndexOf("php_mbstring.dll", StringComparison.Ordinal)
+                    < isiAdopsi.IndexOf("php_exif.dll", StringComparison.Ordinal));
+
+            // Profil yang SUDAH punya daftar tidak boleh diambil alih.
+            var profilPunya = new Profile { Name = "Sudah punya" };
+            profilPunya.PhpExtensions.Add("oci8_12c");
+            var r2b = new ConfigWriter.Result();
+            var isiPunya = File.ReadAllText(Path.Combine(
+                ConfigWriter.WritePhpIni(profilPunya, php, r2b), "php.ini"));
+            Ok("Profil yang sudah punya daftar tidak diambil alih", r2b.AdoptedExtensions == null);
+            Ok("Daftar profil yang dipakai, bukan daftar berkas dasar",
+                !Regex.IsMatch(isiPunya, @"(?m)^extension\s*=\s*php_mbstring\.dll"));
+
             // Profil tetap berkuasa di atas berkas dasar.
             profil.PhpIniOverrides["short_open_tag"] = "Off";
             var isi2 = File.ReadAllText(Path.Combine(

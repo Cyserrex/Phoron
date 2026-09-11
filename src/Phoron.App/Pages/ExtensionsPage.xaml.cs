@@ -95,6 +95,37 @@ namespace Phoron.App.Pages
                     ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>
+        /// Centang ulang mengikuti php.ini yang berlaku sebelum Phoron ikut
+        /// campur. Pengambilalihan otomatis hanya terjadi pada profil yang belum
+        /// punya daftar; profil yang sudah terlanjur berisi sebagian ekstensi
+        /// butuh jalan sadar seperti ini.
+        /// </summary>
+        void BtnAmbil_Click(object sender, RoutedEventArgs e)
+        {
+            var php = _e.Php;
+            if (php == null) { AppState.Warn("Profil belum menunjuk PHP."); return; }
+            var dasar = ConfigWriter.EkstensiDariPhpIniDasar(php);
+            if (dasar.Count == 0)
+            {
+                AppState.Info("php.ini asli di " + php.Id + " tidak mengaktifkan ekstensi apa pun.");
+                return;
+            }
+            if (!AppState.Ask("php.ini asli mengaktifkan " + dasar.Count + " ekstensi:\n\n"
+                              + string.Join(", ", dasar)
+                              + "\n\nGanti centangan sekarang dengan daftar itu?")) return;
+
+            var set = new HashSet<string>(dasar, StringComparer.OrdinalIgnoreCase);
+            foreach (var cb in _kotak) cb.IsChecked = set.Contains((cb.Tag ?? "").ToString());
+
+            var hilang = dasar.Where(d => !_kotak.Any(c =>
+                string.Equals((c.Tag ?? "").ToString(), d, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (hilang.Count > 0)
+                AppState.Warn("Tidak ada DLL-nya di " + php.Id + ", jadi dilewati: "
+                              + string.Join(", ", hilang));
+            AppState.Info("Centangan disesuaikan. Tekan \"Simpan ke profil\" untuk menerapkannya.");
+        }
+
         void BtnSimpan_Click(object sender, RoutedEventArgs e)
         {
             var p = _e.Active;

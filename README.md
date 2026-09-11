@@ -205,6 +205,14 @@ menunjuk ke Phoron sama sekali — CodeIgniter, misalnya, beralih ke jalur `eval
 saat tag pendek mati, lalu gagal mengurai view-nya. Penimpaan di profil tetap
 berkuasa di atas berkas dasar itu.
 
+**Daftar ekstensinya juga ikut diambil alih** kalau profilnya belum punya daftar
+sendiri, lalu disimpan ke profil supaya terlihat dan bisa disunting. Tanpa itu,
+php.ini hasil mewarisi seluruh setelan tapi tidak satu pun ekstensinya, dan aplikasi
+mati dengan `Call to undefined function mb_strlen()` — yang, kalau galatnya
+disembunyikan aplikasi, hanya berwujud halaman putih. Untuk profil yang terlanjur
+berisi sebagian ekstensi, ada tombol **Ambil dari php.ini asli** di halaman
+Ekstensi PHP.
+
 **php.ini ditulis ke `etc\php\<versi>\`, bukan ke folder PHP.** Folder PHP sering
 dipinjam dari Laragon atau XAMPP, dan php.ini di sana milik pengelola itu. Phoron
 mengarahkan `PHPIniDir` Apache dan variabel `PHPRC` ke berkasnya sendiri, jadi PHP
@@ -269,7 +277,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (116 uji)
+build.bat test         harness uji (122 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

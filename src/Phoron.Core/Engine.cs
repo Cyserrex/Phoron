@@ -158,6 +158,19 @@ namespace Phoron.Core
             // hilang dari daftar tanpa sebab yang terlihat.
             LastBuild.Warnings.AddRange(SiteWarnings);
             LastBuild.Warnings.AddRange(awal);
+
+            // Daftar ekstensi yang diambil alih dari php.ini dasar disimpan ke
+            // profil, bukan dibiarkan tersirat: begitu tersimpan, daftarnya
+            // terlihat dan bisa disunting di halaman Ekstensi PHP, dan tidak
+            // berubah lagi kalau berkas dasarnya kelak ikut berubah.
+            if (LastBuild.AdoptedExtensions != null && LastBuild.AdoptedExtensions.Count > 0)
+            {
+                Active.PhpExtensions = new List<string>(LastBuild.AdoptedExtensions);
+                ProfileStore.Save(Active);
+                Say("Profil \"" + Active.Name + "\" mengambil alih " + Active.PhpExtensions.Count
+                    + " ekstensi dari php.ini yang sudah ada: "
+                    + string.Join(", ", Active.PhpExtensions) + ".");
+            }
             // Dipindai ulang SETELAH vhost ditulis. Pemindaian di atas terjadi
             // sebelum berkasnya ada, jadi kolom "vhost" di halaman Situs akan
             // menunjukkan "-" untuk semua situs padahal berkasnya baru saja dibuat.

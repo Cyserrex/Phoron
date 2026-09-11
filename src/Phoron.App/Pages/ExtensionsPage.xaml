@@ -66,6 +66,7 @@
 
         <WrapPanel Grid.Row="2" Margin="0,12,0,0">
             <ui:Button Content="Simpan ke profil" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
+            <ui:Button Content="Ambil dari php.ini asli" Margin="0,0,8,0" Click="BtnAmbil_Click"/>
             <ui:Button Content="Buka php.ini hasil" Margin="0,0,8,0" Click="BtnBuka_Click"/>
             <ui:Button Content="Uji: php -m" Click="BtnUji_Click"/>
         </WrapPanel>

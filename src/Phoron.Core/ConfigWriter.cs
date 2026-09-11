@@ -30,6 +30,11 @@ namespace Phoron.Core
             public int FastCgiPort = 9123;
             /// <summary>true bila konfigurasi ini benar-benar membuka port HTTPS.</summary>
             public bool SslEnabled;
+            /// <summary>
+            /// Ekstensi yang diambil alih dari php.ini dasar karena profilnya
+            /// belum punya daftar sendiri. Null bila tidak ada pengambilalihan.
+            /// </summary>
+            public List<string> AdoptedExtensions;
         }
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
@@ -412,9 +417,25 @@ namespace Phoron.Core
             foreach (var kv in set)
                 if (!applied.Contains(kv.Key)) sb.AppendLine(kv.Key + " = " + kv.Value);
 
+            // Profil yang belum punya daftar ekstensi mengambil alih daftar dari
+            // php.ini dasar. Tanpa ini, php.ini hasil mewarisi seluruh setelan
+            // tapi TIDAK satu pun ekstensinya - dan aplikasi yang selama ini
+            // jalan mati dengan "Call to undefined function mb_strlen()" yang,
+            // kalau galatnya disembunyikan aplikasi, hanya berwujud halaman putih.
+            var daftarExt = profile.PhpExtensions;
+            if (daftarExt.Count == 0)
+            {
+                var dariDasar = EkstensiAktif(baseText);
+                if (dariDasar.Count > 0)
+                {
+                    daftarExt = dariDasar;
+                    r.AdoptedExtensions = dariDasar;
+                }
+            }
+
             sb.AppendLine();
             sb.AppendLine("; --- ekstensi profil ---");
-            foreach (var ext in profile.PhpExtensions.Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var ext in daftarExt.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 var dll = Path.Combine(php.Path, "ext", "php_" + ext + ".dll");
                 if (!File.Exists(dll))
@@ -492,6 +513,46 @@ namespace Phoron.Core
                 return a.StartsWith(b, StringComparison.OrdinalIgnoreCase);
             }
             catch { return false; }
+        }
+
+        /// <summary>
+        /// Ekstensi yang AKTIF (tidak dikomentari) di sebuah teks php.ini, dalam
+        /// nama tanpa awalan php_ dan tanpa akhiran .dll - bentuk yang dipakai
+        /// profil. Urutannya dipertahankan: di PHP, ekstensi tertentu harus
+        /// dimuat setelah ekstensi yang jadi sandarannya (exif butuh mbstring).
+        /// </summary>
+        public static List<string> EkstensiAktif(string iniText)
+        {
+            var hasil = new List<string>();
+            if (string.IsNullOrEmpty(iniText)) return hasil;
+            var rx = new Regex(@"^\s*(?:zend_)?extension\s*=\s*""?([^"";\r\n]+)",
+                               RegexOptions.IgnoreCase);
+            foreach (var baris in iniText.Split('\n'))
+            {
+                var t = baris.TrimStart();
+                if (t.StartsWith(";")) continue;
+                var m = rx.Match(t);
+                if (!m.Success) continue;
+                var nama = m.Groups[1].Value.Trim();
+                if (nama.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+                    nama = nama.Substring(0, nama.Length - 4);
+                if (nama.StartsWith("php_", StringComparison.OrdinalIgnoreCase))
+                    nama = nama.Substring(4);
+                nama = nama.ToLowerInvariant();
+                if (nama.Length > 0 && !hasil.Contains(nama)) hasil.Add(nama);
+            }
+            return hasil;
+        }
+
+        /// <summary>
+        /// Ekstensi yang aktif di php.ini dasar milik sebuah paket PHP - yaitu
+        /// keadaan yang benar-benar berlaku sebelum Phoron ikut campur. Dipakai
+        /// tombol "Ambil dari php.ini asli" di halaman Ekstensi PHP.
+        /// </summary>
+        public static List<string> EkstensiDariPhpIniDasar(BinPackage php)
+        {
+            if (php == null) return new List<string>();
+            return EkstensiAktif(PhpIniTemplate(php));
         }
 
         /// <summary>Daftar ekstensi yang tersedia di sebuah build PHP (nama tanpa awalan php_).</summary>
