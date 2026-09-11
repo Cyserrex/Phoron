@@ -114,6 +114,13 @@ namespace Phoron.App
 
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
             BtnPower.Content = anyRunning ? "Matikan semua" : "Nyalakan semua";
+            // Merah saat tombolnya berarti "matikan": warnanya harus menyatakan
+            // akibat penekanan, bukan sekadar menonjol. Biru untuk aksi yang
+            // menghidupkan dan untuk aksi yang mematikan membuat keduanya
+            // gampang tertukar saat diklik cepat.
+            BtnPower.Appearance = anyRunning
+                ? Wpf.Ui.Controls.ControlAppearance.Danger
+                : Wpf.Ui.Controls.ControlAppearance.Primary;
             bool busy = web == ServiceState.Menyalakan || web == ServiceState.Mematikan
                      || db == ServiceState.Menyalakan || db == ServiceState.Mematikan;
             BtnPower.IsEnabled = !busy;

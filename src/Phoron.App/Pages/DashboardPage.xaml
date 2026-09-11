@@ -24,15 +24,22 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
                         <TextBlock Text="Profil aktif" Style="{StaticResource Label}" Margin="0,0,0,4"/>
                         <ComboBox x:Name="CmbProfil" SelectionChanged="CmbProfil_Changed"
                                   HorizontalAlignment="Stretch"/>
                     </StackPanel>
-                    <ui:Button Grid.Column="1" x:Name="BtnSwitch" Content="Switch" Appearance="Primary"
-                               VerticalAlignment="Bottom" Margin="0,0,8,0" Click="BtnSwitch_Click"/>
-                    <ui:Button Grid.Column="2" Content="Tulis ulang konfigurasi"
+                    <ui:Button Grid.Column="1" x:Name="BtnSwitchRun" Content="Switch &amp; Jalankan"
+                               Appearance="Primary" VerticalAlignment="Bottom" Margin="0,0,8,0"
+                               ToolTip="Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL"
+                               Click="BtnSwitchRun_Click"/>
+                    <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="Switch"
+                               VerticalAlignment="Bottom" Margin="0,0,8,0"
+                               ToolTip="Pindah ke profil ini tanpa mengubah keadaan layanan"
+                               Click="BtnSwitch_Click"/>
+                    <ui:Button Grid.Column="3" Content="Tulis ulang konfigurasi"
                                VerticalAlignment="Bottom" Click="BtnApply_Click"/>
                 </Grid>
             </Border>

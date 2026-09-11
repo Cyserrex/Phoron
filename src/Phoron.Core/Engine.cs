@@ -158,6 +158,7 @@ namespace Phoron.Core
             // hilang dari daftar tanpa sebab yang terlihat.
             LastBuild.Warnings.AddRange(SiteWarnings);
             LastBuild.Warnings.AddRange(awal);
+            LastBuild.Warnings.AddRange(PaketKembar());
 
             // Daftar ekstensi yang diambil alih dari php.ini dasar disimpan ke
             // profil, bukan dibiarkan tersirat: begitu tersimpan, daftarnya
@@ -179,6 +180,38 @@ namespace Phoron.Core
             foreach (var w in LastBuild.Warnings) Say("Peringatan: " + w);
             Say("Konfigurasi profil \"" + Active.Name + "\" ditulis ulang.");
             return LastBuild.Warnings;
+        }
+
+        /// <summary>
+        /// Profil menyimpan versi sebagai NAMA FOLDER saja. Kalau dua folder bin
+        /// memuat nama yang sama persis, nama itu tidak lagi menunjuk satu paket
+        /// tertentu dan yang terpakai adalah yang pertama ditemukan - diam-diam,
+        /// dan bisa berubah kalau urutan folder bin diubah. Karena itu keadaan
+        /// ini disebutkan, bukan dibiarkan.
+        /// </summary>
+        List<string> PaketKembar()
+        {
+            var pesan = new List<string>();
+            if (Active == null) return pesan;
+            var dipakai = new[]
+            {
+                new { Jenis = BinKind.Php, Id = Active.PhpId },
+                new { Jenis = BinKind.Apache, Id = Active.ApacheId },
+                new { Jenis = BinKind.Nginx, Id = Active.NginxId },
+                new { Jenis = BinKind.MySql, Id = Active.MySqlId },
+            };
+            foreach (var d in dipakai)
+            {
+                if (string.IsNullOrEmpty(d.Id)) continue;
+                var cocok = Packages.Where(p => p.Kind == d.Jenis
+                    && string.Equals(p.Id, d.Id, StringComparison.OrdinalIgnoreCase)).ToList();
+                if (cocok.Count < 2) continue;
+                pesan.Add("Nama folder \"" + d.Id + "\" ada di lebih dari satu folder bin ("
+                          + string.Join(", ", cocok.Select(c => c.SourceRoot))
+                          + "). Yang dipakai adalah " + cocok[0].Path
+                          + "; ganti nama salah satunya supaya tidak ambigu.");
+            }
+            return pesan;
         }
 
         /// <summary>

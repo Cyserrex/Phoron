@@ -113,24 +113,42 @@ namespace Phoron.App.Pages
         void CmbProfil_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (_loading) return;
-            BtnSwitch.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+            BtnSwitchRun.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
         }
 
-        async void BtnSwitch_Click(object sender, RoutedEventArgs e)
+        void BtnSwitch_Click(object sender, RoutedEventArgs e) { Pindah(false); }
+
+        void BtnSwitchRun_Click(object sender, RoutedEventArgs e) { Pindah(true); }
+
+        /// <summary>
+        /// Pindah ke profil terpilih. Dengan <paramref name="lalimJalankan"/>,
+        /// layanan ikut dinyalakan setelahnya - tanpa itu SwitchAsync hanya
+        /// mengembalikan keadaan seperti semula (yang tadinya mati tetap mati).
+        /// </summary>
+        async void Pindah(bool lalimJalankan)
         {
             var p = CmbProfil.SelectedItem as Profile;
             if (p == null) return;
-            BtnSwitch.IsEnabled = false;
+            BtnSwitch.IsEnabled = BtnSwitchRun.IsEnabled = false;
             try
             {
                 var warnings = await _e.SwitchAsync(p);
                 AppState.RaiseChanged();
-                RefreshState();
                 var main = Window.GetWindow(this) as MainWindow;
+
+                if (lalimJalankan)
+                {
+                    // Peringatan ditampilkan SETELAH layanan dicoba dinyalakan:
+                    // kotak pesan modal di tengah proses akan menahan start
+                    // sampai pengguna menekan OK.
+                    await _e.StartAllAsync();
+                }
+
+                RefreshState();
                 if (main != null) main.RefreshStatus();
                 AppState.ShowWarnings(warnings);
             }
-            finally { BtnSwitch.IsEnabled = true; }
+            finally { BtnSwitch.IsEnabled = BtnSwitchRun.IsEnabled = true; }
         }
 
         void BtnApply_Click(object sender, RoutedEventArgs e)

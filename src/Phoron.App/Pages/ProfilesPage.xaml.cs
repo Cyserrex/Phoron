@@ -40,14 +40,51 @@ namespace Phoron.App.Pages
         List<Row> Rows(BinKind kind)
         {
             var list = new List<Row> { new Row { Pkg = null, Text = "(tidak dipakai)" } };
-            list.AddRange(_e.Of(kind).Select(p => new Row
-            {
-                Pkg = p,
-                // Nama folder ikut ditampilkan karena itulah yang tersimpan di
-                // berkas profil - memudahkan mencocokkan saat menyunting manual.
-                Text = p.Label + "   —   " + p.Id,
-            }));
+            list.AddRange(_e.Of(kind).Select(p => new Row { Pkg = p, Text = LabelPaket(p) }));
             return list;
+        }
+
+        /// <summary>
+        /// Baris untuk sebuah paket versi.
+        ///
+        /// Nama folder ditaruh di depan karena itulah yang tersimpan di berkas
+        /// profil - memudahkan mencocokkan saat menyunting manual. Nomor versi
+        /// dan toolset tidak diulang lagi kalau sudah ada di nama folder itu;
+        /// mengulangnya membuat tiap baris panjang dan mirip satu sama lain.
+        ///
+        /// Folder bin asal SELALU ikut ditulis. Dua folder bin bisa memuat nama
+        /// folder yang sama persis - lazim terjadi saat bin Phoron dan bin
+        /// Laragon dipakai bersama - dan tanpa penanda ini kedua barisnya tidak
+        /// bisa dibedakan sama sekali.
+        /// </summary>
+        static string LabelPaket(BinPackage p)
+        {
+            var bagian = new List<string> { p.Id };
+
+            var tambahan = new List<string>();
+            if (!string.IsNullOrEmpty(p.Compiler)
+                && p.Id.IndexOf(p.Compiler, StringComparison.OrdinalIgnoreCase) < 0)
+                tambahan.Add(p.Compiler);
+            // Arsitektur ditulis bermacam-macam di nama folder: x64, win64,
+            // winx64, Win32. Mencari "x64" harfiah membuat httpd-...-win64-...
+            // tetap diberi embel-embel "x64" yang mengulang isi namanya sendiri.
+            if (!string.IsNullOrEmpty(p.Arch) && !ArsitekturTersirat(p.Id, p.Arch))
+                tambahan.Add(p.Arch);
+            if (p.Kind == BinKind.Php) tambahan.Add(p.ThreadSafe ? "TS" : "NTS");
+            if (tambahan.Count > 0) bagian.Add(string.Join(" · ", tambahan));
+
+            if (!string.IsNullOrEmpty(p.SourceRoot)) bagian.Add(p.SourceRoot);
+            return string.Join("   —   ", bagian);
+        }
+
+        static bool ArsitekturTersirat(string id, string arch)
+        {
+            var l = (id ?? "").ToLowerInvariant();
+            if (string.Equals(arch, "x64", StringComparison.OrdinalIgnoreCase))
+                return l.Contains("x64") || l.Contains("win64") || l.Contains("amd64");
+            if (string.Equals(arch, "x86", StringComparison.OrdinalIgnoreCase))
+                return l.Contains("x86") || l.Contains("win32");
+            return false;
         }
 
         void IsiDaftar(Profile pilih)

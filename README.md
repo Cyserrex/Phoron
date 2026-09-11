@@ -137,7 +137,7 @@ tidak pernah tersentuh:
 
 ### Halaman yang tersedia
 
-- **Beranda** — pilih profil, nyalakan/matikan, pintasan (www, localhost, terminal
+- **Beranda** — pilih profil, **Switch & Jalankan** (pindah profil lalu langsung nyalakan), nyalakan/matikan, pintasan (www, localhost, terminal
   dengan PATH profil aktif, `phpinfo()`, uji konfigurasi Apache, buat sertifikat SSL).
 - **Profil** — sunting kombinasi versi, port, folder proyek, akhiran nama situs.
 - **Versi** — daftar semua versi terpasang; tambah folder bin; unduh & pasang
