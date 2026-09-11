@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Phoron.Core;
 
 namespace Phoron.Tests
@@ -39,6 +40,7 @@ namespace Phoron.Tests
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
+                UjiWarisanPhpIni();
                 UjiPhpIniKeFolderPhp();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
@@ -336,6 +338,59 @@ namespace Phoron.Tests
                 Ok(v.Version + ": memory_limit terbaca PHP sebagai 333M",
                     limit.StdOut.Trim() == "333M", limit.All);
             }
+        }
+
+        static void UjiWarisanPhpIni()
+        {
+            Bagian("php.ini yang sudah ada dijadikan dasar");
+            // Kasus nyata: folder PHP dipinjam dari Laragon, yang menyetel
+            // short_open_tag=On bertahun-tahun. Memulai dari php.ini-development
+            // bawaan vendor mengembalikannya ke Off diam-diam, dan CodeIgniter
+            // beralih ke jalur eval() lalu gagal mengurai view-nya.
+            var palsu = Path.Combine(Paths.Root, "php-warisan");
+            Directory.CreateDirectory(Path.Combine(palsu, "ext"));
+            File.WriteAllText(Path.Combine(palsu, "php.ini-development"),
+                "short_open_tag = Off\nmemory_limit = 128M\nmax_input_vars = 1000\n");
+            File.WriteAllText(Path.Combine(palsu, "php.ini"),
+                "short_open_tag = On\nmemory_limit = 128M\nmax_input_vars = 5000\n");
+            var php = new BinPackage { Kind = BinKind.Php, Id = "php-warisan", Path = palsu, Version = "5.6.40" };
+
+            var profil = new Profile { Name = "Uji warisan" };
+            var dir = ConfigWriter.WritePhpIni(profil, php, new ConfigWriter.Result());
+            var isi = File.ReadAllText(Path.Combine(dir, "php.ini"));
+
+            Ok("short_open_tag dari php.ini yang dipakai ikut terbawa",
+                Regex.IsMatch(isi, @"(?m)^short_open_tag\s*=\s*On"),
+                Baris(isi, "short_open_tag"));
+            Ok("Setelan lain dari php.ini itu juga ikut",
+                Regex.IsMatch(isi, @"(?m)^max_input_vars\s*=\s*5000"),
+                Baris(isi, "max_input_vars"));
+
+            // Profil tetap berkuasa di atas berkas dasar.
+            profil.PhpIniOverrides["short_open_tag"] = "Off";
+            var isi2 = File.ReadAllText(Path.Combine(
+                ConfigWriter.WritePhpIni(profil, php, new ConfigWriter.Result()), "php.ini"));
+            Ok("Penimpaan profil mengalahkan php.ini dasar",
+                Regex.IsMatch(isi2, @"(?m)^short_open_tag\s*=\s*Off"),
+                Baris(isi2, "short_open_tag"));
+
+            // php.ini yang ternyata keluaran Phoron tidak boleh dipakai sebagai dasar.
+            File.WriteAllText(Path.Combine(palsu, "php.ini"), isi);
+            var isi3 = File.ReadAllText(Path.Combine(
+                ConfigWriter.WritePhpIni(new Profile { Name = "Uji" }, php, new ConfigWriter.Result()), "php.ini"));
+            Ok("Keluaran Phoron tidak dijadikan dasar (tidak menumpuk)",
+                isi3.Length < isi.Length + 200,
+                isi.Length + " lalu " + isi3.Length);
+
+            Directory.Delete(palsu, true);
+        }
+
+        /// <summary>Baris pertama yang memuat sebuah kunci - dipakai untuk pesan kegagalan.</summary>
+        static string Baris(string teks, string kunci)
+        {
+            foreach (var l in teks.Split('\n'))
+                if (l.TrimStart().StartsWith(kunci, StringComparison.OrdinalIgnoreCase)) return l.Trim();
+            return "(tidak ada baris " + kunci + ")";
         }
 
         static void UjiPhpIniKeFolderPhp()

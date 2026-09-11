@@ -57,12 +57,33 @@ namespace Phoron.App.Pages
             TxtTz.Text = Nilai(p, "date.timezone");
             var de = Nilai(p, "display_errors");
             ChkErrors.IsChecked = de.Length == 0 || de.Equals("On", StringComparison.OrdinalIgnoreCase);
+            // Tanpa penimpaan di profil, yang berlaku adalah nilai dari php.ini
+            // dasar - jadi kotaknya mencerminkan berkas itu, bukan menebak Off.
+            var sot = Nilai(p, "short_open_tag");
+            ChkShortTag.IsChecked = sot.Length > 0
+                ? sot.Equals("On", StringComparison.OrdinalIgnoreCase)
+                : PhpIniAktif("short_open_tag");
         }
 
         static string Nilai(Profile p, string key)
         {
             string v;
             return p.PhpIniOverrides.TryGetValue(key, out v) ? v : "";
+        }
+
+        /// <summary>Nilai direktif menurut php.ini yang sedang berlaku, ditanyakan ke php.exe sendiri.</summary>
+        bool PhpIniAktif(string key)
+        {
+            var php = _e.Php;
+            if (php == null) return false;
+            try
+            {
+                var res = Shell.Run(Path.Combine(php.Path, "php.exe"),
+                    "-r \"echo ini_get('" + key + "') ? 1 : 0;\"", php.Path, 15000,
+                    ServiceManager.EnvFor(php));
+                return res.StdOut.Trim() == "1";
+            }
+            catch { return false; }
         }
 
         void TxtCari_Changed(object sender, TextChangedEventArgs e)
@@ -87,6 +108,7 @@ namespace Phoron.App.Pages
             Set(p, "max_execution_time", TxtExec.Text);
             Set(p, "date.timezone", TxtTz.Text);
             p.PhpIniOverrides["display_errors"] = ChkErrors.IsChecked == true ? "On" : "Off";
+            p.PhpIniOverrides["short_open_tag"] = ChkShortTag.IsChecked == true ? "On" : "Off";
 
             ProfileStore.Save(p);
             AppState.ShowWarnings(_e.Apply());

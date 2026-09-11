@@ -1,4 +1,4 @@
-# Phoron
+﻿# Phoron
 
 Lingkungan pengembangan web lokal untuk Windows — Apache/Nginx, PHP, dan MySQL —
 dengan satu kelebihan yang jadi alasan utamanya dibuat: **kombinasi versi disimpan
@@ -196,6 +196,15 @@ memory_limit=512M
 
 ## Catatan teknis
 
+**php.ini yang sudah ada jadi dasarnya, bukan bawaan vendor.** Urutannya:
+`php.ini.sebelum-phoron` → `php.ini` → `php.ini-development` → `php.ini-production`.
+Folder PHP sering dipinjam dari pengelola yang sudah menyetelnya bertahun-tahun;
+memulai dari bawaan vendor berarti setelan seperti `short_open_tag` diam-diam kembali
+ke `Off`, dan proyek yang tadinya jalan rusak dengan galat yang jejaknya tidak
+menunjuk ke Phoron sama sekali — CodeIgniter, misalnya, beralih ke jalur `eval()`
+saat tag pendek mati, lalu gagal mengurai view-nya. Penimpaan di profil tetap
+berkuasa di atas berkas dasar itu.
+
 **php.ini ditulis ke `etc\php\<versi>\`, bukan ke folder PHP.** Folder PHP sering
 dipinjam dari Laragon atau XAMPP, dan php.ini di sana milik pengelola itu. Phoron
 mengarahkan `PHPIniDir` Apache dan variabel `PHPRC` ke berkasnya sendiri, jadi PHP
@@ -260,7 +269,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (112 uji)
+build.bat test         harness uji (116 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

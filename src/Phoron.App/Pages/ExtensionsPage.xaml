@@ -48,6 +48,13 @@
                     <ui:TextBox x:Name="TxtExec" PlaceholderText="120"/>
                     <TextBlock Text="date.timezone" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtTz" PlaceholderText="Asia/Makassar"/>
+                    <!-- Banyak proyek PHP lama (CodeIgniter 3, skrip warisan)
+                         memakai tag pendek; mematikannya membuat view gagal
+                         diurai dengan galat yang tidak menyebut sebabnya. -->
+                    <CheckBox x:Name="ChkShortTag" Margin="0,14,0,0">
+                        <TextBlock Text="short_open_tag (perlu untuk banyak proyek lama)"
+                                   TextWrapping="Wrap"/>
+                    </CheckBox>
                     <!-- Teks di dalam TextBlock supaya garis bawahnya tidak dimakan
                          sebagai penanda tombol akses. -->
                     <CheckBox x:Name="ChkErrors" Margin="0,14,0,0">

@@ -442,19 +442,42 @@ namespace Phoron.Core
             return modern ? ext : "php_" + ext + ".dll";
         }
 
+        /// <summary>Penanda di baris awal berkas yang dihasilkan Phoron sendiri.</summary>
+        const string PenandaBuatanPhoron = "dibuat otomatis oleh Phoron";
+
         /// <summary>
-        /// Contoh php.ini yang jadi dasar. Kalau ada cadangan, itu yang dipakai:
-        /// menulis ke folder PHP berarti php.ini di sana adalah keluaran Phoron
-        /// sendiri, dan memakainya sebagai dasar membuat berkasnya menumpuk tiap
-        /// kali konfigurasi ditulis ulang.
+        /// php.ini contoh yang jadi dasar, menurut urutan kepercayaan:
+        ///
+        ///   1. php.ini.sebelum-phoron  - salinan asli yang Phoron simpan sendiri
+        ///   2. php.ini                 - yang SELAMA INI dipakai di folder itu
+        ///   3. php.ini-development / -production - bawaan vendor
+        ///
+        /// php.ini yang sudah ada didahulukan di atas bawaan vendor dengan
+        /// sengaja. Folder PHP sering dipinjam dari pengelola lain yang sudah
+        /// menyetelnya bertahun-tahun; memulai dari bawaan vendor berarti
+        /// setelan seperti short_open_tag diam-diam kembali ke Off, dan proyek
+        /// yang tadinya jalan rusak dengan galat yang jejaknya tidak menunjuk
+        /// ke sini sama sekali. Ini bukan hipotesis: CodeIgniter beralih ke
+        /// jalur eval() saat short_open_tag mati, dan view-nya gagal diurai.
         /// </summary>
         static string PhpIniTemplate(BinPackage php, string cadangan = null)
         {
             if (cadangan != null && File.Exists(cadangan)) return File.ReadAllText(cadangan);
-            foreach (var name in new[] { "php.ini-development", "php.ini-production", "php.ini" })
+
+            var asli = Path.Combine(php.Path, "php.ini.sebelum-phoron");
+            if (File.Exists(asli)) return File.ReadAllText(asli);
+
+            foreach (var name in new[] { "php.ini", "php.ini-development", "php.ini-production" })
             {
                 var p = Path.Combine(php.Path, name);
-                if (File.Exists(p)) return File.ReadAllText(p);
+                if (!File.Exists(p)) continue;
+                var teks = File.ReadAllText(p);
+                // php.ini yang ternyata keluaran Phoron sendiri dilewati: memakai
+                // keluaran sebagai dasar membuat berkasnya menumpuk tiap penulisan.
+                if (name == "php.ini" && teks.Length > 0
+                    && teks.Substring(0, Math.Min(300, teks.Length)).Contains(PenandaBuatanPhoron))
+                    continue;
+                return teks;
             }
             return null;
         }
