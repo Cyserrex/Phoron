@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
 namespace Phoron.Core
@@ -77,6 +78,41 @@ namespace Phoron.Core
             var res = Shell.Run(openssl, args, Path.GetDirectoryName(openssl), 120000, env);
             if (!Exists) return "openssl gagal: " + res.All;
             return null;
+        }
+
+        /// <summary>
+        /// Sudah terpasang di Trusted Root Windows? Dibandingkan lewat sidik jari,
+        /// bukan nama subjek: sertifikat lama dengan subjek sama tapi kunci berbeda
+        /// tetap membuat browser memperingatkan, dan itu justru keadaan yang paling
+        /// membingungkan - "kan sudah saya pasang".
+        /// </summary>
+        public static bool IsTrusted
+        {
+            get
+            {
+                if (!Exists) return false;
+                string sidik;
+                try { sidik = new X509Certificate2(CrtPath).Thumbprint; }
+                catch { return false; }
+
+                foreach (var lokasi in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
+                {
+                    try
+                    {
+                        var store = new X509Store(StoreName.Root, lokasi);
+                        store.Open(OpenFlags.ReadOnly);
+                        try
+                        {
+                            foreach (var c in store.Certificates)
+                                if (string.Equals(c.Thumbprint, sidik, StringComparison.OrdinalIgnoreCase))
+                                    return true;
+                        }
+                        finally { store.Close(); }
+                    }
+                    catch { }
+                }
+                return false;
+            }
         }
 
         /// <summary>Pasang sertifikat ke Trusted Root Windows. Butuh hak admin.</summary>

@@ -78,7 +78,7 @@
                         <ui:Button Content="Terminal" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
                         <ui:Button Content="phpinfo()" Margin="0,0,8,8" Click="BtnPhpInfo_Click"/>
                         <ui:Button Content="Uji konfigurasi Apache" Margin="0,0,8,8" Click="BtnTest_Click"/>
-                        <ui:Button Content="Buat sertifikat SSL" Margin="0,0,8,8" Click="BtnSsl_Click"/>
+                        <ui:Button x:Name="BtnSsl" Content="Buat sertifikat SSL" Margin="0,0,8,8" Click="BtnSsl_Click"/>
                         <ui:Button Content="Folder etc" Margin="0,0,8,8" Click="BtnEtc_Click"/>
                     </WrapPanel>
                 </StackPanel>

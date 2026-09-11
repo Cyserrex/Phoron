@@ -71,6 +71,9 @@ namespace Phoron.App.Pages
                 ? db.Label + " · port " + (p != null ? p.MySqlPort.ToString() : "?")
                 : "belum dipilih di profil";
 
+            BtnSsl.Content = !SslTool.Exists ? "Buat sertifikat SSL"
+                           : !SslTool.IsTrusted ? "Percayai sertifikat SSL"
+                           : "Buat ulang sertifikat SSL";
             ShowConflicts();
         }
 
@@ -89,6 +92,14 @@ namespace Phoron.App.Pages
                           + (_e.Active != null ? _e.Active.HttpsPort.ToString() : "443")
                           + " tidak dibuka. Pakai http:// (bukan https://), atau tekan "
                           + "\"Buat sertifikat SSL\" di bawah.");
+            else if (!SslTool.IsTrusted)
+                // Sertifikat yang ada tapi belum tepercaya adalah keadaan paling
+                // menjebak: https menjawab, lalu browser menuduh situsnya palsu.
+                // Pada host ber-HSTS (mis. localhost yang pernah dipasangi header
+                // itu), tombol "tambah pengecualian" pun tidak ditawarkan.
+                pesan.Add("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser "
+                          + "akan memperingatkan - dan pada host ber-HSTS tidak ada tombol "
+                          + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin())
                 pesan.Add("Phoron tidak jalan sebagai Administrator, jadi berkas hosts tidak bisa disunting. "
                           + "Nama situs .test belum tentu bisa dibuka.");
@@ -173,24 +184,51 @@ namespace Phoron.App.Pages
 
         void BtnSsl_Click(object sender, RoutedEventArgs e)
         {
+            // Sertifikat yang sudah ada TIDAK dibuat ulang begitu saja: membuat
+            // ulang berarti sertifikat yang sudah dipercayai orang jadi tidak
+            // cocok lagi, dan peringatan browser justru kembali muncul.
+            if (SslTool.Exists && !SslTool.IsTrusted) { PercayaiSertifikat(); return; }
+            if (SslTool.Exists
+                && !AppState.Ask("Sertifikat sudah ada dan sudah tepercaya. Buat ulang? "
+                                 + "Sertifikat lama akan berhenti berlaku dan harus dipercayai lagi."))
+                return;
+
             var apache = _e.Apache;
             if (apache == null) { AppState.Warn("Butuh paket Apache (openssl.exe ada di dalamnya)."); return; }
             var err = SslTool.Generate(apache, _e.Active != null ? _e.Active.SiteSuffix : "test");
             if (err != null) { AppState.Warn(err); return; }
             _e.Apply();
             _e.Say("Sertifikat SSL dibuat di etc\\ssl.");
+            RefreshState();
+            PercayaiSertifikat();
+        }
 
-            if (AppState.Ask("Sertifikat dibuat. Pasang ke Trusted Root Windows supaya browser "
-                             + "tidak memberi peringatan?"))
+        void PercayaiSertifikat()
+        {
+            if (!AppState.Ask("Pasang sertifikat ke Trusted Root Windows supaya browser tidak "
+                              + "memberi peringatan?")) return;
+
+            var t = SslTool.Trust();
+            if (t != null && t.Contains("Administrator"))
             {
-                var t = SslTool.Trust();
-                if (t != null && t.Contains("Administrator"))
-                {
-                    Program.RestartAsAdmin("Memasang sertifikat ke Trusted Root butuh hak Administrator.");
-                    return;
-                }
-                AppState.Info(t ?? "Sertifikat terpasang. Tutup dan buka ulang browser.");
+                Program.RestartAsAdmin("Memasang sertifikat ke Trusted Root butuh hak Administrator.");
+                return;
             }
+            if (t != null) { AppState.Warn(t); return; }
+
+            RefreshState();
+            // Firefox punya daftar sertifikat sendiri dan tidak selalu ikut
+            // Windows, jadi "sudah terpasang" saja bukan jawaban lengkap bagi
+            // pengguna Firefox - dan diam soal ini membuat orang mengira
+            // pemasangannya gagal.
+            AppState.Info("Sertifikat terpasang di Trusted Root Windows. Tutup dan buka ulang browser.\n\n"
+                          + "Chrome dan Edge langsung ikut. Firefox memakai daftar sertifikatnya "
+                          + "sendiri: buka about:config, setel security.enterprise_roots.enabled "
+                          + "jadi true, lalu jalankan ulang Firefox.\n\n"
+                          + "Kalau sebuah nama (mis. localhost) pernah dipasangi HSTS, Firefox "
+                          + "menolak menampilkan tombol pengecualian sampai sertifikatnya benar-benar "
+                          + "tepercaya - atau entri HSTS-nya dibuang lewat Riwayat > klik kanan situs "
+                          + "> Lupakan Situs Ini.");
         }
     }
 }

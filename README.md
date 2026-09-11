@@ -112,6 +112,18 @@ Kalau sertifikat belum ada, port HTTPS **tidak dibuka sama sekali**. Itu disenga
 port yang terbuka tapi selalu gagal jauh lebih membingungkan daripada port yang
 tertutup. Beranda menyebutkan statusnya, jadi tidak perlu menebak.
 
+**Firefox punya daftar sertifikat sendiri** dan tidak otomatis ikut Trusted Root
+Windows. Setelah menekan tombolnya, buka `about:config` lalu setel
+`security.enterprise_roots.enabled` jadi `true` dan jalankan ulang Firefox. Chrome
+dan Edge langsung ikut tanpa tambahan apa pun.
+
+**Hati-hati dengan HSTS.** Kalau sebuah nama pernah menerima header
+`Strict-Transport-Security` — `localhost` sangat sering kena, dari proyek lain yang
+pernah dibuka lewat https — browser memaksa https untuk nama itu **dan menolak
+menampilkan tombol "tambah pengecualian"**. Jalan keluarnya: percayai sertifikatnya
+(sehingga tidak perlu pengecualian), buang entrinya lewat *Riwayat → klik kanan situs
+→ Lupakan Situs Ini*, atau pakai nama `.test` proyek Anda yang tidak terkena HSTS.
+
 Nama `.test` perlu masuk ke berkas hosts Windows, dan itu butuh hak Administrator.
 Phoron menulisnya di dalam blok bertanda sendiri, jadi baris milik aplikasi lain
 tidak pernah tersentuh:
