@@ -100,6 +100,18 @@ Kalau dua folder berisi proyek bernama sama, yang pertama memegang nama aslinya 
 yang berikutnya diberi angka (`api.test`, `api-2.test`) — tidak ada yang dibuang
 diam-diam, dan Phoron memberi tahu pasangan mana yang bentrok.
 
+### HTTPS
+
+Sertifikat wildcard untuk `*.test` dibuat **otomatis** pada penulisan konfigurasi
+pertama (memakai `openssl.exe` yang ikut dalam paket Apache), jadi `https://localhost`
+dan `https://proyek.test` langsung bisa dibuka. Browser masih memperingatkan sampai
+sertifikatnya dipasang ke Trusted Root Windows — tombolnya ada di **Beranda → Buat
+sertifikat SSL** (butuh Administrator, cukup sekali).
+
+Kalau sertifikat belum ada, port HTTPS **tidak dibuka sama sekali**. Itu disengaja:
+port yang terbuka tapi selalu gagal jauh lebih membingungkan daripada port yang
+tertutup. Beranda menyebutkan statusnya, jadi tidak perlu menebak.
+
 Nama `.test` perlu masuk ke berkas hosts Windows, dan itu butuh hak Administrator.
 Phoron menulisnya di dalam blok bertanda sendiri, jadi baris milik aplikasi lain
 tidak pernah tersentuh:
@@ -194,6 +206,11 @@ Tanpa penjaga, `http://localhost` akan dilayani situs yang kebetulan pertama men
 abjad, bukan folder proyek utama — gejala yang baru muncul setelah situs pertama
 dibuat, jadi mudah disangka kesalahan lain. Phoron selalu menulis
 `sites-enabled\000-default.conf` yang urutannya dijamin paling awal.
+
+**Proses yang mati sendiri ketahuan.** Layanan bisa berakhir setelah dilaporkan
+"jalan" — httpd yang kehabisan port, mysqld yang gagal memulihkan InnoDB. Phoron
+mengawasi proses anaknya dan mengubah indikatornya jadi merah beserta alasannya,
+daripada membiarkan lampu hijau menunjuk server yang sudah tidak ada.
 
 **Konflik port dijelaskan, bukan dibiarkan.** Sebelum menyalakan, Phoron memeriksa
 port dan menyebut nama proses beserta PID yang memegangnya. "Port 80 sedang dipakai

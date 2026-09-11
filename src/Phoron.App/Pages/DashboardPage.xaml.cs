@@ -57,8 +57,14 @@ namespace Phoron.App.Pages
             TxtPhpSub.Text = php != null ? php.Label : "belum dipilih di profil";
             TxtWebKind.Text = p != null && p.WebServer == "nginx" ? "Nginx" : "Apache";
             TxtWeb.Text = web != null ? web.Version : "-";
+            // Status HTTPS ikut ditulis: tanpa sertifikat, port 443 tidak dibuka
+            // sama sekali, dan browser hanya menjawab "tidak dapat tersambung"
+            // tanpa menyebutkan sebabnya di mana pun.
+            var https = SslTool.Exists
+                ? " · https " + (p != null ? p.HttpsPort.ToString() : "?")
+                : " · https mati";
             TxtWebSub.Text = web != null
-                ? web.Label + " · port " + (p != null ? p.HttpPort.ToString() : "?")
+                ? web.Label + " · port " + (p != null ? p.HttpPort.ToString() : "?") + https
                 : "belum dipilih di profil";
             TxtDb.Text = db != null ? db.Version : "-";
             TxtDbSub.Text = db != null
@@ -78,6 +84,11 @@ namespace Phoron.App.Pages
                 // yang memegang port itu justru kita sendiri.
                 foreach (var u in PortCheck.Conflicts(_e.Active, false)) pesan.Add(u.Describe());
             }
+            if (!SslTool.Exists)
+                pesan.Add("HTTPS belum aktif: sertifikat belum ada, jadi port "
+                          + (_e.Active != null ? _e.Active.HttpsPort.ToString() : "443")
+                          + " tidak dibuka. Pakai http:// (bukan https://), atau tekan "
+                          + "\"Buat sertifikat SSL\" di bawah.");
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin())
                 pesan.Add("Phoron tidak jalan sebagai Administrator, jadi berkas hosts tidak bisa disunting. "
                           + "Nama situs .test belum tentu bisa dibuka.");

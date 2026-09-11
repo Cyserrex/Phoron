@@ -28,6 +28,8 @@ namespace Phoron.Core
             public readonly List<string> Warnings = new List<string>();
             public bool PhpFastCgi;
             public int FastCgiPort = 9123;
+            /// <summary>true bila konfigurasi ini benar-benar membuka port HTTPS.</summary>
+            public bool SslEnabled;
         }
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
@@ -197,6 +199,7 @@ namespace Phoron.Core
             sb.AppendLine("<IfModule ssl_module>");
             if (File.Exists(crt) && File.Exists(key))
             {
+                r.SslEnabled = true;
                 sb.AppendLine("    Listen " + profile.HttpsPort);
                 sb.AppendLine("    SSLCipherSuite HIGH:MEDIUM:!MD5:!RC4:!3DES");
                 sb.AppendLine("    SSLProtocol all -SSLv3");

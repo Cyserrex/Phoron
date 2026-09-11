@@ -148,6 +148,7 @@ namespace Phoron.Core
         {
             if (Active == null) return new List<string> { "Belum ada profil." };
             PastikanHalamanSambutan();
+            var awal = PastikanSertifikat();
             RefreshSites();
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>());
@@ -155,10 +156,39 @@ namespace Phoron.Core
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.
             LastBuild.Warnings.AddRange(SiteWarnings);
+            LastBuild.Warnings.AddRange(awal);
+            // Dipindai ulang SETELAH vhost ditulis. Pemindaian di atas terjadi
+            // sebelum berkasnya ada, jadi kolom "vhost" di halaman Situs akan
+            // menunjukkan "-" untuk semua situs padahal berkasnya baru saja dibuat.
+            RefreshSites();
             if (Settings.ManageHosts) SyncHosts(LastBuild.Warnings);
             foreach (var w in LastBuild.Warnings) Say("Peringatan: " + w);
             Say("Konfigurasi profil \"" + Active.Name + "\" ditulis ulang.");
             return LastBuild.Warnings;
+        }
+
+        /// <summary>
+        /// Buat sertifikat self-signed sekali saja, kalau belum ada.
+        ///
+        /// Tanpa ini HTTPS mati total dan kegagalannya membingungkan: browser
+        /// hanya bilang "tidak dapat tersambung" tanpa petunjuk apa pun, dan
+        /// Firefox kerap menaikkan sendiri http menjadi https. Sertifikatnya
+        /// belum tepercaya sampai dipasang ke Trusted Root lewat tombol di
+        /// Beranda - tapi port 443 sudah terbuka dan situsnya bisa dibuka.
+        /// </summary>
+        List<string> PastikanSertifikat()
+        {
+            var pesan = new List<string>();
+            if (SslTool.Exists) return pesan;
+            var apache = Apache;
+            if (apache == null || Active.WebServer == "nginx") return pesan;
+            if (SslTool.FindOpenSsl(apache) == null) return pesan;   // paket tanpa openssl: diam saja
+
+            var err = SslTool.Generate(apache, Active.SiteSuffix);
+            if (err != null) pesan.Add("HTTPS tidak aktif - " + err);
+            else Say("Sertifikat HTTPS dibuat untuk *." + SiteScanner.Suffix(Active)
+                     + " (pasang ke Trusted Root lewat Beranda agar browser tidak memperingatkan).");
+            return pesan;
         }
 
         /// <summary>

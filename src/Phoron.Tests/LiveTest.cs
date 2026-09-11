@@ -56,11 +56,17 @@ namespace Phoron.Tests
                     Console.WriteLine("Dilewati: butuh minimal satu Apache dan satu PHP.");
                     return 0;
                 }
-                if (!PortCheck.IsFree(Port))
+                if (!PortCheck.IsFree(Port) || !PortCheck.IsFree(Port + 1))
                 {
-                    Console.WriteLine("Dilewati: port " + Port + " sedang dipakai.");
+                    Console.WriteLine("Dilewati: port " + Port + "/" + (Port + 1) + " sedang dipakai.");
                     return 0;
                 }
+
+                // Sertifikat uji ini self-signed dan baru dibuat detik ini, jadi
+                // tidak akan pernah lolos validasi rantai. Yang diuji di sini
+                // adalah Apache melayani HTTPS-nya, bukan kepercayaan Windows.
+                ServicePointManager.ServerCertificateValidationCallback =
+                    (a, b, c, d) => true;
 
                 foreach (var apache in apaches)
                 {
@@ -97,6 +103,12 @@ namespace Phoron.Tests
             };
             profil.ProjectRoots.Add(Paths.Www);
             profil.ProjectRoots.Add(FolderKedua);
+
+            // Sertifikat dibuat lebih dulu, persis seperti yang dilakukan Engine
+            // pada Apply pertama - tanpa itu port HTTPS tidak dibuka sama sekali.
+            var errSsl = SslTool.Generate(apache, profil.SiteSuffix);
+            if (errSsl != null) Console.WriteLine("   peringatan SSL: " + errSsl);
+
             var situs = SiteScanner.Scan(profil);
             var cfg = ConfigWriter.Build(profil, php, apache, null, null, situs);
             foreach (var w in cfg.Warnings) Console.WriteLine("   peringatan: " + w);
@@ -138,6 +150,22 @@ namespace Phoron.Tests
                     return false;
                 }
                 Console.WriteLine("   ok: situs di luar www ikut dilayani Apache");
+
+                // HTTPS. Inilah yang gagal diam-diam sebelum sertifikat dibuat
+                // otomatis: browser hanya menjawab "tidak dapat tersambung".
+                if (!cfg.SslEnabled)
+                {
+                    Console.WriteLine("   GAGAL: sertifikat ada tapi HTTPS tidak diaktifkan.");
+                    return false;
+                }
+                var aman = Ambil("https://127.0.0.1:" + (Port + 1) + "/");
+                Console.WriteLine("   https: " + aman);
+                if (!aman.StartsWith("PHORON|"))
+                {
+                    Console.WriteLine("   GAGAL: HTTPS tidak melayani halaman.");
+                    return false;
+                }
+                Console.WriteLine("   ok: HTTPS melayani di port " + (Port + 1));
                 return true;
             }
             catch (Exception ex)

@@ -59,6 +59,21 @@ namespace Phoron.Core
                 return false;
             }
 
+            if (cfg != null && cfg.SslEnabled)
+            {
+                // Apache yang gagal mengikat SATU port menolak start seluruhnya.
+                // Tanpa pemeriksaan ini, port 443 yang dipakai aplikasi lain
+                // membuat situs http ikut mati tanpa sebab yang kelihatan.
+                var portSsl = PortCheck.Check(profile.HttpsPort);
+                if (portSsl.InUse)
+                {
+                    Say(portSsl.Describe() + " HTTPS memakai port itu, dan Apache menolak "
+                        + "start kalau salah satu portnya terpakai.");
+                    SetState(ServiceKind.Web, ServiceState.Gagal);
+                    return false;
+                }
+            }
+
             if (profile.WebServer == "nginx") return await StartNginxAsync(web, php, cfg);
             return await StartApacheAsync(profile, web, php, cfg);
         }
@@ -137,16 +152,16 @@ namespace Phoron.Core
         public async Task StopWebAsync()
         {
             SetState(ServiceKind.Web, ServiceState.Mematikan);
+            // Rujukannya dilepas SEBELUM dimatikan: pengawas Exited memakai
+            // rujukan itu untuk membedakan "dimatikan pengguna" dari "mati
+            // sendiri", dan kalau urutannya terbalik penghentian yang disengaja
+            // ikut dilaporkan sebagai kegagalan.
+            Process proc;
+            lock (_lock) { proc = _web; _web = null; }
             await Task.Run(() =>
             {
-                lock (_lock)
-                {
-                    if (_web != null)
-                    {
-                        try { if (!_web.HasExited) Shell.KillTree(_web.Id); } catch { }
-                        _web = null;
-                    }
-                }
+                if (proc == null) return;
+                try { if (!proc.HasExited) Shell.KillTree(proc.Id); } catch { }
             });
             StopFastCgi();
             Say("Web server dimatikan.");
@@ -181,9 +196,10 @@ namespace Phoron.Core
 
         void StopFastCgi()
         {
-            if (_fcgi == null) return;
-            try { if (!_fcgi.HasExited) Shell.KillTree(_fcgi.Id); } catch { }
-            _fcgi = null;
+            var proc = _fcgi;
+            _fcgi = null;   // dilepas dulu, lihat catatan di StopWebAsync
+            if (proc == null) return;
+            try { if (!proc.HasExited) Shell.KillTree(proc.Id); } catch { }
         }
 
         // ------------------------------------------------------------------ MySQL
@@ -321,6 +337,12 @@ namespace Phoron.Core
                 var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 p.OutputDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Say("[" + tag + "] " + e.Data); };
                 p.ErrorDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Say("[" + tag + "] " + e.Data); };
+                // Proses bisa mati sendiri setelah dilaporkan "jalan": httpd yang
+                // kehabisan port saat vhost baru ditambahkan, mysqld yang gagal
+                // memulihkan InnoDB, php-cgi yang ditutup paksa. Tanpa pengawas
+                // ini, lampu indikator tetap hijau padahal tidak ada lagi yang
+                // mendengarkan - dan pengguna mencari-cari sebabnya di browser.
+                p.Exited += (s, e) => ProsesMati(p, tag);
                 p.Start();
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
@@ -330,6 +352,37 @@ namespace Phoron.Core
             {
                 Say("Tidak bisa menjalankan " + Path.GetFileName(exe) + ": " + ex.Message);
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Dipanggil saat sebuah proses anak berakhir. Hanya berarti kalau proses
+        /// itu MASIH yang sedang dipegang: penghentian yang disengaja lebih dulu
+        /// melepas rujukannya, jadi perbandingan ini yang membedakan "dimatikan
+        /// pengguna" dari "mati sendiri".
+        /// </summary>
+        void ProsesMati(Process p, string tag)
+        {
+            int kode;
+            try { kode = p.ExitCode; } catch { kode = -1; }
+
+            if (ReferenceEquals(_web, p))
+            {
+                _web = null;
+                StopFastCgi();
+                Say(tag + " berhenti sendiri (kode " + kode + "). Lihat logs\\apache-error.log.");
+                SetState(ServiceKind.Web, ServiceState.Gagal);
+            }
+            else if (ReferenceEquals(_db, p))
+            {
+                _db = null;
+                Say("MySQL berhenti sendiri (kode " + kode + "). Lihat logs\\mysql-error.log.");
+                SetState(ServiceKind.Db, ServiceState.Gagal);
+            }
+            else if (ReferenceEquals(_fcgi, p) && WebState == ServiceState.Jalan)
+            {
+                _fcgi = null;
+                Say("php-cgi berhenti sendiri (kode " + kode + ") - halaman PHP akan membalas 503.");
             }
         }
 
