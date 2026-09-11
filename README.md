@@ -277,7 +277,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (122 uji)
+build.bat test         harness uji (124 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

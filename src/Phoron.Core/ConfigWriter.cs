@@ -562,7 +562,15 @@ namespace Phoron.Core
             var dir = Path.Combine(php.Path, "ext");
             if (!Directory.Exists(dir)) return new List<string>();
             return Directory.GetFiles(dir, "php_*.dll")
+                // Pola "*.dll" di Windows JUGA cocok dengan php_oci8_12c.dllaaa:
+                // FindFirstFile masih mencocokkan nama pendek 8.3, jadi akhiran
+                // apa pun setelah .dll ikut terjaring. Berkas semacam itu justru
+                // sengaja dinonaktifkan orang dengan mengganti namanya - kalau
+                // ikut terdaftar, daftarnya berisi entri kembar yang tidak bisa
+                // dipakai sama sekali.
+                .Where(f => string.Equals(Path.GetExtension(f), ".dll", StringComparison.OrdinalIgnoreCase))
                 .Select(f => Path.GetFileNameWithoutExtension(f).Substring(4).ToLowerInvariant())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
         }
 

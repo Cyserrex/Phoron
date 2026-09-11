@@ -40,6 +40,7 @@ namespace Phoron.Tests
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
+                UjiDaftarEkstensiTersedia();
                 UjiWarisanPhpIni();
                 UjiPhpIniKeFolderPhp();
                 UjiHalamanSambutan();
@@ -338,6 +339,31 @@ namespace Phoron.Tests
                 Ok(v.Version + ": memory_limit terbaca PHP sebagai 333M",
                     limit.StdOut.Trim() == "333M", limit.All);
             }
+        }
+
+        static void UjiDaftarEkstensiTersedia()
+        {
+            Bagian("Daftar ekstensi tersedia");
+            var palsu = Path.Combine(Paths.Root, "php-ext-daftar");
+            var ext = Path.Combine(palsu, "ext");
+            Directory.CreateDirectory(ext);
+            File.WriteAllText(Path.Combine(ext, "php_mbstring.dll"), "x");
+            File.WriteAllText(Path.Combine(ext, "php_oci8_12c.dll"), "x");
+            // Cara orang menonaktifkan ekstensi: ganti nama berkasnya. Pola
+            // "*.dll" Windows masih menjaringnya lewat pencocokan nama 8.3.
+            File.WriteAllText(Path.Combine(ext, "php_oci8_12c.dllaaa"), "x");
+            File.WriteAllText(Path.Combine(ext, "php_curl.dll.mati"), "x");
+            File.WriteAllText(Path.Combine(ext, "catatan.txt"), "x");
+            var php = new BinPackage { Kind = BinKind.Php, Id = "php-ext", Path = palsu, Version = "5.6.40" };
+
+            var daftar = ConfigWriter.AvailableExtensions(php);
+            Ok("Hanya berkas .dll sungguhan yang terdaftar",
+                daftar.SequenceEqual(new[] { "mbstring", "oci8_12c" }),
+                string.Join(",", daftar));
+            Ok("Berkas yang dinonaktifkan (.dllaaa) tidak ikut",
+                daftar.Count(x => x == "oci8_12c") == 1, string.Join(",", daftar));
+
+            Directory.Delete(palsu, true);
         }
 
         static void UjiWarisanPhpIni()
