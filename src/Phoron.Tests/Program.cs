@@ -47,6 +47,7 @@ namespace Phoron.Tests
                 UjiKonfigurasiApache();
                 UjiHosts();
                 UjiPortCheck();
+                UjiNodeApps();
                 UjiAutostart();
                 UjiLabelVersi();
             }
@@ -676,6 +677,72 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiNodeApps()
+        {
+            Bagian("Proyek Node");
+            var proyek = Path.Combine(Paths.Root, "proyek-node");
+            Directory.CreateDirectory(proyek);
+            // package.json sungguhan punya nilai yang memuat kurung kurawal dan
+            // tanda kutip di dalamnya - pengurai sederhana gampang tersandung di
+            // situ, jadi contoh ini sengaja dibuat menyerupai yang asli.
+            File.WriteAllText(Path.Combine(proyek, "package.json"),
+                "{\n" +
+                "  \"name\": \"contoh\",\n" +
+                "  \"scripts\": {\n" +
+                "    \"dev\": \"next dev --experimental-https\",\n" +
+                "    \"build\": \"astro check && astro build\",\n" +
+                "    \"aneh\": \"node -e \\\"console.log({a:1})\\\"\",\n" +
+                "    \"start\": \"node server.mjs\"\n" +
+                "  },\n" +
+                "  \"dependencies\": { \"next\": \"^15.0.0\" }\n" +
+                "}\n");
+
+            var skrip = PackageJson.Scripts(proyek);
+            Ok("Nama skrip terbaca sesuai urutan",
+                skrip.SequenceEqual(new[] { "dev", "build", "aneh", "start" }),
+                string.Join(",", skrip));
+            Ok("Kurung kurawal di dalam nilai tidak mengacaukan pembacaan",
+                skrip.Count == 4, string.Join(",", skrip));
+            Ok("Kerangka terdeteksi dari dependensi",
+                PackageJson.DetectFramework(proyek) == "next",
+                PackageJson.DetectFramework(proyek));
+            Ok("Tanpa berkas kunci, pengelolanya npm",
+                PackageJson.DetectManager(proyek) == "npm");
+
+            File.WriteAllText(Path.Combine(proyek, "pnpm-lock.yaml"), "");
+            Ok("pnpm-lock.yaml menentukan pnpm", PackageJson.DetectManager(proyek) == "pnpm");
+            File.Delete(Path.Combine(proyek, "pnpm-lock.yaml"));
+
+            Ok("Folder tanpa package.json bukan proyek Node",
+                !PackageJson.LooksLikeNodeProject(Paths.Tmp));
+            Ok("Daftar skrip folder bukan proyek itu kosong",
+                PackageJson.Scripts(Paths.Tmp).Count == 0);
+
+            // Bolak-balik ke apps.ini - jalur Windows memuat ":" dan "\",
+            // keduanya harus selamat sebagai nama seksi.
+            var apps = new List<NodeApp>
+            {
+                new NodeApp { Path = proyek, Name = "Contoh", Script = "build", Manager = "pnpm", NodeId = "node-v18" },
+                new NodeApp { Path = @"D:\kerjaan\situs", Script = "dev", Manager = "npm" },
+            };
+            NodeAppStore.SaveAll(apps);
+            var muat = NodeAppStore.LoadAll();
+            Ok("Dua proyek tersimpan dan terbaca lagi", muat.Count == 2, muat.Count.ToString());
+            var satu = muat.FirstOrDefault(x => x.Path == proyek);
+            Ok("Jalur, skrip, pengelola, dan Node bolak-balik utuh",
+                satu != null && satu.Name == "Contoh" && satu.Script == "build"
+                && satu.Manager == "pnpm" && satu.NodeId == "node-v18",
+                satu == null ? "null" : satu.Script + "/" + satu.Manager + "/" + satu.NodeId);
+            var dua = muat.FirstOrDefault(x => x.Path == @"D:\kerjaan\situs");
+            Ok("Jalur berhuruf drive lain tetap utuh", dua != null, "");
+            Ok("Nama tampilan jatuh ke nama folder bila kosong",
+                dua != null && dua.DisplayName == "situs",
+                dua == null ? "null" : dua.DisplayName);
+
+            File.Delete(Path.Combine(Paths.Root, "apps.ini"));
+            Directory.Delete(proyek, true);
         }
 
         static void UjiAutostart()

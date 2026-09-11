@@ -24,6 +24,11 @@
             <ui:ToggleSwitch x:Name="SwHosts" Margin="0,0,0,10"
                              Content="Sinkronkan berkas hosts Windows (butuh Administrator)"/>
 
+            <ui:ToggleSwitch x:Name="SwLogRinci" Margin="0,0,0,4"
+                             Content="Catat log rinci"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                       Text="Baku mati agar Phoron ringan: log akses Apache dan seluruh keluaran layanan tidak ditulis (mysqld sendiri mencetak ratusan baris tiap kali menyala). Log GALAT Apache, MySQL, dan PHP tetap menyala — itulah yang menjelaskan kalau ada yang rusak."/>
+
             <ui:ToggleSwitch x:Name="SwPhpIni" Margin="0,0,0,4"
                              Content="Tulis php.ini ke dalam folder PHP"/>
             <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"

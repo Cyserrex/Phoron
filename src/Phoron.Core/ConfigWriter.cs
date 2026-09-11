@@ -39,14 +39,14 @@ namespace Phoron.Core
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
                                    BinPackage mysql, BinPackage nginx, List<Site> sites,
-                                   bool phpIniKeFolderPhp = false)
+                                   bool phpIniKeFolderPhp = false, bool logAkses = true)
         {
             var r = new Result();
             if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp);
             if (profile.WebServer == "nginx" && nginx != null)
                 r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
             else if (apache != null)
-                r.HttpdConf = WriteApache(profile, apache, php, sites, r);
+                r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses);
             else
                 r.Warnings.Add("Profil belum menunjuk versi Apache mana pun.");
             if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
@@ -56,7 +56,7 @@ namespace Phoron.Core
         // ---------------------------------------------------------------- Apache
 
         static string WriteApache(Profile profile, BinPackage apache, BinPackage php,
-                                  List<Site> sites, Result r)
+                                  List<Site> sites, Result r, bool logAkses)
         {
             var baseConf = PristineConf(apache);
             if (baseConf == null)
@@ -111,7 +111,14 @@ namespace Phoron.Core
             sb.AppendLine("DefaultRuntimeDir \"" + Paths.Fwd(Paths.Tmp) + "/\"");
             sb.AppendLine("PidFile \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "httpd.pid")) + "\"");
             sb.AppendLine("ErrorLog \"" + Paths.Fwd(Path.Combine(Paths.Logs, "apache-error.log")) + "\"");
-            sb.AppendLine("CustomLog \"" + Paths.Fwd(Path.Combine(Paths.Logs, "apache-access.log")) + "\" common");
+            // Log akses hanya ditulis kalau diminta. Log GALAT selalu menyala:
+            // itulah yang menjelaskan kenapa sesuatu rusak, dan mematikannya
+            // demi keringanan berarti menukar beberapa megabita dengan
+            // kebutaan total saat ada masalah.
+            if (logAkses)
+                sb.AppendLine("CustomLog \"" + Paths.Fwd(Path.Combine(Paths.Logs, "apache-access.log")) + "\" common");
+            else
+                sb.AppendLine("# Log akses dimatikan (Pengaturan > Catat log rinci).");
             sb.AppendLine("ServerName localhost:" + profile.HttpPort);
             sb.AppendLine("ServerSignature Off");
             sb.AppendLine("DocumentRoot \"" + docRoot + "\"");

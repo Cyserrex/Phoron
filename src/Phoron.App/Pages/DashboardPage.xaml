@@ -36,11 +36,9 @@
                                ToolTip="Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL"
                                Click="BtnSwitchRun_Click"/>
                     <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="Switch"
-                               VerticalAlignment="Bottom" Margin="0,0,8,0"
+                               VerticalAlignment="Bottom"
                                ToolTip="Pindah ke profil ini tanpa mengubah keadaan layanan"
                                Click="BtnSwitch_Click"/>
-                    <ui:Button Grid.Column="3" Content="Tulis ulang konfigurasi"
-                               VerticalAlignment="Bottom" Click="BtnApply_Click"/>
                 </Grid>
             </Border>
 
@@ -73,6 +71,11 @@
                 <StackPanel>
                     <TextBlock Text="Perhatian" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <TextBlock x:Name="TxtPeringatan" TextWrapping="Wrap"/>
+                    <!-- Tombolnya ditaruh tepat di bawah keluhannya. Menyebut
+                         masalah tanpa menyediakan jalan keluarnya di tempat yang
+                         sama memaksa orang mencarinya sendiri di halaman lain. -->
+                    <ui:Button x:Name="BtnAdmin" Content="Jalankan ulang sebagai Administrator"
+                               Margin="0,10,0,0" Visibility="Collapsed" Click="BtnAdmin_Click"/>
                 </StackPanel>
             </Border>
 

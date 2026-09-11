@@ -84,6 +84,41 @@ namespace Phoron.Core
             catch { }
         }
 
+        /// <summary>
+        /// Buka terminal yang langsung menjalankan satu perintah, lalu tetap
+        /// terbuka. Dipakai untuk perintah panjang yang keluarannya perlu
+        /// dibaca utuh (npm install) - menjalankannya diam-diam di latar hanya
+        /// membuat orang menunggu tanpa tahu sedang terjadi apa.
+        /// </summary>
+        public static void OpenTerminalWithCommand(string kind, string workDir,
+                                                   IDictionary<string, string> env, string command)
+        {
+            string exe, args;
+            switch ((kind ?? "cmd").ToLowerInvariant())
+            {
+                case "powershell":
+                    exe = "powershell.exe";
+                    args = "-NoExit -NoLogo -Command \"" + command.Replace("\"", "`\"") + "\"";
+                    break;
+                case "wt":
+                    exe = "wt.exe";
+                    args = "-d \"" + workDir + "\" cmd /k " + command;
+                    break;
+                default:
+                    exe = "cmd.exe";
+                    args = "/k " + command;
+                    break;
+            }
+            var psi = new ProcessStartInfo(exe, args)
+            {
+                UseShellExecute = false,
+                WorkingDirectory = Directory.Exists(workDir) ? workDir : Paths.Root,
+            };
+            if (env != null) foreach (var kv in env) psi.EnvironmentVariables[kv.Key] = kv.Value;
+            try { Process.Start(psi); }
+            catch { if (exe != "cmd.exe") OpenTerminalWithCommand("cmd", workDir, env, command); }
+        }
+
         /// <summary>Buka terminal dengan PATH yang sudah berisi PHP, MySQL, dan Composer profil aktif.</summary>
         public static void OpenTerminal(string kind, string workDir, IDictionary<string, string> env)
         {

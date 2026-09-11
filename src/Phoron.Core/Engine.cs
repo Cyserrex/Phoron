@@ -18,6 +18,9 @@ namespace Phoron.Core
         public List<Profile> Profiles { get; private set; }
         public Profile Active { get; private set; }
         public ServiceManager Services { get; private set; }
+        /// <summary>Proyek Node/TypeScript yang terdaftar, dan pengendali prosesnya.</summary>
+        public NodeRunner Node { get; private set; }
+        public List<NodeApp> NodeAppsList { get; private set; }
         public ConfigWriter.Result LastBuild { get; private set; }
         public List<Site> Sites { get; private set; }
 
@@ -35,6 +38,9 @@ namespace Phoron.Core
             Sites = new List<Site>();
             Services = new ServiceManager();
             Services.Log += Say;
+            Services.LogRinci = Settings.LogRinci;
+            Node = new NodeRunner();
+            NodeAppsList = new List<NodeApp>();
         }
 
         public void Say(string text)
@@ -55,6 +61,7 @@ namespace Phoron.Core
         public void Reload()
         {
             Packages = BinScanner.ScanAll(Settings.BinRoots);
+            NodeAppsList = NodeAppStore.LoadAll();
             Profiles = ProfileStore.LoadAll();
             if (Profiles.Count == 0 && Packages.Any(p => p.Kind == BinKind.Php))
             {
@@ -150,9 +157,10 @@ namespace Phoron.Core
             PastikanHalamanSambutan();
             var awal = PastikanSertifikat();
             RefreshSites();
+            Services.LogRinci = Settings.LogRinci;
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>(),
-                                           Settings.PhpIniKeFolderPhp);
+                                           Settings.PhpIniKeFolderPhp, Settings.LogRinci);
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.

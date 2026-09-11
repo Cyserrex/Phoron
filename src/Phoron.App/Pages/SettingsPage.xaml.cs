@@ -34,6 +34,7 @@ namespace Phoron.App.Pages
             SwVhost.IsChecked = s.AutoVhost;
             SwHosts.IsChecked = s.ManageHosts;
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
+            SwLogRinci.IsChecked = s.LogRinci;
             TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             foreach (ComboBoxItem item in CmbTerminal.Items)
                 if ((item.Tag ?? "").ToString() == s.Terminal) CmbTerminal.SelectedItem = item;
@@ -82,6 +83,7 @@ namespace Phoron.App.Pages
             s.AutoVhost = SwVhost.IsChecked == true;
             s.ManageHosts = SwHosts.IsChecked == true;
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
+            s.LogRinci = SwLogRinci.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
             s.Terminal = item != null ? (item.Tag ?? "cmd").ToString() : "cmd";
             s.BinRoots = (TxtRoots.Text ?? "")

@@ -17,6 +17,7 @@ namespace Phoron.Core
         static readonly Regex VersionRx = new Regex(@"(\d+\.\d+(?:\.\d+)?)", RegexOptions.Compiled);
         static readonly Regex CompilerRx = new Regex(@"\b(vc\d{1,2}|vs\d{2})\b",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        static readonly Regex MajorOnlyRx = new Regex(@"v(\d+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         /// <summary>Pindai semua root; hasilnya sudah diurutkan versi menurun.</summary>
         public static List<BinPackage> ScanAll(IEnumerable<string> roots)
@@ -52,7 +53,8 @@ namespace Phoron.Core
 
                 var name = Path.GetFileName(dir).ToLowerInvariant();
                 if (name == "php" || name == "apache" || name == "nginx"
-                    || name == "mysql" || name == "mariadb")
+                    || name == "mysql" || name == "mariadb"
+                    || name == "nodejs" || name == "node")
                 {
                     foreach (var sub in SafeDirs(dir))
                     {
@@ -89,6 +91,9 @@ namespace Phoron.Core
             if (File.Exists(exe = Path.Combine(dir, "bin", "mysqld.exe")))
                 return Common(BinKind.MySql, dir, name, sourceRoot, exe);
 
+            if (File.Exists(exe = Path.Combine(dir, "node.exe")))
+                return Common(BinKind.Node, dir, name, sourceRoot, exe);
+
             // Nama folder yang menjanjikan tapi exe-nya tidak ada = instalasi rusak
             // atau baru setengah diekstrak; jangan ditawarkan.
             if (lower.StartsWith("php-") || lower.StartsWith("httpd-")
@@ -120,6 +125,10 @@ namespace Phoron.Core
                 SourceRoot = root,
             };
             var m = VersionRx.Match(name);
+            // Folder Node kerap dinamai hanya dengan nomor mayor ("node-v18"),
+            // tanpa titik sama sekali - tanpa cadangan ini versinya kosong dan
+            // urutan daftarnya jadi acak.
+            if (!m.Success) m = MajorOnlyRx.Match(name);
             pkg.Version = m.Success ? m.Groups[1].Value : "";
             var c = CompilerRx.Match(name);
             pkg.Compiler = c.Success ? c.Groups[1].Value.ToUpperInvariant() : "";

@@ -106,6 +106,13 @@ namespace Phoron.App.Pages
 
             TxtPeringatan.Text = string.Join(Environment.NewLine, pesan);
             PanelPeringatan.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BtnAdmin.Visibility = HostsFile.IsAdmin() ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        void BtnAdmin_Click(object sender, RoutedEventArgs e)
+        {
+            Program.RestartAsAdmin("Menyunting berkas hosts dan memasang sertifikat ke Trusted Root "
+                                   + "hanya bisa dilakukan dengan hak Administrator.");
         }
 
         // ------------------------------------------------------------------ Aksi
@@ -149,12 +156,6 @@ namespace Phoron.App.Pages
                 AppState.ShowWarnings(warnings);
             }
             finally { BtnSwitch.IsEnabled = BtnSwitchRun.IsEnabled = true; }
-        }
-
-        void BtnApply_Click(object sender, RoutedEventArgs e)
-        {
-            AppState.ShowWarnings(_e.Apply());
-            RefreshState();
         }
 
         void BtnWww_Click(object sender, RoutedEventArgs e)

@@ -6,10 +6,10 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.6.0";
+        public const string Version = "1.7.0";
     }
 
-    public enum BinKind { Php, Apache, Nginx, MySql }
+    public enum BinKind { Php, Apache, Nginx, MySql, Node }
 
     public enum ServiceKind { Web, Db }
 

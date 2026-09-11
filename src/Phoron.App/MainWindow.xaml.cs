@@ -85,6 +85,7 @@ namespace Phoron.App
                 case "profil": Host.Content = new ProfilesPage(); break;
                 case "versi": Host.Content = new VersionsPage(); break;
                 case "situs": Host.Content = new SitesPage(); break;
+                case "node": Host.Content = new NodePage(); break;
                 case "ekstensi": Host.Content = new ExtensionsPage(); break;
                 case "log": Host.Content = new LogPage(); break;
                 case "setelan": Host.Content = new SettingsPage(); break;
@@ -153,6 +154,17 @@ namespace Phoron.App
             await TogglePower();
         }
 
+        void BtnKeluar_Click(object sender, RoutedEventArgs e)
+        {
+            bool ada = _engine.Services.WebState == ServiceState.Jalan
+                    || _engine.Services.DbState == ServiceState.Jalan
+                    || _engine.Node.RunningFolders.Any();
+            if (ada && !AppState.Ask("Masih ada layanan yang berjalan. Semuanya akan dimatikan.\n\n"
+                                     + "Keluar dari Phoron sekarang?")) return;
+            _reallyClosing = true;
+            Close();
+        }
+
         public async System.Threading.Tasks.Task TogglePower()
         {
             bool anyRunning = _engine.Services.WebState == ServiceState.Jalan
@@ -205,6 +217,9 @@ namespace Phoron.App
             // Layanan adalah proses anak; membiarkannya hidup setelah aplikasi
             // ditutup berarti port 80 tetap terpakai tanpa ada yang mengaku.
             _engine.Services.StopAll();
+            // Server pengembangan Node juga proses anak; kalau ditinggal hidup,
+            // port 3000/4321 tetap terpakai oleh proses tanpa jendela.
+            _engine.Node.StopAll();
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
             // ShutdownMode aplikasi ini OnExplicitShutdown (lihat Program.cs),
             // jadi menutup jendela saja tidak mengakhiri prosesnya.

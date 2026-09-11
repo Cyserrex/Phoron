@@ -74,6 +74,12 @@
                                 <TextBlock Text="Situs" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
+                        <ListBoxItem Tag="node">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE756;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="Node / TS" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
                         <ListBoxItem Tag="ekstensi">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE71D;" Style="{StaticResource NavIcon}"/>
@@ -111,6 +117,13 @@
                                    Appearance="Primary" HorizontalAlignment="Stretch"
                                    HorizontalContentAlignment="Center"
                                    Click="BtnPower_Click"/>
+                        <!-- Keluar ditaruh di sini, bukan hanya di menu baki
+                             sistem: menutup aplikasi tidak seharusnya menuntut
+                             orang mencari ikon tersembunyi lalu klik kanan. -->
+                        <ui:Button x:Name="BtnKeluar" Content="Keluar" Margin="0,6,0,0"
+                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                   ToolTip="Tutup Phoron sepenuhnya dan matikan semua layanan"
+                                   Click="BtnKeluar_Click"/>
                     </StackPanel>
                 </Grid>
             </Border>

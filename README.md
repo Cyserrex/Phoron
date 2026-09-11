@@ -144,10 +144,13 @@ tidak pernah tersentuh:
   versi PHP baru langsung dari windows.php.net, atau Apache/MySQL/Nginx dari
   katalog di `etc\catalog.ini`.
 - **Situs** — daftar situs, buat proyek baru, status hosts & vhost.
+- **Node / TS** — jalankan Next.js, Astro, Vite, dan proyek Node lain dari folder
+  mana pun (tidak harus di `www`). Skrip dibaca dari `package.json`, alamatnya
+  ditangkap dari keluaran server, dan prosesnya ikut mati saat Phoron ditutup.
 - **Ekstensi PHP** — centang ekstensi per profil, plus setelan php.ini yang sering
   diubah. Tombol **Uji: php -m** memperlihatkan apa yang benar-benar dimuat.
 - **Log** — pembaca log Apache/MySQL/PHP/Phoron yang ikut mengekor otomatis.
-- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray.
+- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray, log.
 
 ---
 
@@ -262,6 +265,20 @@ abjad, bukan folder proyek utama — gejala yang baru muncul setelah situs perta
 dibuat, jadi mudah disangka kesalahan lain. Phoron selalu menulis
 `sites-enabled\000-default.conf` yang urutannya dijamin paling awal.
 
+**Log rinci mati secara baku.** Log akses Apache dan seluruh keluaran layanan
+tidak ditulis kecuali diminta di Pengaturan — mysqld saja mencetak ratusan baris
+tiap kali menyala. Log **galat** Apache, MySQL, dan PHP tetap menyala: itulah yang
+menjelaskan kalau ada yang rusak, dan menukarnya dengan beberapa megabita berarti
+buta total saat dibutuhkan.
+
+**Proyek Node dijalankan lewat package.json, bukan tebakan port.** Server
+pengembangan mencetak alamatnya sendiri saat siap (Next 3000, Astro 4321, Vite
+5173 — semuanya bergeser kalau portnya terpakai), jadi Phoron membaca alamat itu
+dari keluarannya. Perintahnya dijalankan lewat `cmd.exe` karena npm/pnpm/yarn di
+Windows berupa berkas `.cmd` yang tidak bisa dijalankan CreateProcess langsung,
+dan penghentiannya membunuh seluruh pohon proses — `cmd` hanya pembungkus,
+`node.exe` di bawahnyalah yang memegang port.
+
 **Proses yang mati sendiri ketahuan.** Layanan bisa berakhir setelah dilaporkan
 "jalan" — httpd yang kehabisan port, mysqld yang gagal memulihkan InnoDB. Phoron
 mengawasi proses anaknya dan mengubah indikatornya jadi merah beserta alasannya,
@@ -285,7 +302,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (129 uji)
+build.bat test         harness uji (140 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

@@ -21,6 +21,26 @@ namespace Phoron.Core
         public ServiceState WebState { get; private set; }
         public ServiceState DbState { get; private set; }
 
+        /// <summary>
+        /// Teruskan SELURUH keluaran layanan, bukan hanya barisnya yang
+        /// mencurigakan. Mati secara baku: mysqld mencetak ratusan baris tiap
+        /// kali menyala, dan semuanya ikut tertulis ke phoron.log.
+        /// </summary>
+        public bool LogRinci;
+
+        /// <summary>
+        /// Baris yang tetap diteruskan walau log rinci mati. Tanpa penyaring
+        /// ini, mematikan log berarti kegagalan start juga ikut hilang - dan
+        /// itu justru satu-satunya saat keluarannya dibaca orang.
+        /// </summary>
+        static bool Penting(string baris)
+        {
+            if (string.IsNullOrEmpty(baris)) return false;
+            var l = baris.ToLowerInvariant();
+            return l.Contains("error") || l.Contains("fatal") || l.Contains("warning")
+                || l.Contains("cannot") || l.Contains("failed") || l.Contains("denied");
+        }
+
         public event Action<ServiceKind, ServiceState> StateChanged;
         public event Action<string> Log;
 
@@ -335,8 +355,13 @@ namespace Phoron.Core
             try
             {
                 var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
-                p.OutputDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Say("[" + tag + "] " + e.Data); };
-                p.ErrorDataReceived += (s, e) => { if (!string.IsNullOrWhiteSpace(e.Data)) Say("[" + tag + "] " + e.Data); };
+                DataReceivedEventHandler baca = (s, e) =>
+                {
+                    if (string.IsNullOrWhiteSpace(e.Data)) return;
+                    if (LogRinci || Penting(e.Data)) Say("[" + tag + "] " + e.Data);
+                };
+                p.OutputDataReceived += baca;
+                p.ErrorDataReceived += baca;
                 // Proses bisa mati sendiri setelah dilaporkan "jalan": httpd yang
                 // kehabisan port saat vhost baru ditambahkan, mysqld yang gagal
                 // memulihkan InnoDB, php-cgi yang ditutup paksa. Tanpa pengawas

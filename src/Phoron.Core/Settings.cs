@@ -25,6 +25,14 @@ namespace Phoron.Core
         /// berarti dua pengelola berebut satu berkas yang sama.
         /// </summary>
         public bool PhpIniKeFolderPhp;
+        /// <summary>
+        /// Catat log rinci: log akses Apache dan seluruh keluaran layanan.
+        /// Baku mati. mysqld sendiri mencetak ratusan baris tiap kali menyala,
+        /// dan log akses tumbuh terus sepanjang hari - keduanya jarang dibaca
+        /// saat pengembangan. Log GALAT (Apache, MySQL, PHP) tetap menyala:
+        /// itulah yang dibutuhkan ketika ada yang rusak.
+        /// </summary>
+        public bool LogRinci;
         public string Terminal = "cmd";     // cmd | powershell | wt
         public string Editor = "";          // kosong = notepad
 
@@ -42,6 +50,7 @@ namespace Phoron.Core
             s.AutoVhost = ini.GetBool("umum", "auto_vhost", true);
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
+            s.LogRinci = ini.GetBool("umum", "log_rinci", false);
             s.Terminal = ini.Get("umum", "terminal", "cmd");
             s.Editor = ini.Get("umum", "editor", "");
             return s;
@@ -69,6 +78,7 @@ namespace Phoron.Core
             ini.Set("umum", "auto_vhost", AutoVhost ? "1" : "0");
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
+            ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");
             ini.Set("umum", "terminal", Terminal ?? "cmd");
             ini.Set("umum", "editor", Editor ?? "");
             ini.Save(Paths.SettingsFile,
