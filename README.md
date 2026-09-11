@@ -205,6 +205,14 @@ menunjuk ke Phoron sama sekali — CodeIgniter, misalnya, beralih ke jalur `eval
 saat tag pendek mati, lalu gagal mengurai view-nya. Penimpaan di profil tetap
 berkuasa di atas berkas dasar itu.
 
+**Profil lahir dengan daftar ekstensi yang sudah terisi.** Sumbernya php.ini yang
+aktif di paket PHP itu; kalau paketnya baru diunduh dan php.ini-nya belum
+mengaktifkan apa pun, dipakai daftar baku (curl, fileinfo, openssl, mbstring, exif,
+intl, gd, mysqli, pdo_mysql, pdo_sqlite, sqlite3, zip) yang disaring ke DLL yang
+benar-benar ada di build tersebut. Profil kosong menghasilkan PHP yang mati di
+pemanggilan fungsi pertama — `mb_strlen`, `mysqli_connect` — dan galatnya sering
+hanya berwujud halaman putih.
+
 **Daftar ekstensinya juga ikut diambil alih** kalau profilnya belum punya daftar
 sendiri, lalu disimpan ke profil supaya terlihat dan bisa disunting. Tanpa itu,
 php.ini hasil mewarisi seluruh setelan tapi tidak satu pun ekstensinya, dan aplikasi
@@ -277,7 +285,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (124 uji)
+build.bat test         harness uji (129 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

@@ -207,6 +207,9 @@ namespace Phoron.App.Pages
                 p.PhpId = php.Id;
                 var apache = ProfileStore.PickApache(php, _e.Of(BinKind.Apache));
                 if (apache != null) p.ApacheId = apache.Id;
+                // Sama seperti profil bawaan: lahir dengan daftar ekstensi yang
+                // masuk akal, bukan kosong.
+                p.PhpExtensions = ConfigWriter.EkstensiDisarankan(php);
             }
             var db = _e.Of(BinKind.MySql).FirstOrDefault();
             if (db != null) p.MySqlId = db.Id;

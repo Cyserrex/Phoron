@@ -363,6 +363,33 @@ namespace Phoron.Tests
             Ok("Berkas yang dinonaktifkan (.dllaaa) tidak ikut",
                 daftar.Count(x => x == "oci8_12c") == 1, string.Join(",", daftar));
 
+            // --- daftar yang disarankan untuk profil baru ---
+            // php.ini-development bawaan: semua ekstensi dikomentari, jadi
+            // daftar baku yang harus dipakai - kalau tidak, profil baru lahir
+            // tanpa satu pun ekstensi.
+            File.WriteAllText(Path.Combine(palsu, "php.ini-development"),
+                ";extension=php_mbstring.dll\n;extension=php_curl.dll\n");
+            foreach (var e in new[] { "curl", "openssl", "gd2", "mysqli", "tidak_disarankan" })
+                File.WriteAllText(Path.Combine(ext, "php_" + e + ".dll"), "x");
+
+            var baku = ConfigWriter.EkstensiDisarankan(php);
+            Ok("PHP baru unduh dapat daftar baku, bukan kosong", baku.Count > 0,
+                string.Join(",", baku));
+            Ok("Daftar baku memuat mbstring", baku.Contains("mbstring"), string.Join(",", baku));
+            Ok("Daftar baku disaring ke DLL yang ada",
+                !baku.Contains("intl") && !baku.Contains("tidak_disarankan"),
+                string.Join(",", baku));
+            Ok("Urutan baku menjaga exif setelah mbstring",
+                !baku.Contains("exif")
+                || baku.IndexOf("mbstring") < baku.IndexOf("exif"),
+                string.Join(",", baku));
+
+            // php.ini yang SUDAH mengaktifkan sesuatu selalu menang atas daftar baku.
+            File.WriteAllText(Path.Combine(palsu, "php.ini"), "extension=php_oci8_12c.dll\n");
+            var dariIni = ConfigWriter.EkstensiDisarankan(php);
+            Ok("php.ini yang sudah ada mengalahkan daftar baku",
+                dariIni.SequenceEqual(new[] { "oci8_12c" }), string.Join(",", dariIni));
+
             Directory.Delete(palsu, true);
         }
 

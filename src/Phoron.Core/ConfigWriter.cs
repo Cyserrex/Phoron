@@ -425,7 +425,12 @@ namespace Phoron.Core
             var daftarExt = profile.PhpExtensions;
             if (daftarExt.Count == 0)
             {
-                var dariDasar = EkstensiAktif(baseText);
+                var tersedia = new HashSet<string>(AvailableExtensions(php), StringComparer.OrdinalIgnoreCase);
+                var dariDasar = EkstensiAktif(baseText).Where(tersedia.Contains).ToList();
+                // php.ini dasar yang tidak mengaktifkan apa pun (PHP yang baru
+                // diunduh) tetap harus menghasilkan profil yang bisa dipakai.
+                if (dariDasar.Count == 0)
+                    dariDasar = BakuDisarankan.Where(tersedia.Contains).ToList();
                 if (dariDasar.Count > 0)
                 {
                     daftarExt = dariDasar;
@@ -553,6 +558,37 @@ namespace Phoron.Core
         {
             if (php == null) return new List<string>();
             return EkstensiAktif(PhpIniTemplate(php));
+        }
+
+        /// <summary>
+        /// Daftar baku untuk build PHP yang php.ini-nya belum mengaktifkan apa
+        /// pun - yaitu PHP yang baru diunduh, yang hanya membawa
+        /// php.ini-development dengan semua ekstensi dikomentari. Tanpa daftar
+        /// ini, profil baru lahir tanpa satu pun ekstensi dan aplikasi apa pun
+        /// langsung mati di pemanggilan fungsi pertama.
+        ///
+        /// Urutannya penting: exif menyandarkan diri pada mbstring, jadi harus
+        /// dimuat sesudahnya. gd2 (PHP 5/7) dan gd (PHP 8) dua-duanya disebut;
+        /// yang tidak punya DLL-nya tersaring sendiri.
+        /// </summary>
+        static readonly string[] BakuDisarankan =
+        {
+            "curl", "fileinfo", "openssl", "mbstring", "exif", "intl",
+            "gd2", "gd", "mysqli", "pdo_mysql", "pdo_sqlite", "sqlite3", "zip",
+        };
+
+        /// <summary>
+        /// Ekstensi yang sepatutnya dipakai profil baru: apa yang sudah aktif di
+        /// php.ini paket itu, atau - kalau tidak ada - daftar baku yang masuk akal.
+        /// Selalu disaring ke DLL yang benar-benar ada di build tersebut.
+        /// </summary>
+        public static List<string> EkstensiDisarankan(BinPackage php)
+        {
+            if (php == null) return new List<string>();
+            var dariIni = EkstensiDariPhpIniDasar(php);
+            var calon = dariIni.Count > 0 ? dariIni : new List<string>(BakuDisarankan);
+            var tersedia = new HashSet<string>(AvailableExtensions(php), StringComparer.OrdinalIgnoreCase);
+            return calon.Where(tersedia.Contains).ToList();
         }
 
         /// <summary>Daftar ekstensi yang tersedia di sebuah build PHP (nama tanpa awalan php_).</summary>

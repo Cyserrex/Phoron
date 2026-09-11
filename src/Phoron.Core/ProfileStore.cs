@@ -135,6 +135,11 @@ namespace Phoron.Core
                     ApacheId = apache != null ? apache.Id : "",
                     MySqlId = mysql != null ? mysql.Id : "",
                     WebServer = "apache",
+                    // Diisi sejak awal, bukan dibiarkan kosong: profil tanpa
+                    // ekstensi menghasilkan PHP yang mati di pemanggilan fungsi
+                    // pertama (mb_strlen, mysqli_connect), dengan galat yang
+                    // sering hanya berwujud halaman putih.
+                    PhpExtensions = ConfigWriter.EkstensiDisarankan(php),
                 };
                 p.FileName = UniqueFileName(p.Name);
                 Save(p);
