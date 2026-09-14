@@ -41,6 +41,10 @@ namespace Phoron.Core
         /// tetap bisa dibuka di /index.php.
         /// </summary>
         public bool BerandaDiAkar = true;
+        /// <summary>"sistem" (ikut Windows), "terang", atau "gelap".</summary>
+        public string Tema = "sistem";
+        /// <summary>Kode bahasa antarmuka: id, en, jv, bjn.</summary>
+        public string Bahasa = Lang.Indonesia;
         /// <summary>Cek rilis baru di GitHub saat aplikasi dibuka. Baku menyala.</summary>
         public bool CekPembaruan = true;
         /// <summary>
@@ -68,6 +72,9 @@ namespace Phoron.Core
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
             s.BerandaDiAkar = ini.GetBool("umum", "beranda_di_akar", true);
+            s.Tema = ini.Get("umum", "tema", "sistem");
+            s.Bahasa = ini.Get("umum", "bahasa", Lang.Indonesia);
+            if (!Lang.Sah(s.Bahasa)) s.Bahasa = Lang.Indonesia;
             s.CekPembaruan = ini.GetBool("umum", "cek_pembaruan", true);
             DateTime kapan;
             s.CekTerakhir = DateTime.TryParse(ini.Get("umum", "cek_terakhir", ""),
@@ -103,6 +110,8 @@ namespace Phoron.Core
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");
             ini.Set("umum", "beranda_di_akar", BerandaDiAkar ? "1" : "0");
+            ini.Set("umum", "tema", Tema ?? "sistem");
+            ini.Set("umum", "bahasa", Bahasa ?? Lang.Indonesia);
             ini.Set("umum", "cek_pembaruan", CekPembaruan ? "1" : "0");
             ini.Set("umum", "cek_terakhir", CekTerakhir == DateTime.MinValue
                 ? "" : CekTerakhir.ToString("o", System.Globalization.CultureInfo.InvariantCulture));

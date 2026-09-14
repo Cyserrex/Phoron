@@ -174,7 +174,8 @@ tidak pernah tersentuh:
 - **Ekstensi PHP** — centang ekstensi per profil, plus setelan php.ini yang sering
   diubah. Tombol **Uji: php -m** memperlihatkan apa yang benar-benar dimuat.
 - **Log** — pembaca log Apache/MySQL/PHP/Phoron yang ikut mengekor otomatis.
-- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray, log, cek pembaruan.
+- **Pengaturan** — tema, bahasa, folder bin yang dipindai, terminal, auto-start, tray,
+  log, cek pembaruan.
 
 ---
 
@@ -220,6 +221,29 @@ memory_limit=512M
 ```
 
 ---
+
+## Tema dan bahasa
+
+**Tema** ikut Windows secara baku, atau bisa dipaksa Terang/Gelap.
+
+**Bahasa**: Indonesia, English, Basa Jawa, Bahasa Banjar. Nama bahasanya sengaja
+tidak ikut diterjemahkan - orang mencari "English" atau "Basa Jawa", bukan
+padanannya dalam bahasa yang sedang aktif, yang justru tidak mereka kenali kalau
+salah pilih dan ingin kembali.
+
+Kunci terjemahannya adalah **teks Indonesia itu sendiri**, bukan kode seperti
+`nav.beranda`. Dua alasan: bahasa asal aplikasi ini memang Indonesia sehingga tidak
+perlu kamus sama sekali untuk bahasa itu, dan teks yang belum diterjemahkan jatuh
+kembali ke Indonesia yang benar - bukan ke kode mentah yang tidak berarti apa-apa.
+Berkas XAML-nya pun tetap terbaca seperti kalimat biasa.
+
+Istilah teknis yang memang dipakai apa adanya sehari-hari (port, profil, log)
+sengaja tidak dipaksakan padanannya dalam Jawa dan Banjar; menerjemahkannya membuat
+layar lebih sulit dibaca, bukan lebih ramah.
+
+Yang sudah diterjemahkan adalah seluruh teks antarmuka: navigasi, judul halaman,
+tombol, judul kolom, dan label setelan. Pesan dialog dan baris log masih Indonesia,
+dan akan jatuh ke Indonesia dengan wajar sampai diterjemahkan.
 
 ## Catatan teknis
 

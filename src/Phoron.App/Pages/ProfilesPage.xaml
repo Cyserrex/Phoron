@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.ProfilesPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -9,9 +10,9 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Profil" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Profil'}" Style="{StaticResource Judul}"/>
             <TextBlock Style="{StaticResource SubJudul}"
-                       Text="Satu profil = satu kombinasi versi + port. Simpan sebanyak yang perlu, lalu tinggal switch."/>
+                       Text="{loc:T 'Satu profil = satu kombinasi versi + port. Simpan sebanyak yang perlu, lalu tinggal switch.'}"/>
         </StackPanel>
 
         <Grid Grid.Row="1">
@@ -22,16 +23,16 @@
 
             <DockPanel Grid.Column="0" Margin="0,0,12,0">
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-                    <ui:Button Content="Profil baru" HorizontalAlignment="Stretch"
+                    <ui:Button Content="{loc:T 'Profil baru'}" HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Center" Margin="0,0,0,6" Click="BtnBaru_Click"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <ui:Button Grid.Column="0" Content="Duplikat" HorizontalAlignment="Stretch"
+                        <ui:Button Grid.Column="0" Content="{loc:T 'Duplikat'}" HorizontalAlignment="Stretch"
                                    HorizontalContentAlignment="Center" Margin="0,0,3,0" Click="BtnDuplikat_Click"/>
-                        <ui:Button Grid.Column="1" Content="Hapus" HorizontalAlignment="Stretch"
+                        <ui:Button Grid.Column="1" Content="{loc:T 'Hapus'}" HorizontalAlignment="Stretch"
                                    HorizontalContentAlignment="Center" Margin="3,0,0,0" Click="BtnHapus_Click"/>
                     </Grid>
                 </StackPanel>
@@ -40,25 +41,25 @@
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
                 <StackPanel x:Name="Editor">
-                    <TextBlock Text="Nama profil" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Nama profil'}" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtNama"/>
 
-                    <TextBlock Text="Web server" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Web server'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbWeb" SelectionChanged="CmbWeb_Changed">
                         <ComboBoxItem Content="Apache" Tag="apache"/>
                         <ComboBoxItem Content="Nginx" Tag="nginx"/>
                     </ComboBox>
 
-                    <TextBlock Text="Versi PHP" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Versi PHP'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbPhp"/>
 
-                    <TextBlock x:Name="LblApache" Text="Versi Apache" Style="{StaticResource Label}"/>
+                    <TextBlock x:Name="LblApache" Text="{loc:T 'Versi Apache'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbApache"/>
 
-                    <TextBlock x:Name="LblNginx" Text="Versi Nginx" Style="{StaticResource Label}"/>
+                    <TextBlock x:Name="LblNginx" Text="{loc:T 'Versi Nginx'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbNginx"/>
 
-                    <TextBlock Text="Versi MySQL / MariaDB" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Versi MySQL / MariaDB'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbMysql"/>
 
                     <Grid>
@@ -68,38 +69,38 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,6,0">
-                            <TextBlock Text="Port HTTP" Style="{StaticResource Label}"/>
+                            <TextBlock Text="{loc:T 'Port HTTP'}" Style="{StaticResource Label}"/>
                             <ui:TextBox x:Name="TxtPortHttp"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="3,0,3,0">
-                            <TextBlock Text="Port HTTPS" Style="{StaticResource Label}"/>
+                            <TextBlock Text="{loc:T 'Port HTTPS'}" Style="{StaticResource Label}"/>
                             <ui:TextBox x:Name="TxtPortHttps"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Margin="6,0,0,0">
-                            <TextBlock Text="Port MySQL" Style="{StaticResource Label}"/>
+                            <TextBlock Text="{loc:T 'Port MySQL'}" Style="{StaticResource Label}"/>
                             <ui:TextBox x:Name="TxtPortMysql"/>
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock Text="Folder proyek" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Folder proyek'}" Style="{StaticResource Label}"/>
                     <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
                                Text="Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan."/>
                     <ui:TextBox x:Name="TxtDocRoot" AcceptsReturn="True" Height="80"
                                 TextWrapping="NoWrap" VerticalContentAlignment="Top"
                                 VerticalScrollBarVisibility="Auto"/>
-                    <ui:Button Content="Tambah folder..." Margin="0,6,0,0"
+                    <ui:Button Content="{loc:T 'Tambah folder...'}" Margin="0,6,0,0"
                                HorizontalAlignment="Left" Click="BtnPilihFolder_Click"/>
 
-                    <TextBlock Text="Akhiran nama situs" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Akhiran nama situs'}" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtSuffix" PlaceholderText="test"/>
 
-                    <TextBlock Text="Catatan" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Catatan'}" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtCatatan" AcceptsReturn="True" Height="60"
                                 TextWrapping="Wrap" VerticalContentAlignment="Top"/>
 
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
-                        <ui:Button Content="Simpan" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
-                        <ui:Button Content="Simpan lalu switch ke profil ini" Click="BtnSimpanSwitch_Click"/>
+                        <ui:Button Content="{loc:T 'Simpan'}" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
+                        <ui:Button Content="{loc:T 'Simpan lalu switch ke profil ini'}" Click="BtnSimpanSwitch_Click"/>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.SitesPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -11,7 +12,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Situs" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Situs'}" Style="{StaticResource Judul}"/>
             <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"
                        Text="Tiap subfolder di www otomatis dapat alamat sendiri."/>
         </StackPanel>
@@ -30,7 +31,7 @@
                      dengan satu folder, pertanyaannya tidak ada gunanya. -->
                 <ComboBox x:Name="CmbRootBaru" Grid.Column="1" Margin="0,0,8,0" MinWidth="180"
                           Visibility="Collapsed"/>
-                <ui:Button Grid.Column="2" Content="Buat situs" Appearance="Primary" Click="BtnBuat_Click"/>
+                <ui:Button Grid.Column="2" Content="{loc:T 'Buat situs'}" Appearance="Primary" Click="BtnBuat_Click"/>
             </Grid>
         </Border>
 
@@ -38,22 +39,22 @@
                   MouseDoubleClick="Daftar_DoubleClick">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="Alamat" Width="215" DisplayMemberBinding="{Binding Alamat}"/>
-                    <GridViewColumn Header="Folder" Width="150" DisplayMemberBinding="{Binding Folder}"/>
-                    <GridViewColumn Header="Folder proyek" Width="185" DisplayMemberBinding="{Binding Root}"/>
-                    <GridViewColumn Header="Document root" Width="150" DisplayMemberBinding="{Binding DocRoot}"/>
-                    <GridViewColumn Header="hosts" Width="70" DisplayMemberBinding="{Binding Hosts}"/>
-                    <GridViewColumn Header="vhost" Width="70" DisplayMemberBinding="{Binding Vhost}"/>
+                    <GridViewColumn Header="{loc:T 'Alamat'}" Width="215" DisplayMemberBinding="{Binding Alamat}"/>
+                    <GridViewColumn Header="{loc:T 'Folder'}" Width="150" DisplayMemberBinding="{Binding Folder}"/>
+                    <GridViewColumn Header="{loc:T 'Folder proyek'}" Width="185" DisplayMemberBinding="{Binding Root}"/>
+                    <GridViewColumn Header="{loc:T 'Document root'}" Width="150" DisplayMemberBinding="{Binding DocRoot}"/>
+                    <GridViewColumn Header="{loc:T 'hosts'}" Width="70" DisplayMemberBinding="{Binding Hosts}"/>
+                    <GridViewColumn Header="{loc:T 'vhost'}" Width="70" DisplayMemberBinding="{Binding Vhost}"/>
                 </GridView>
             </ListView.View>
         </ListView>
 
         <WrapPanel Grid.Row="3">
-            <ui:Button Content="Buka di browser" Margin="0,0,8,0" Click="BtnBuka_Click"/>
-            <ui:Button Content="Buka folder" Margin="0,0,8,0" Click="BtnFolder_Click"/>
-            <ui:Button Content="Terminal di sini" Margin="0,0,8,0" Click="BtnTerminal_Click"/>
+            <ui:Button Content="{loc:T 'Buka di browser'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+            <ui:Button Content="{loc:T 'Buka folder'}" Margin="0,0,8,0" Click="BtnFolder_Click"/>
+            <ui:Button Content="{loc:T 'Terminal di sini'}" Margin="0,0,8,0" Click="BtnTerminal_Click"/>
             <ui:Button Content="Segarkan &amp; sinkronkan" Margin="0,0,8,0" Click="BtnSegarkan_Click"/>
-            <ui:Button Content="Buka berkas hosts" Click="BtnHosts_Click"/>
+            <ui:Button Content="{loc:T 'Buka berkas hosts'}" Click="BtnHosts_Click"/>
         </WrapPanel>
     </Grid>
 </UserControl>

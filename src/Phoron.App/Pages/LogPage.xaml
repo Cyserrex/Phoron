@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.LogPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -10,9 +11,9 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Log" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Log'}" Style="{StaticResource Judul}"/>
             <TextBlock Style="{StaticResource SubJudul}"
-                       Text="Semua log Apache, MySQL, PHP, dan Phoron ada di folder logs."/>
+                       Text="{loc:T 'Semua log Apache, MySQL, PHP, dan Phoron ada di folder logs.'}"/>
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,10">
@@ -25,10 +26,10 @@
             </Grid.ColumnDefinitions>
             <ComboBox x:Name="CmbBerkas" Grid.Column="0" Margin="0,0,8,0"
                       SelectionChanged="CmbBerkas_Changed"/>
-            <ui:Button Grid.Column="1" Content="Muat ulang" Margin="0,0,8,0" Click="BtnMuat_Click"/>
-            <ui:Button Grid.Column="2" Content="Buka folder" Margin="0,0,8,0" Click="BtnFolder_Click"/>
-            <ui:Button Grid.Column="3" Content="Kosongkan" Margin="0,0,8,0" Click="BtnKosong_Click"/>
-            <CheckBox Grid.Column="4" x:Name="ChkAuto" Content="Ikuti" IsChecked="True"
+            <ui:Button Grid.Column="1" Content="{loc:T 'Muat ulang'}" Margin="0,0,8,0" Click="BtnMuat_Click"/>
+            <ui:Button Grid.Column="2" Content="{loc:T 'Buka folder'}" Margin="0,0,8,0" Click="BtnFolder_Click"/>
+            <ui:Button Grid.Column="3" Content="{loc:T 'Kosongkan'}" Margin="0,0,8,0" Click="BtnKosong_Click"/>
+            <CheckBox Grid.Column="4" x:Name="ChkAuto" Content="{loc:T 'Ikuti'}" IsChecked="True"
                       VerticalAlignment="Center"/>
         </Grid>
 

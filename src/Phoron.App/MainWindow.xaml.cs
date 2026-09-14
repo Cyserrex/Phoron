@@ -20,10 +20,14 @@ namespace Phoron.App
         public MainWindow()
         {
             InitializeComponent();
-            ApplicationThemeManager.ApplySystemTheme();
 
             PasangIkon();
             AppState.Init(_engine);
+            // Bahasa disetel SEBELUM halaman mana pun dibuat: penerjemahnya
+            // bekerja saat XAML dimuat, jadi halaman yang terlanjur dibuat
+            // dengan bahasa lama tidak akan berubah sendiri.
+            Lang.Pakai(_engine.Settings.Bahasa);
+            TerapkanTema(_engine.Settings.Tema);
             _engine.Services.StateChanged += (kind, state) => Dispatcher.Invoke(RefreshStatus);
             _engine.Reload();
 
@@ -74,6 +78,63 @@ namespace Phoron.App
         /// ApplicationIcon di csproj sudah menaruhnya di dalam exe; menanamkannya
         /// kedua kali hanya menggandakan 140 KB di dalam berkas yang sama.
         /// </summary>
+        /// <summary>
+        /// Terapkan tema. "sistem" mengikut setelan terang/gelap Windows, dan
+        /// itulah bawaannya - sebagian besar orang sudah menentukan pilihannya di
+        /// tingkat sistem, dan aplikasi yang mengabaikannya terasa asing.
+        /// </summary>
+        public static void TerapkanTema(string tema)
+        {
+            switch ((tema ?? "sistem").ToLowerInvariant())
+            {
+                case "terang":
+                    ApplicationThemeManager.Apply(ApplicationTheme.Light);
+                    break;
+                case "gelap":
+                    ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+                    break;
+                default:
+                    ApplicationThemeManager.ApplySystemTheme();
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Gambar ulang seluruh label setelah bahasa berganti. Navigasi dan
+        /// panel status tinggal di jendela ini dan tidak ikut dibuat ulang saat
+        /// berpindah halaman, jadi keduanya harus disentuh sendiri.
+        /// </summary>
+        public void TerapkanBahasa()
+        {
+            var terpilih = Nav.SelectedIndex;
+            foreach (ListBoxItem item in Nav.Items)
+            {
+                var panel = item.Content as StackPanel;
+                if (panel == null || panel.Children.Count < 2) continue;
+                var teks = panel.Children[1] as TextBlock;
+                if (teks == null) continue;
+                switch ((item.Tag ?? "").ToString())
+                {
+                    case "beranda": teks.Text = Lang.T("Beranda"); break;
+                    case "profil": teks.Text = Lang.T("Profil"); break;
+                    case "versi": teks.Text = Lang.T("Versi"); break;
+                    case "situs": teks.Text = Lang.T("Situs"); break;
+                    case "node": teks.Text = Lang.T("Node / TS"); break;
+                    case "ekstensi": teks.Text = Lang.T("Ekstensi PHP"); break;
+                    case "log": teks.Text = Lang.T("Log"); break;
+                    case "setelan": teks.Text = Lang.T("Pengaturan"); break;
+                }
+            }
+            BtnKeluar.Content = Lang.T("Keluar");
+            RefreshStatus();
+
+            // Halaman yang sedang terbuka dibuat ulang supaya teksnya ikut
+            // berganti - penerjemahnya bekerja saat XAML dimuat, bukan lewat
+            // pengikatan hidup.
+            Nav.SelectedIndex = -1;
+            Nav.SelectedIndex = terpilih;
+        }
+
         void PasangIkon()
         {
             try
@@ -127,12 +188,12 @@ namespace Phoron.App
 
             DotWeb.Fill = Dot(web);
             DotDb.Fill = Dot(db);
-            TxtWeb.Text = webName + " " + web.ToString().ToLowerInvariant();
-            TxtDb.Text = "MySQL " + db.ToString().ToLowerInvariant();
-            TxtProfil.Text = _engine.Active != null ? _engine.Active.Name : "(belum ada profil)";
+            TxtWeb.Text = webName + " " + Lang.T(web.ToString().ToLowerInvariant());
+            TxtDb.Text = "MySQL " + Lang.T(db.ToString().ToLowerInvariant());
+            TxtProfil.Text = _engine.Active != null ? _engine.Active.Name : Lang.T("(belum ada profil)");
 
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
-            BtnPower.Content = anyRunning ? "Matikan semua" : "Nyalakan semua";
+            BtnPower.Content = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
             // Merah saat tombolnya berarti "matikan": warnanya harus menyatakan
             // akibat penekanan, bukan sekadar menonjol. Biru untuk aksi yang
             // menghidupkan dan untuk aksi yang mematikan membuat keduanya
@@ -148,7 +209,7 @@ namespace Phoron.App
             {
                 _tray.Text = "Phoron - " + (anyRunning ? "berjalan" : "berhenti");
                 if (_tray.ContextMenuStrip != null && _tray.ContextMenuStrip.Items.Count > 0)
-                    _tray.ContextMenuStrip.Items[0].Text = anyRunning ? "Matikan semua" : "Nyalakan semua";
+                    _tray.ContextMenuStrip.Items[0].Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
             }
 
             var dash = Host.Content as DashboardPage;

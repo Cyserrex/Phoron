@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.DashboardPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <UserControl.Resources>
         <Style x:Key="Kartu" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
@@ -13,9 +14,9 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
         <StackPanel Margin="4,8,4,4">
-            <TextBlock Text="Beranda" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Beranda'}" Style="{StaticResource Judul}"/>
             <TextBlock Style="{StaticResource SubJudul}"
-                       Text="Pilih profil, lalu nyalakan. Ganti profil berarti ganti versi PHP, Apache, dan MySQL sekaligus."/>
+                       Text="{loc:T 'Pilih profil, lalu nyalakan. Ganti profil berarti ganti versi PHP, Apache, dan MySQL sekaligus.'}"/>
 
             <!-- Pemilih profil: inti dari seluruh aplikasi, jadi ditaruh paling atas. -->
             <Border Style="{StaticResource Kartu}">
@@ -27,7 +28,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                        <TextBlock Text="Profil aktif" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                        <TextBlock Text="{loc:T 'Profil aktif'}" Style="{StaticResource Label}" Margin="0,0,0,4"/>
                         <ComboBox x:Name="CmbProfil" SelectionChanged="CmbProfil_Changed"
                                   HorizontalAlignment="Stretch"/>
                     </StackPanel>
@@ -35,7 +36,7 @@
                                Appearance="Primary" VerticalAlignment="Bottom" Margin="0,0,8,0"
                                ToolTip="Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL"
                                Click="BtnSwitchRun_Click"/>
-                    <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="Switch"
+                    <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="{loc:T 'Switch'}"
                                VerticalAlignment="Bottom"
                                ToolTip="Pindah ke profil ini tanpa mengubah keadaan layanan"
                                Click="BtnSwitch_Click"/>
@@ -69,18 +70,18 @@
             <Border x:Name="PanelPeringatan" Style="{StaticResource Kartu}" Visibility="Collapsed"
                     Background="#33E0A020">
                 <StackPanel>
-                    <TextBlock Text="Perhatian" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <TextBlock Text="{loc:T 'Perhatian'}" FontWeight="SemiBold" Margin="0,0,0,4"/>
                     <TextBlock x:Name="TxtPeringatan" TextWrapping="Wrap"/>
                     <!-- Tombolnya ditaruh tepat di bawah keluhannya. Menyebut
                          masalah tanpa menyediakan jalan keluarnya di tempat yang
                          sama memaksa orang mencarinya sendiri di halaman lain. -->
                     <WrapPanel Margin="0,10,0,0">
-                        <ui:Button x:Name="BtnAdmin" Content="Jalankan ulang sebagai Administrator"
+                        <ui:Button x:Name="BtnAdmin" Content="{loc:T 'Jalankan ulang sebagai Administrator'}"
                                    Margin="0,0,8,0" Visibility="Collapsed" Click="BtnAdmin_Click"/>
-                        <ui:Button x:Name="BtnPembaruan" Content="Unduh pembaruan"
+                        <ui:Button x:Name="BtnPembaruan" Content="{loc:T 'Unduh pembaruan'}"
                                    Appearance="Primary" Margin="0,0,8,0"
                                    Visibility="Collapsed" Click="BtnPembaruan_Click"/>
-                        <ui:Button x:Name="BtnBebaskan" Content="Hentikan proses yang tertinggal"
+                        <ui:Button x:Name="BtnBebaskan" Content="{loc:T 'Hentikan proses yang tertinggal'}"
                                    Appearance="Danger" Visibility="Collapsed" Click="BtnBebaskan_Click"/>
                     </WrapPanel>
                 </StackPanel>
@@ -88,23 +89,23 @@
 
             <Border Style="{StaticResource Kartu}">
                 <StackPanel>
-                    <TextBlock Text="Pintasan" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{loc:T 'Pintasan'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
                     <WrapPanel>
-                        <ui:Button Content="Buka www" Margin="0,0,8,8" Click="BtnWww_Click"/>
-                        <ui:Button Content="Buka localhost" Margin="0,0,8,8" Click="BtnLocalhost_Click"/>
-                        <ui:Button Content="Beranda Phoron" Margin="0,0,8,8" Click="BtnBeranda_Click"/>
-                        <ui:Button Content="Terminal" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
+                        <ui:Button Content="{loc:T 'Buka www'}" Margin="0,0,8,8" Click="BtnWww_Click"/>
+                        <ui:Button Content="{loc:T 'Buka localhost'}" Margin="0,0,8,8" Click="BtnLocalhost_Click"/>
+                        <ui:Button Content="{loc:T 'Beranda Phoron'}" Margin="0,0,8,8" Click="BtnBeranda_Click"/>
+                        <ui:Button Content="{loc:T 'Terminal'}" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
                         <ui:Button Content="phpinfo()" Margin="0,0,8,8" Click="BtnPhpInfo_Click"/>
-                        <ui:Button Content="Uji konfigurasi Apache" Margin="0,0,8,8" Click="BtnTest_Click"/>
-                        <ui:Button x:Name="BtnSsl" Content="Buat sertifikat SSL" Margin="0,0,8,8" Click="BtnSsl_Click"/>
-                        <ui:Button Content="Folder etc" Margin="0,0,8,8" Click="BtnEtc_Click"/>
+                        <ui:Button Content="{loc:T 'Uji konfigurasi Apache'}" Margin="0,0,8,8" Click="BtnTest_Click"/>
+                        <ui:Button x:Name="BtnSsl" Content="{loc:T 'Buat sertifikat SSL'}" Margin="0,0,8,8" Click="BtnSsl_Click"/>
+                        <ui:Button Content="{loc:T 'Folder etc'}" Margin="0,0,8,8" Click="BtnEtc_Click"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>
 
             <Border Style="{StaticResource Kartu}">
                 <StackPanel>
-                    <TextBlock Text="Aktivitas" Style="{StaticResource Label}" Margin="0,0,0,6"/>
+                    <TextBlock Text="{loc:T 'Aktivitas'}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
                     <TextBox x:Name="TxtLog" IsReadOnly="True" AcceptsReturn="True"
                              VerticalScrollBarVisibility="Auto" Height="150"
                              FontFamily="Consolas" FontSize="11" TextWrapping="NoWrap"

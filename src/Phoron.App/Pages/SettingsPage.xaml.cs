@@ -36,6 +36,15 @@ namespace Phoron.App.Pages
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
             SwLogRinci.IsChecked = s.LogRinci;
             SwBerandaAkar.IsChecked = s.BerandaDiAkar;
+            foreach (ComboBoxItem it in CmbTema.Items)
+                if ((it.Tag ?? "").ToString() == s.Tema) CmbTema.SelectedItem = it;
+            if (CmbTema.SelectedItem == null) CmbTema.SelectedIndex = 0;
+            if (CmbBahasa.Items.Count == 0)
+                foreach (var kode in Lang.Semua)
+                    CmbBahasa.Items.Add(new ComboBoxItem { Content = Lang.NamaBahasa(kode), Tag = kode });
+            foreach (ComboBoxItem it in CmbBahasa.Items)
+                if ((it.Tag ?? "").ToString() == s.Bahasa) CmbBahasa.SelectedItem = it;
+            if (CmbBahasa.SelectedItem == null) CmbBahasa.SelectedIndex = 0;
             SwCekPembaruan.IsChecked = s.CekPembaruan;
             TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             foreach (ComboBoxItem item in CmbTerminal.Items)
@@ -99,6 +108,30 @@ namespace Phoron.App.Pages
         /// tampak seperti tidak berfungsi.
         /// </summary>
         void Sw_Ubah(object sender, RoutedEventArgs e) { SimpanSeketika(); }
+
+        void CmbTema_Ubah(object sender, SelectionChangedEventArgs e)
+        {
+            if (_mengisi) return;
+            var it = CmbTema.SelectedItem as ComboBoxItem;
+            _e.Settings.Tema = it != null ? (it.Tag ?? "sistem").ToString() : "sistem";
+            _e.Settings.Save();
+            MainWindow.TerapkanTema(_e.Settings.Tema);
+        }
+
+        void CmbBahasa_Ubah(object sender, SelectionChangedEventArgs e)
+        {
+            if (_mengisi) return;
+            var it = CmbBahasa.SelectedItem as ComboBoxItem;
+            var kode = it != null ? (it.Tag ?? Lang.Indonesia).ToString() : Lang.Indonesia;
+            if (kode == _e.Settings.Bahasa) return;
+            _e.Settings.Bahasa = kode;
+            _e.Settings.Save();
+            Lang.Pakai(kode);
+            // Halaman digambar ulang seluruhnya; penerjemahnya bekerja saat XAML
+            // dimuat, jadi teks yang sudah terlanjur tampil tidak berubah sendiri.
+            var utama = Window.GetWindow(this) as MainWindow;
+            if (utama != null) utama.TerapkanBahasa();
+        }
 
         void CmbTerminal_Ubah(object sender, SelectionChangedEventArgs e) { SimpanSeketika(); }
 

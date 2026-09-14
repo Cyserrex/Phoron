@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.ExtensionsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -10,7 +11,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Ekstensi PHP" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Ekstensi PHP'}" Style="{StaticResource Judul}"/>
             <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"
                        Text="Centang ekstensi yang dipakai profil aktif."/>
         </StackPanel>
@@ -37,7 +38,7 @@
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="Setelan php.ini yang sering diubah" Style="{StaticResource Label}"/>
+                    <TextBlock Text="{loc:T 'Setelan php.ini yang sering diubah'}" Style="{StaticResource Label}"/>
                     <TextBlock Text="memory_limit" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtMemory" PlaceholderText="512M"/>
                     <TextBlock Text="upload_max_filesize" Style="{StaticResource Label}"/>
@@ -52,7 +53,7 @@
                          memakai tag pendek; mematikannya membuat view gagal
                          diurai dengan galat yang tidak menyebut sebabnya. -->
                     <CheckBox x:Name="ChkShortTag" Margin="0,14,0,0">
-                        <TextBlock Text="short_open_tag (perlu untuk banyak proyek lama)"
+                        <TextBlock Text="{loc:T 'short_open_tag (perlu untuk banyak proyek lama)'}"
                                    TextWrapping="Wrap"/>
                     </CheckBox>
                     <!-- Teks di dalam TextBlock supaya garis bawahnya tidak dimakan
@@ -65,10 +66,10 @@
         </Grid>
 
         <WrapPanel Grid.Row="2" Margin="0,12,0,0">
-            <ui:Button Content="Simpan ke profil" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
-            <ui:Button Content="Ambil dari php.ini asli" Margin="0,0,8,0" Click="BtnAmbil_Click"/>
-            <ui:Button Content="Buka php.ini hasil" Margin="0,0,8,0" Click="BtnBuka_Click"/>
-            <ui:Button Content="Uji: php -m" Click="BtnUji_Click"/>
+            <ui:Button Content="{loc:T 'Simpan ke profil'}" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
+            <ui:Button Content="{loc:T 'Ambil dari php.ini asli'}" Margin="0,0,8,0" Click="BtnAmbil_Click"/>
+            <ui:Button Content="{loc:T 'Buka php.ini hasil'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+            <ui:Button Content="{loc:T 'Uji: php -m'}" Click="BtnUji_Click"/>
         </WrapPanel>
     </Grid>
 </UserControl>

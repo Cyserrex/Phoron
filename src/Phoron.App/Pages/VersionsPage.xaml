@@ -1,7 +1,8 @@
 <UserControl x:Class="Phoron.App.Pages.VersionsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -10,7 +11,7 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0">
-            <TextBlock Text="Versi terpasang" Style="{StaticResource Judul}"/>
+            <TextBlock Text="{loc:T 'Versi terpasang'}" Style="{StaticResource Judul}"/>
             <TextBlock Style="{StaticResource SubJudul}"
                        Text="Semua folder versi yang ditemukan di folder bin yang terdaftar. Folder bin Laragon ikut dipindai bila ada."/>
         </StackPanel>
@@ -18,27 +19,27 @@
         <ListView x:Name="Daftar" Grid.Row="1" Margin="0,0,0,10">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="Jenis" Width="80" DisplayMemberBinding="{Binding Jenis}"/>
-                    <GridViewColumn Header="Versi" Width="90" DisplayMemberBinding="{Binding Versi}"/>
-                    <GridViewColumn Header="Toolset" Width="80" DisplayMemberBinding="{Binding Toolset}"/>
-                    <GridViewColumn Header="Arsitektur" Width="90" DisplayMemberBinding="{Binding Arsitektur}"/>
-                    <GridViewColumn Header="Folder" Width="290" DisplayMemberBinding="{Binding Folder}"/>
-                    <GridViewColumn Header="Sumber" Width="200" DisplayMemberBinding="{Binding Sumber}"/>
+                    <GridViewColumn Header="{loc:T 'Jenis'}" Width="80" DisplayMemberBinding="{Binding Jenis}"/>
+                    <GridViewColumn Header="{loc:T 'Versi'}" Width="90" DisplayMemberBinding="{Binding Versi}"/>
+                    <GridViewColumn Header="{loc:T 'Toolset'}" Width="80" DisplayMemberBinding="{Binding Toolset}"/>
+                    <GridViewColumn Header="{loc:T 'Arsitektur'}" Width="90" DisplayMemberBinding="{Binding Arsitektur}"/>
+                    <GridViewColumn Header="{loc:T 'Folder'}" Width="290" DisplayMemberBinding="{Binding Folder}"/>
+                    <GridViewColumn Header="{loc:T 'Sumber'}" Width="200" DisplayMemberBinding="{Binding Sumber}"/>
                 </GridView>
             </ListView.View>
         </ListView>
 
         <StackPanel Grid.Row="2">
             <WrapPanel Margin="0,0,0,10">
-                <ui:Button Content="Pindai ulang" Margin="0,0,8,0" Click="BtnPindai_Click"/>
-                <ui:Button Content="Tambah folder bin" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>
-                <ui:Button Content="Buka folder versi" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+                <ui:Button Content="{loc:T 'Pindai ulang'}" Margin="0,0,8,0" Click="BtnPindai_Click"/>
+                <ui:Button Content="{loc:T 'Tambah folder bin'}" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>
+                <ui:Button Content="{loc:T 'Buka folder versi'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
                 <ui:Button Content="Katalog unduhan (etc\catalog.ini)" Click="BtnKatalog_Click"/>
             </WrapPanel>
 
             <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8" Padding="14">
                 <StackPanel>
-                    <TextBlock Text="Pasang versi baru" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                    <TextBlock Text="{loc:T 'Pasang versi baru'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150"/>
