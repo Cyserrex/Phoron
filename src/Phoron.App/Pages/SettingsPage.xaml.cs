@@ -72,18 +72,51 @@ namespace Phoron.App.Pages
             _e.Say(mau
                 ? "Phoron akan ikut menyala saat Windows dinyalakan."
                 : "Phoron tidak lagi menyala otomatis saat Windows dinyalakan.");
-            Isi();
+            // HANYA keterangannya yang disegarkan, bukan Isi() seluruh halaman.
+            // Isi() membaca ulang SEMUA kotak dari setelan tersimpan, sehingga
+            // sakelar lain yang baru saja diubah pengguna ikut dikembalikan ke
+            // nilai lamanya - persis gejala "sakelar kembali off sendiri".
+            SegarkanKeteranganWindows();
         }
 
-        void BtnSimpan_Click(object sender, RoutedEventArgs e)
+        void SegarkanKeteranganWindows()
         {
+            var asing = Autostart.EntriAsing();
+            TxtWindows.Text = asing == null
+                ? "Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela."
+                : "Ada entri autostart milik salinan Phoron lain: " + asing
+                  + ". Menyalakan sakelar ini akan menggantinya dengan yang ini.";
+        }
+
+        /// <summary>
+        /// Semua sakelar dan pilihan disimpan SEKETIKA. Sebelumnya sebagian
+        /// menunggu tombol "Simpan pengaturan" di ujung bawah halaman yang
+        /// panjang, sementara sakelar autostart Windows menyimpan sendiri -
+        /// dua perilaku berbeda di satu halaman, dan yang menunggu tombol itu
+        /// tampak seperti tidak berfungsi.
+        /// </summary>
+        void Sw_Ubah(object sender, RoutedEventArgs e) { SimpanSeketika(); }
+
+        void CmbTerminal_Ubah(object sender, SelectionChangedEventArgs e) { SimpanSeketika(); }
+
+        void TxtRoots_Lepas(object sender, RoutedEventArgs e) { SimpanSeketika(true); }
+
+        void SimpanSeketika(bool pindaiUlang = false)
+        {
+            if (_mengisi) return;
             var s = _e.Settings;
+            var vhostLama = s.AutoVhost;
+            var hostsLama = s.ManageHosts;
+            var logLama = s.LogRinci;
+            var phpIniLama = s.PhpIniKeFolderPhp;
+            var rootsLama = string.Join(";", s.BinRoots);
+
             s.AutoStartServices = SwAutoStart.IsChecked == true;
             s.MinimizeToTray = SwTray.IsChecked == true;
             s.AutoVhost = SwVhost.IsChecked == true;
             s.ManageHosts = SwHosts.IsChecked == true;
-            s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             s.LogRinci = SwLogRinci.IsChecked == true;
+            s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
             s.Terminal = item != null ? (item.Tag ?? "cmd").ToString() : "cmd";
             s.BinRoots = (TxtRoots.Text ?? "")
@@ -92,11 +125,24 @@ namespace Phoron.App.Pages
             if (s.BinRoots.Count == 0) s.BinRoots = Settings.DefaultBinRoots();
             s.Save();
 
-            _e.Reload();
-            AppState.RaiseChanged();
-            AppState.ShowWarnings(_e.Apply());
-            Isi();
-            _e.Say("Pengaturan disimpan.");
+            // Pemindaian ulang dan penulisan konfigurasi hanya dijalankan kalau
+            // setelan yang MEMPENGARUHINYA benar-benar berubah. Menjalankannya
+            // di tiap ketukan sakelar membuat halaman ini terasa berat tanpa
+            // alasan.
+            bool rootsBerubah = string.Join(";", s.BinRoots) != rootsLama;
+            if (pindaiUlang && rootsBerubah)
+            {
+                _e.Reload();
+                AppState.RaiseChanged();
+                TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
+            }
+            if (rootsBerubah || s.AutoVhost != vhostLama || s.ManageHosts != hostsLama
+                || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama)
+            {
+                // Peringatannya cukup masuk log; kotak pesan modal tiap kali
+                // sakelar disentuh justru mengganggu.
+                _e.Apply();
+            }
         }
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)

@@ -65,10 +65,15 @@ namespace Phoron.App
                     UseShellExecute = true,
                     Verb = "runas",
                 };
-                Process.Start(psi);
-                // Mutex instans tunggal harus dilepas sebelum salinan baru mencoba
-                // mengambilnya, kalau tidak salinan itu langsung keluar sendiri.
+                // Handle mutex DITUTUP, bukan sekadar dilepas, dan dilakukan
+                // SEBELUM salinan baru dijalankan. Penjaga instans tunggal
+                // bersandar pada ada atau tidaknya objek mutex, bukan pada
+                // kepemilikannya - selama proses ini masih memegang handle-nya,
+                // salinan yang baru naik hak akan mengira Phoron sudah berjalan
+                // lalu keluar seketika dengan kotak pesan yang membingungkan.
                 try { _single.ReleaseMutex(); } catch { }
+                try { _single.Close(); } catch { }
+                Process.Start(psi);
                 Application.Current.Shutdown();
                 return true;
             }
