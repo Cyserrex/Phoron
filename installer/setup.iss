@@ -8,7 +8,7 @@
 ; ============================================================================
 
 #define MyAppName "Phoron"
-#define MyAppVersion "1.9.1"
+#define MyAppVersion "1.9.2"
 #define MyAppExeName "Phoron.exe"
 #define MyAppPublisher "Phoron"
 
@@ -81,7 +81,14 @@ Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Tanpa itu, di komputer yang hanya punya 4.0-4.7 aplikasinya tetap mulai lalu
 ; gagal di tengah dengan galat yang tidak menjelaskan apa pun.
 Source: "..\dist\{#MyAppExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\README.md"; DestDir: "{app}"; DestName: "Panduan.md"; Flags: ignoreversion isreadme
+
+[InstallDelete]
+; Panduan.md pernah ikut dipasang sampai versi 1.9.1. Markdown mentah tidak
+; berguna di folder instalasi - tidak semua Windows punya pembukanya, dan
+; isinya toh selalu lebih baru di halaman GitHub. Dibuang di sini karena
+; berkas yang tidak lagi terdaftar di [Files] tidak ikut terhapus sendiri
+; saat pemasangan ulang; ia akan tertinggal selamanya.
+Type: files; Name: "{app}\Panduan.md"
 
 [Dirs]
 ; Kerangka folder dibuat sejak awal supaya pengguna langsung tahu ke mana
