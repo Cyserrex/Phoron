@@ -265,6 +265,13 @@ abjad, bukan folder proyek utama — gejala yang baru muncul setelah situs perta
 dibuat, jadi mudah disangka kesalahan lain. Phoron selalu menulis
 `sites-enabled\000-default.conf` yang urutannya dijamin paling awal.
 
+**Pemasangan ulang menunggu Phoron benar-benar tutup.** Pemasang memakai Restart
+Manager untuk meminta Phoron menutup diri, dan Phoron menanggapinya dengan
+mematikan Apache dan MySQL lebih dulu. Kalau permintaan itu gagal, pemasang
+berhenti dengan menyebutkan port mana yang masih dipegang - bukan menimpa exe
+sambil meninggalkan layanan hidup. Port yang masih terpakai padahal Phoron sudah
+tutup (sisa versi lama) hanya diberitahukan, karena itu bukan penghalang.
+
 **Cek pembaruan lewat API rilis GitHub, bukan mengikis halaman.** Tata letak
 halaman berubah sewaktu-waktu tanpa pemberitahuan; bentuk JSON-nya stabil. Aset
 yang diambil khusus `*-Setup.exe` — rilis juga memuat `Phoron.exe`, dan mengambil

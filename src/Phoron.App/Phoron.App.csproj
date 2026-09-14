@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>Phoron</AssemblyName>
     <RootNamespace>Phoron.App</RootNamespace>
-    <Version>1.8.1</Version>
+    <Version>1.9.0</Version>
     <ApplicationIcon>..\..\assets\phoron.ico</ApplicationIcon>
     <AssemblyTitle>Phoron</AssemblyTitle>
     <Product>Phoron</Product>

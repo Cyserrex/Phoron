@@ -8,7 +8,7 @@
 ; ============================================================================
 
 #define MyAppName "Phoron"
-#define MyAppVersion "1.8.1"
+#define MyAppVersion "1.9.0"
 #define MyAppExeName "Phoron.exe"
 #define MyAppPublisher "Phoron"
 
@@ -56,7 +56,13 @@ DisableProgramGroupPage=yes
 
 ; Tutup aplikasi yang sedang jalan sebelum menimpa exe-nya, daripada gagal
 ; dengan "file sedang digunakan" di tengah pemasangan ulang.
+;
+; Phoron menanggapi permintaan Restart Manager ini dengan mematikan Apache dan
+; MySQL lebih dulu (lihat PasangPengawasSesi di MainWindow). Tanpa kerja sama
+; itu, penutupannya dialihkan jadi "mengecil ke baki sistem", prosesnya
+; dihentikan paksa, dan layanan tertinggal hidup sambil memegang port 80.
 CloseApplications=yes
+CloseApplicationsFilter=Phoron.exe
 RestartApplications=no
 
 [Languages]
@@ -183,10 +189,62 @@ ErrorTitle=Galat
 SetupAborted=Pemasangan tidak selesai.%n%nPerbaiki masalahnya lalu jalankan pemasang lagi.
 
 [CustomMessages]
+id.MasihJalan=Phoron masih berjalan dan layanan berikut masih memegang portnya:%n%n%1%nPemasangan dihentikan supaya tidak ada yang rusak setengah jalan.%n%nTutup Phoron lewat tombol "Keluar" di panel kiri - cara itu mematikan Apache dan MySQL dengan rapi - lalu jalankan pemasang ini lagi.
+id.PortSisa=Port berikut masih terpakai meski Phoron sudah ditutup:%n%n%1%nBiasanya ini sisa proses dari Phoron versi lama yang berakhir tanpa sempat membersihkan diri.%n%nPemasangan tetap bisa dilanjutkan - Phoron versi baru punya tombol "Hentikan proses yang tertinggal" di Beranda untuk membereskannya.%n%nLanjutkan?
 id.NeedDotNet=Aplikasi ini memerlukan Microsoft .NET Framework 4.8, yang belum terpasang di komputer ini.%n%nWindows 10 versi 1903 ke atas dan Windows 11 sudah membawanya. Pada Windows 7 SP1 atau 8.1, .NET Framework 4.8 perlu dipasang sekali (gratis, dari Microsoft).%n%nBuka halaman unduhannya sekarang?
 id.HapusData=Hapus juga proyek web, basis data, profil, dan versi PHP/Apache yang tersimpan di%n%n%1%n%nPilih Tidak (disarankan) kalau Anda masih membutuhkan proyek di folder www.
 
 [Code]
+
+/// Apakah sebuah port TCP sedang didengarkan, dan oleh proses apa.
+/// Dibaca dari netstat: Inno Setup tidak punya akses soket sendiri, dan
+/// menambah DLL bantu hanya untuk satu pemeriksaan tidak sepadan.
+function PortDipakai(Port: Integer; var Keterangan: String): Boolean;
+var
+  keluaran: AnsiString;
+  berkas, baris: String;
+  kode, i: Integer;
+  daftar: TStringList;
+begin
+  Result := False;
+  Keterangan := '';
+  berkas := ExpandConstant('{tmp}\port.txt');
+  { cmd /c dipakai supaya pengalihan keluaran ke berkas bekerja. }
+  if not Exec(ExpandConstant('{cmd}'), '/c netstat -ano -p tcp | findstr /r /c:":' 
+      + IntToStr(Port) + ' .*LISTENING" > "' + berkas + '"',
+      '', SW_HIDE, ewWaitUntilTerminated, kode) then
+    Exit;
+  if not LoadStringFromFile(berkas, keluaran) then Exit;
+  if Trim(String(keluaran)) = '' then Exit;
+
+  daftar := TStringList.Create;
+  try
+    daftar.Text := String(keluaran);
+    for i := 0 to daftar.Count - 1 do
+    begin
+      baris := Trim(daftar[i]);
+      if baris <> '' then
+      begin
+        Result := True;
+        Keterangan := '  port ' + IntToStr(Port);
+        Break;
+      end;
+    end;
+  finally
+    daftar.Free;
+  end;
+end;
+
+/// Daftar port Phoron yang masih terpakai, satu per baris. Kosong = semua bebas.
+function PortPhoronTerpakai(): String;
+var
+  ket: String;
+begin
+  Result := '';
+  if PortDipakai(80, ket) then Result := Result + ket + ' (Apache)' + #13#10;
+  if PortDipakai(443, ket) then Result := Result + ket + ' (Apache HTTPS)' + #13#10;
+  if PortDipakai(3306, ket) then Result := Result + ket + ' (MySQL)' + #13#10;
+end;
 
 /// Folder bawaan: C:\Phoron kalau dipasang untuk semua pengguna, folder
 /// pengguna kalau tidak. Ditentukan lewat kode karena pilihan hak akses baru
@@ -226,6 +284,34 @@ begin
                 'https://dotnet.microsoft.com/download/dotnet-framework/net48',
                 '', '', SW_SHOW, ewNoWait, dummy);
   end;
+end;
+
+/// Dijalankan SETELAH Restart Manager menutup aplikasi yang berjalan, tepat
+/// sebelum berkas disalin. Di sinilah keadaan sebenarnya bisa diperiksa: kalau
+/// Phoron masih hidup, menimpa exe-nya akan menghasilkan pemasangan setengah
+/// jadi - dan layanan yang masih memegang port tetap tertinggal setelahnya.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  port: String;
+begin
+  Result := '';
+
+  if CheckForMutexes('Phoron.SingleInstance') then
+  begin
+    port := PortPhoronTerpakai();
+    if port = '' then port := '  (tidak ada port yang terdeteksi)' + #13#10;
+    Result := FmtMessage(CustomMessage('MasihJalan'), [port]);
+    Exit;
+  end;
+
+  { Phoron sudah tidak berjalan, tapi portnya masih dipegang sesuatu - hampir
+    selalu sisa httpd/mysqld dari versi lama yang dihentikan paksa. Ini bukan
+    penghalang pemasangan, jadi cukup diberitahukan. }
+  port := PortPhoronTerpakai();
+  if port <> '' then
+    if MsgBox(FmtMessage(CustomMessage('PortSisa'), [port]), mbConfirmation,
+              MB_YESNO) = IDNO then
+      Result := 'Pemasangan dibatalkan atas permintaan Anda.';
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

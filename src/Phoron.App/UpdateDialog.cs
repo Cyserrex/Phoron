@@ -46,7 +46,7 @@ namespace Phoron.App
             Unduh(e, hasil);
         }
 
-        static async void Unduh(Engine e, HasilCek hasil)
+        static void Unduh(Engine e, HasilCek hasil)
         {
             if (string.IsNullOrEmpty(hasil.UrlInstaller))
             {
@@ -57,24 +57,23 @@ namespace Phoron.App
             }
 
             e.Say("Mengunduh Phoron " + hasil.Versi + "...");
-            string galat = null;
-            var kemajuan = new Progress<int>(v =>
+            var jendela = new DownloadWindow(hasil);
+            var pemilik = Application.Current != null ? Application.Current.MainWindow : null;
+            if (pemilik != null && pemilik.IsVisible) jendela.Owner = pemilik;
+
+            var selesai = jendela.ShowDialog();
+            if (selesai != true)
             {
-                // Dilaporkan tiap 10% saja: tiap potongan 80 KB akan membanjiri
-                // kotak Aktivitas dengan ratusan baris tanpa guna.
-                if (v % 10 == 0) e.Say("Mengunduh pembaruan... " + v + "%");
-            });
-            var berkas = await Updater.UnduhInstallerAsync(hasil, kemajuan, g => galat = g);
-            if (berkas == null)
-            {
-                AppState.Warn(galat ?? "Gagal mengunduh pembaruan.");
+                if (jendela.Galat != null) { e.Say(jendela.Galat); AppState.Warn(jendela.Galat); }
                 return;
             }
 
+            var berkas = jendela.Berkas;
             e.Say("Installer tersimpan di " + berkas + ".");
+
             if (!AppState.Ask("Installer sudah diunduh.\n\nJalankan sekarang?\n\n"
-                              + "Phoron akan ditutup oleh pemasangnya. Proyek, basis data, "
-                              + "dan profil Anda tidak disentuh."))
+                              + "Phoron akan ditutup lebih dulu supaya Apache dan MySQL berhenti "
+                              + "dengan rapi. Proyek, basis data, dan profil Anda tidak disentuh."))
             {
                 Shell.Open(Paths.Tmp);
                 return;
@@ -82,12 +81,14 @@ namespace Phoron.App
 
             try
             {
-                // Layanan dimatikan lebih dulu: pemasang akan menutup Phoron,
-                // dan proses anak yang ditinggalkan hidup akan tetap memegang
-                // port 80 setelah aplikasinya tiada.
-                e.Services.StopAll();
-                e.Node.StopAll();
                 Process.Start(new ProcessStartInfo(berkas) { UseShellExecute = true });
+                // Phoron ditutup SENDIRI lewat jalur penutupan normal, tidak
+                // menunggu pemasang memaksanya. Jalur normal itulah yang meminta
+                // mysqladmin shutdown; dihentikan paksa, InnoDB harus memulihkan
+                // diri saat start berikutnya.
+                var utama = Application.Current.MainWindow as MainWindow;
+                if (utama != null) utama.TutupUntukPembaruan();
+                else { e.Services.StopAll(); e.Node.StopAll(); Application.Current.Shutdown(); }
             }
             catch (Exception ex)
             {

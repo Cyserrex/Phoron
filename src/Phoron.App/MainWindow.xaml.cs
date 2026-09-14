@@ -29,6 +29,7 @@ namespace Phoron.App
 
             SetupTray();
             Closing += OnClosing;
+            SourceInitialized += (s, e) => PasangPengawasSesi();
             Nav.SelectedIndex = 0;
             RefreshStatus();
 
@@ -168,6 +169,45 @@ namespace Phoron.App
         async void BtnPower_Click(object sender, RoutedEventArgs e)
         {
             await TogglePower();
+        }
+
+        /// <summary>
+        /// Mendengarkan WM_QUERYENDSESSION.
+        ///
+        /// Restart Manager - yang dipakai pemasang Inno Setup untuk menutup
+        /// aplikasi yang sedang berjalan - mengirim pesan itu ke jendela
+        /// aplikasi. Tanpa penanganan ini, permintaan tutupnya jatuh ke jalur
+        /// penutupan biasa, dan perilaku "mengecil ke baki sistem" justru
+        /// MEMBATALKAN penutupan. Pemasang lalu menghentikan prosesnya paksa,
+        /// dan Apache serta MySQL tidak pernah sempat dimatikan dengan rapi.
+        /// </summary>
+        void PasangPengawasSesi()
+        {
+            var sumber = System.Windows.Interop.HwndSource.FromHwnd(
+                new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            if (sumber == null) return;
+            sumber.AddHook((IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+            {
+                const int WM_QUERYENDSESSION = 0x0011;
+                const int WM_ENDSESSION = 0x0016;
+                if (msg == WM_QUERYENDSESSION || msg == WM_ENDSESSION)
+                {
+                    // Ditandai sebagai penutupan sungguhan supaya OnClosing tidak
+                    // mengalihkannya jadi "sembunyi ke baki sistem".
+                    _reallyClosing = true;
+                    _engine.Say("Diminta menutup diri oleh sistem (pemasang atau shutdown) - "
+                                + "mematikan layanan dulu.");
+                    try { _engine.Services.StopAll(); _engine.Node.StopAll(); } catch { }
+                }
+                return IntPtr.Zero;
+            });
+        }
+
+        /// <summary>Tutup Phoron sepenuhnya karena pemasang pembaruan akan berjalan.</summary>
+        public void TutupUntukPembaruan()
+        {
+            _reallyClosing = true;
+            Close();
         }
 
         void BtnKeluar_Click(object sender, RoutedEventArgs e)

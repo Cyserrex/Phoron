@@ -2,10 +2,38 @@ using System;
 using System.IO;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Phoron.Core
 {
+    /// <summary>
+    /// Kemajuan unduhan. Byte yang sudah turun ikut dilaporkan, bukan hanya
+    /// persen: berkas 5 MB yang macet di 40% terlihat sama dengan yang sedang
+    /// berjalan lancar kalau yang ditampilkan hanya angka persen.
+    /// </summary>
+    public class KemajuanUnduh
+    {
+        public long Sudah;
+        public long Total;
+        public int Persen { get { return Total > 0 ? (int)Math.Min(100, Sudah * 100 / Total) : 0; } }
+
+        public static string Ukuran(long b)
+        {
+            if (b <= 0) return "?";
+            if (b < 1024) return b + " B";
+            if (b < 1024 * 1024) return (b / 1024.0).ToString("0.#") + " KB";
+            return (b / 1048576.0).ToString("0.#") + " MB";
+        }
+
+        public override string ToString()
+        {
+            return Total > 0
+                ? Ukuran(Sudah) + " dari " + Ukuran(Total)
+                : Ukuran(Sudah) + " terunduh";
+        }
+    }
+
     /// <summary>Hasil pengecekan rilis terbaru di GitHub.</summary>
     public class HasilCek
     {
@@ -135,7 +163,9 @@ namespace Phoron.Core
         /// Unduh installer rilis terbaru ke folder tmp. Mengembalikan jalur
         /// berkasnya, atau null bila gagal (pesan kesalahan lewat out).
         /// </summary>
-        public static async Task<string> UnduhInstallerAsync(HasilCek hasil, IProgress<int> kemajuan,
+        public static async Task<string> UnduhInstallerAsync(HasilCek hasil,
+                                                             IProgress<KemajuanUnduh> kemajuan,
+                                                             CancellationToken batal,
                                                              Action<string> galat)
         {
             if (hasil == null || string.IsNullOrEmpty(hasil.UrlInstaller))
@@ -157,15 +187,24 @@ namespace Phoron.Core
                     long total = resp.ContentLength, sudah = 0;
                     var buf = new byte[81920];
                     int n;
-                    while ((n = await masuk.ReadAsync(buf, 0, buf.Length)) > 0)
+                    while ((n = await masuk.ReadAsync(buf, 0, buf.Length, batal)) > 0)
                     {
-                        await keluar.WriteAsync(buf, 0, n);
+                        batal.ThrowIfCancellationRequested();
+                        await keluar.WriteAsync(buf, 0, n, batal);
                         sudah += n;
-                        if (kemajuan != null && total > 0)
-                            kemajuan.Report((int)Math.Min(100, sudah * 100 / total));
+                        if (kemajuan != null)
+                            kemajuan.Report(new KemajuanUnduh { Sudah = sudah, Total = total });
                     }
                 }
                 return tujuan;
+            }
+            catch (OperationCanceledException)
+            {
+                // Berkas separuh jadi dibuang: kalau ditinggal, unduhan berikutnya
+                // menemukan berkas bernama sama dan menganggapnya sudah lengkap.
+                try { if (File.Exists(tujuan)) File.Delete(tujuan); } catch { }
+                if (galat != null) galat("Unduhan dibatalkan.");
+                return null;
             }
             catch (Exception ex)
             {
