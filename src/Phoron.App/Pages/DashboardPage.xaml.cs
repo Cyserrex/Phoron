@@ -104,13 +104,28 @@ namespace Phoron.App.Pages
             if (baru != null && baru.Galat == null && baru.LebihBaru)
                 pesan.Add("Phoron " + baru.Versi + " sudah rilis; yang terpasang "
                           + AppInfo.Version + ".");
+            // Autostart Windows memakai kunci Run, dan Windows SELALU menjalankan
+            // entri Run tanpa hak admin. Jadi keadaan ini normal, bukan kerusakan,
+            // dan kalimatnya harus mengatakan begitu - lalu menunjukkan bahwa
+            // cukup sekali izin, tidak selamanya.
+            var belumDaftar = BelumDaftar();
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin())
-                pesan.Add("Phoron tidak jalan sebagai Administrator, jadi berkas hosts tidak bisa disunting. "
-                          + "Nama situs .test belum tentu bisa dibuka.");
+            {
+                if (belumDaftar.Count > 0)
+                    pesan.Add("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
+                              + "untuk aplikasi yang menyala sendiri saat boot. Akibatnya "
+                              + belumDaftar.Count + " nama situs .test belum terdaftar di berkas hosts. "
+                              + "Alamat http://localhost/proyek/ tetap jalan normal. "
+                              + "Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.");
+                else
+                    pesan.Add("Phoron jalan tanpa hak Administrator, jadi berkas hosts tidak bisa disunting. "
+                              + "Nama situs yang sudah terdaftar tetap bisa dibuka; yang baru tidak.");
+            }
 
             TxtPeringatan.Text = string.Join(Environment.NewLine, pesan);
             PanelPeringatan.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnAdmin.Visibility = HostsFile.IsAdmin() ? Visibility.Collapsed : Visibility.Visible;
+            BtnDaftarHosts.Visibility = belumDaftar.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnPembaruan.Visibility = baru != null && baru.Galat == null && baru.LebihBaru
                 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -152,6 +167,29 @@ namespace Phoron.App.Pages
                 else AppState.Info("Proses yang tertinggal sudah dihentikan; portnya bebas.");
             }
             finally { BtnBebaskan.IsEnabled = true; }
+        }
+
+        // RefreshState ikut setiap perubahan status layanan, sedangkan
+        // BelumTerdaftar() memindai folder proyek SELURUH profil - puluhan
+        // pembacaan direktori. Jawabannya hampir tidak pernah berubah, jadi
+        // dihitung sekali per halaman dan hanya dibatalkan setelah pendaftaran.
+        List<string> _belumDaftar;
+
+        List<string> BelumDaftar()
+        {
+            if (_belumDaftar != null) return _belumDaftar;
+            if (!_e.Settings.ManageHosts || HostsFile.IsAdmin())
+                return _belumDaftar = new List<string>();
+            try { _belumDaftar = HostsTool.BelumTerdaftar(); }
+            catch { _belumDaftar = new List<string>(); }
+            return _belumDaftar;
+        }
+
+        void BtnDaftarHosts_Click(object sender, RoutedEventArgs e)
+        {
+            DaftarHosts.Jalankan(Window.GetWindow(this));
+            _belumDaftar = null;   // hasilnya berubah; hitung ulang sekali
+            RefreshState();        // peringatan dan tombolnya hilang kalau sudah beres
         }
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)

@@ -123,6 +123,7 @@ namespace Phoron.App
                     case "ekstensi": teks.Text = Lang.T("Ekstensi PHP"); break;
                     case "log": teks.Text = Lang.T("Log"); break;
                     case "setelan": teks.Text = Lang.T("Pengaturan"); break;
+                    case "tentang": teks.Text = Lang.T("Tentang"); break;
                 }
             }
             BtnKeluar.Content = Lang.T("Keluar");
@@ -168,6 +169,7 @@ namespace Phoron.App
                 case "ekstensi": Host.Content = new ExtensionsPage(); break;
                 case "log": Host.Content = new LogPage(); break;
                 case "setelan": Host.Content = new SettingsPage(); break;
+                case "tentang": Host.Content = new AboutPage(); break;
                 default: Host.Content = new DashboardPage(); break;
             }
         }

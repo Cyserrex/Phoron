@@ -99,6 +99,12 @@
                                 <TextBlock Text="{loc:T 'Pengaturan'}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
+                        <ListBoxItem Tag="tentang">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE946;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="{loc:T 'Tentang'}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
                     </ListBox>
 
                     <StackPanel Grid.Row="1" Margin="12,10,12,12">

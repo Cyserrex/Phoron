@@ -17,8 +17,24 @@ namespace Phoron.App
             return Start(args);
         }
 
+        /// <summary>Argumen proses pembantu yang HANYA menulis berkas hosts lalu keluar.</summary>
+        public const string ArgumenSinkronHosts = "--sinkron-hosts";
+
+        /// <summary>Kode keluar proses pembantu, dibaca pemanggilnya untuk melaporkan hasil.</summary>
+        public const int KeluarBerhasil = 0;
+        public const int KeluarTidakBerhak = 2;
+        public const int KeluarGalat = 3;
+
         static int Start(string[] args)
         {
+            // Dijalankan berhak Administrator lewat "runas", menulis hosts, lalu
+            // keluar. Sengaja diperiksa SEBELUM mutex instans tunggal: Phoron yang
+            // biasa masih berjalan saat ini dipanggil, dan pembantu ini bukan
+            // salinan kedua aplikasi - ia tidak membuka jendela dan tidak
+            // menyentuh Apache, MySQL, atau berkas konfigurasi apa pun.
+            if (Array.Exists(args, a => string.Equals(a, ArgumenSinkronHosts, StringComparison.OrdinalIgnoreCase)))
+                return SinkronHostsSaja();
+
             // Dua salinan Phoron berarti dua Apache berebut port 80 dan dua
             // penulis berkas konfigurasi yang sama. Instans kedua langsung keluar.
             bool baru;
@@ -45,6 +61,18 @@ namespace Phoron.App
             app.MainWindow = win;
             if (!keTray) win.Show();
             return app.Run();
+        }
+
+        static int SinkronHostsSaja()
+        {
+            try
+            {
+                if (!Phoron.Core.HostsFile.IsAdmin()) return KeluarTidakBerhak;
+                Phoron.Core.HostsTool.DaftarkanSemua();
+                return KeluarBerhasil;
+            }
+            catch (UnauthorizedAccessException) { return KeluarTidakBerhak; }
+            catch { return KeluarGalat; }
         }
 
         /// <summary>

@@ -6,7 +6,25 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.12.2";
+        public const string Version = "1.13.0";
+
+        // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
+        // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
+        public const string Pemilik = "Cyserrex";
+        public const string Repo = "https://github.com/Cyserrex/Phoron";
+        public const string HalamanRilis = "https://github.com/Cyserrex/Phoron/releases";
+        public const string TahunMulai = "2026";
+
+        /// <summary>Baris hak cipta. Tahunnya jadi rentang begitu tahun berjalan melewati tahun rilis pertama.</summary>
+        public static string HakCipta
+        {
+            get
+            {
+                var kini = DateTime.Now.Year.ToString();
+                var tahun = kini == TahunMulai ? TahunMulai : TahunMulai + "-" + kini;
+                return "Hak cipta © " + tahun + " " + Pemilik;
+            }
+        }
     }
 
     public enum BinKind { Php, Apache, Nginx, MySql, Node }

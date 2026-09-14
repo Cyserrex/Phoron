@@ -97,6 +97,30 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Halaman Tentang
+                { "Tentang",
+                  "About" },
+                { "Yang sedang dipakai",
+                  "Currently in use" },
+                { "Tautan",
+                  "Links" },
+                { "Halaman proyek di GitHub",
+                  "Project page on GitHub" },
+                { "Salin info versi",
+                  "Copy version info" },
+                { "pengguna biasa",
+                  "ordinary user" },
+                { "Info versi sudah disalin ke papan klip.",
+                  "Version info copied to the clipboard." },
+                { "Lingkungan pengembangan web lokal: Apache, PHP, MySQL, dan Node dalam satu tempat, dengan kombinasi versi yang bisa disimpan sebagai profil lalu ditukar sekali klik.",
+                  "A local web development environment: Apache, PHP, MySQL and Node in one place, with version combinations you can save as profiles and swap in one click." },
+                { "Phoron memakai Apache, PHP, MySQL/MariaDB, Nginx, dan Node.js yang masing-masing punya lisensi sendiri. Phoron tidak pernah menulis ke dalam folder bin milik program itu - seluruh konfigurasi yang dihasilkan disimpan di folder etc.",
+                  "Phoron uses Apache, PHP, MySQL/MariaDB, Nginx and Node.js, each under its own licence. Phoron never writes into those programs' bin folders - every configuration it generates is kept in the etc folder." },
+                // Daftar hosts sekali jalan
+                { "Daftarkan nama situs sekali",
+                  "Register site names once" },
+                { "Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.",
+                  "When Windows starts it through autostart, Phoron always runs without Administrator rights - that is Windows' own rule, so there is no UAC box on every boot. Hosts file entries persist, so registering them once is enough: after that .test names keep working even while Phoron runs as an ordinary user." },
                 // Teks layar yang tersisa
                 { "Menyambung...",
                   "Connecting..." },
@@ -296,6 +320,30 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Halaman Tentang
+                { "Tentang",
+                  "Ngenani" },
+                { "Yang sedang dipakai",
+                  "Sing lagi dianggo" },
+                { "Tautan",
+                  "Pranala" },
+                { "Halaman proyek di GitHub",
+                  "Kaca proyek ing GitHub" },
+                { "Salin info versi",
+                  "Salin info versi" },
+                { "pengguna biasa",
+                  "pangguna biasa" },
+                { "Info versi sudah disalin ke papan klip.",
+                  "Info versi wis disalin menyang papan klip." },
+                { "Lingkungan pengembangan web lokal: Apache, PHP, MySQL, dan Node dalam satu tempat, dengan kombinasi versi yang bisa disimpan sebagai profil lalu ditukar sekali klik.",
+                  "Lingkungan pangembangan web lokal: Apache, PHP, MySQL, lan Node ing sak panggonan, kanthi kombinasi versi sing bisa disimpen minangka profil banjur diganti sepisan klik." },
+                { "Phoron memakai Apache, PHP, MySQL/MariaDB, Nginx, dan Node.js yang masing-masing punya lisensi sendiri. Phoron tidak pernah menulis ke dalam folder bin milik program itu - seluruh konfigurasi yang dihasilkan disimpan di folder etc.",
+                  "Phoron nganggo Apache, PHP, MySQL/MariaDB, Nginx, lan Node.js sing saben-sabene duwe lisensi dhewe. Phoron ora tau nulis ing njero folder bin duweke program kuwi - kabeh konfigurasi sing digawe disimpen ing folder etc." },
+                // Daftar hosts sekali jalan
+                { "Daftarkan nama situs sekali",
+                  "Daftarake ngaran situs sepisan" },
+                { "Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.",
+                  "Nalika diuripake Windows liwat autostart, Phoron tansah mlaku tanpa hak Administrator - pancen aturane Windows, supaya ora ana kothak UAC saben boot. Entri berkas hosts kuwi tetep, dadi cukup didaftarake sepisan: sawise kuwi jeneng .test tetep urip sanajan Phoron mlaku minangka pangguna biasa." },
                 // Teks layar yang tersisa
                 { "Menyambung...",
                   "Nyambung..." },
@@ -467,6 +515,30 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Halaman Tentang
+                { "Tentang",
+                  "Maklumat" },
+                { "Yang sedang dipakai",
+                  "Nang parhatan dipakai" },
+                { "Tautan",
+                  "Tautan" },
+                { "Halaman proyek di GitHub",
+                  "Laman proyek di GitHub" },
+                { "Salin info versi",
+                  "Salin maklumat versi" },
+                { "pengguna biasa",
+                  "pamakai biasa" },
+                { "Info versi sudah disalin ke papan klip.",
+                  "Maklumat versi sudah disalin ka papan ganda." },
+                { "Lingkungan pengembangan web lokal: Apache, PHP, MySQL, dan Node dalam satu tempat, dengan kombinasi versi yang bisa disimpan sebagai profil lalu ditukar sekali klik.",
+                  "Lingkungan pangembangan web lokal: Apache, PHP, MySQL, wan Node dalam sabuting wadah, lawan kombinasi versi nang kawa disimpan sabagai profil hanyar ditukar sakali klik." },
+                { "Phoron memakai Apache, PHP, MySQL/MariaDB, Nginx, dan Node.js yang masing-masing punya lisensi sendiri. Phoron tidak pernah menulis ke dalam folder bin milik program itu - seluruh konfigurasi yang dihasilkan disimpan di folder etc.",
+                  "Phoron mamakai Apache, PHP, MySQL/MariaDB, Nginx, wan Node.js nang masing-masingnya baisi lisensi surang. Phoron kada suah manulis ka dalam folder bin punya program itu - samunyaan konfigurasi nang diulah disimpan di folder etc." },
+                // Daftar hosts sekali jalan
+                { "Daftarkan nama situs sekali",
+                  "Daptarakan ngaran situs sakali" },
+                { "Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.",
+                  "Wayah dihidupakan Windows lewat autostart, Phoron salawasnya bajalan kada baisi hak Administrator - mamang aturan Windows, supaya kadada kutak UAC satiap boot. Entri barakas hosts tatap ada, jadi cukup didaptarakan sakali: imbah itu ngaran .test tatap hidup walau Phoron bajalan sabagai pamakai biasa." },
                 { "Menyambung...",
                   "Manyambung..." },
                 { "Batalkan",

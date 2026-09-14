@@ -50,8 +50,12 @@
                              Content="{loc:T 'Tombol tutup mengecilkan ke baki sistem, bukan keluar'}"/>
             <ui:ToggleSwitch x:Name="SwVhost" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
                              Content="{loc:T 'Buat vhost otomatis untuk tiap folder di www'}"/>
-            <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
+            <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Sinkronkan berkas hosts Windows (butuh Administrator)'}"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,6"
+                       Text="{loc:T 'Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.'}"/>
+            <ui:Button x:Name="BtnDaftarHosts" Margin="52,0,0,10"
+                       Content="{loc:T 'Daftarkan nama situs sekali'}" Click="BtnDaftarHosts_Click"/>
 
             <ui:ToggleSwitch x:Name="SwBerandaAkar" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Tampilkan beranda Phoron di http://localhost/'}"/>

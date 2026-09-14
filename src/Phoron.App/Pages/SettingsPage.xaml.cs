@@ -227,6 +227,11 @@ namespace Phoron.App.Pages
         void BtnRoot_Click(object sender, RoutedEventArgs e) { Shell.Open(Paths.Root); }
         void BtnIni_Click(object sender, RoutedEventArgs e) { Shell.Open(Paths.SettingsFile); }
 
+        void BtnDaftarHosts_Click(object sender, RoutedEventArgs e)
+        {
+            DaftarHosts.Jalankan(Window.GetWindow(this));
+        }
+
         void BtnBersihHosts_Click(object sender, RoutedEventArgs e)
         {
             if (!AppState.Ask("Hapus semua baris yang ditambahkan Phoron dari berkas hosts? "
