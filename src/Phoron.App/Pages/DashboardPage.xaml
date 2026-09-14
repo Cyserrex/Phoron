@@ -78,7 +78,10 @@
                         <ui:Button x:Name="BtnAdmin" Content="Jalankan ulang sebagai Administrator"
                                    Margin="0,0,8,0" Visibility="Collapsed" Click="BtnAdmin_Click"/>
                         <ui:Button x:Name="BtnPembaruan" Content="Unduh pembaruan"
-                                   Appearance="Primary" Visibility="Collapsed" Click="BtnPembaruan_Click"/>
+                                   Appearance="Primary" Margin="0,0,8,0"
+                                   Visibility="Collapsed" Click="BtnPembaruan_Click"/>
+                        <ui:Button x:Name="BtnBebaskan" Content="Hentikan proses yang tertinggal"
+                                   Appearance="Danger" Visibility="Collapsed" Click="BtnBebaskan_Click"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>

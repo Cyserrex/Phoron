@@ -369,6 +369,10 @@ namespace Phoron.Core
                 // mendengarkan - dan pengguna mencari-cari sebabnya di browser.
                 p.Exited += (s, e) => ProsesMati(p, tag);
                 p.Start();
+                // Diikat SEGERA setelah start: begitu Phoron berakhir dengan cara
+                // apa pun, Windows ikut menutup proses ini. Tanpa itu, httpd dan
+                // mysqld jadi yatim dan tetap memegang port 80 serta 3306.
+                ProcessJob.Ikat(p);
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
                 return p;

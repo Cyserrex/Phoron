@@ -45,6 +45,73 @@ namespace Phoron.Core
             NodeAppsList = new List<NodeApp>();
         }
 
+        /// <summary>Nama proses yang memang dijalankan Phoron - dipakai mengenali sisa yang tertinggal.</summary>
+        static readonly string[] ProsesKita = { "httpd", "mysqld", "nginx", "php-cgi" };
+
+        /// <summary>
+        /// Port profil yang sedang dipegang proses jenis milik Phoron, padahal
+        /// Phoron ini tidak merasa menjalankannya. Biasanya sisa dari salinan
+        /// sebelumnya yang berakhir tanpa sempat membersihkan diri - misalnya
+        /// ditutup paksa pemasang saat memperbarui versi.
+        /// </summary>
+        public List<PortCheck.Usage> SisaProses()
+        {
+            var hasil = new List<PortCheck.Usage>();
+            if (Active == null) return hasil;
+            if (Services.WebState == ServiceState.Jalan || Services.DbState == ServiceState.Jalan)
+                return hasil;   // yang memegang port itu kita sendiri
+            foreach (var u in PortCheck.Conflicts(Active, SslTool.Exists))
+                if (ProsesKita.Contains((u.ProcessName ?? "").ToLowerInvariant()))
+                    hasil.Add(u);
+            return hasil;
+        }
+
+        /// <summary>
+        /// Hentikan sisa proses itu. MySQL diminta berhenti dengan rapi lebih
+        /// dulu lewat mysqladmin - dimatikan mendadak, InnoDB harus memulihkan
+        /// diri saat start berikutnya, dan itu bisa memakan waktu lama.
+        /// </summary>
+        public async Task<List<string>> HentikanSisaAsync()
+        {
+            var gagal = new List<string>();
+            foreach (var u in SisaProses())
+            {
+                var nama = (u.ProcessName ?? "").ToLowerInvariant();
+                if (nama == "mysqld" && MySql != null)
+                {
+                    var admin = Path.Combine(MySql.Path, "bin", "mysqladmin.exe");
+                    if (File.Exists(admin))
+                    {
+                        Say("Meminta mysqld (PID " + u.Pid + ") berhenti dengan rapi...");
+                        await Task.Run(() => Shell.Run(admin,
+                            "--protocol=tcp --port=" + u.Port + " -u root shutdown", MySql.Path, 20000));
+                        await Task.Delay(1500);
+                    }
+                }
+                if (!PortCheck.IsFree(u.Port))
+                {
+                    Say("Menghentikan " + u.ProcessName + " (PID " + u.Pid + ") yang memegang port " + u.Port + ".");
+                    await Task.Run(() => Shell.KillTree(u.Pid));
+                    await Task.Delay(700);
+                }
+
+                // Port yang MASIH terpakai setelah dibunuh hampir selalu berarti
+                // satu hal: sisa proses itu dijalankan Phoron ber-hak
+                // Administrator, dan proses biasa tidak boleh menghentikannya.
+                // Melaporkan "selesai" di keadaan ini hanya membuat orang
+                // bertanya-tanya kenapa portnya tetap terpakai.
+                if (!PortCheck.IsFree(u.Port))
+                    gagal.Add(u.ProcessName + " (PID " + u.Pid + ") di port " + u.Port
+                              + " tidak bisa dihentikan"
+                              + (HostsFile.IsAdmin()
+                                 ? "." 
+                                 : " - proses itu kemungkinan dijalankan Phoron ber-hak "
+                                   + "Administrator. Jalankan ulang Phoron sebagai Administrator, "
+                                   + "lalu coba lagi."));
+            }
+            return gagal;
+        }
+
         /// <summary>
         /// Cek rilis terbaru di GitHub. Dengan <paramref name="paksa"/> false,
         /// pengecekan dilewati bila baru saja dilakukan - API GitHub tanpa token

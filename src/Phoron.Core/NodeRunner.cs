@@ -127,6 +127,7 @@ namespace Phoron.Core
                 };
 
                 p.Start();
+                ProcessJob.Ikat(p);   // lihat ProcessJob: anak tidak boleh hidup lebih lama dari Phoron
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
             }

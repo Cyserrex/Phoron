@@ -113,11 +113,45 @@ namespace Phoron.App.Pages
             BtnAdmin.Visibility = HostsFile.IsAdmin() ? Visibility.Collapsed : Visibility.Visible;
             BtnPembaruan.Visibility = baru != null && baru.Galat == null && baru.LebihBaru
                 ? Visibility.Visible : Visibility.Collapsed;
+
+            // Sisa proses dari salinan Phoron sebelumnya: port terpakai, tapi
+            // yang memegangnya justru httpd/mysqld - bukan aplikasi asing.
+            // Menyebutkannya tanpa menyediakan tombolnya hanya memaksa orang
+            // membuka Task Manager dan menebak PID mana yang boleh dimatikan.
+            var sisa = _e.SisaProses();
+            BtnBebaskan.Visibility = sisa.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (sisa.Count > 0)
+                TxtPeringatan.Text += (TxtPeringatan.Text.Length > 0 ? Environment.NewLine : "")
+                    + "Proses itu milik Phoron yang sebelumnya berjalan dan tidak sempat "
+                    + "membersihkan diri - bisa dihentikan dari sini.";
         }
 
         void BtnPembaruan_Click(object sender, RoutedEventArgs e)
         {
             UpdateDialog.Tawarkan(_e, _e.Pembaruan);
+        }
+
+        async void BtnBebaskan_Click(object sender, RoutedEventArgs e)
+        {
+            var sisa = _e.SisaProses();
+            if (sisa.Count == 0) { RefreshState(); return; }
+            if (!AppState.Ask("Hentikan proses berikut?" + Environment.NewLine + Environment.NewLine
+                              + string.Join(Environment.NewLine, sisa.Select(u =>
+                                    "  " + u.ProcessName + " (PID " + u.Pid + ") di port " + u.Port))
+                              + Environment.NewLine + Environment.NewLine
+                              + "MySQL diminta berhenti dengan rapi lebih dulu.")) return;
+
+            BtnBebaskan.IsEnabled = false;
+            try
+            {
+                var gagal = await _e.HentikanSisaAsync();
+                RefreshState();
+                var main = Window.GetWindow(this) as MainWindow;
+                if (main != null) main.RefreshStatus();
+                if (gagal.Count > 0) AppState.Warn(string.Join(Environment.NewLine + Environment.NewLine, gagal));
+                else AppState.Info("Proses yang tertinggal sudah dihentikan; portnya bebas.");
+            }
+            finally { BtnBebaskan.IsEnabled = true; }
         }
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)

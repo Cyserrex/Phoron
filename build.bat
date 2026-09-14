@@ -47,6 +47,11 @@ dotnet build "src\Phoron.App\Phoron.App.csproj" -c Debug --nologo || goto :err
 goto :done
 
 :test
+rem Proyek App ikut dibangun walau harness tidak memerlukannya. Phoron.Tests
+rem hanya merujuk Phoron.Core, jadi tanpa baris ini galat kompilasi di lapisan
+rem UI lolos sepenuhnya - uji dilaporkan "semua lulus" padahal aplikasinya
+rem sendiri tidak bisa dibangun. Itu pernah terjadi.
+dotnet build "src\Phoron.App\Phoron.App.csproj" -c Debug --nologo || goto :err
 dotnet build "src\Phoron.Tests\Phoron.Tests.csproj" -c Debug --nologo || goto :err
 "src\Phoron.Tests\bin\Debug\net48\Phoron.Tests.exe" || goto :err
 goto :done
