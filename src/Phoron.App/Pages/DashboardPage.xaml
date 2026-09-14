@@ -74,8 +74,12 @@
                     <!-- Tombolnya ditaruh tepat di bawah keluhannya. Menyebut
                          masalah tanpa menyediakan jalan keluarnya di tempat yang
                          sama memaksa orang mencarinya sendiri di halaman lain. -->
-                    <ui:Button x:Name="BtnAdmin" Content="Jalankan ulang sebagai Administrator"
-                               Margin="0,10,0,0" Visibility="Collapsed" Click="BtnAdmin_Click"/>
+                    <WrapPanel Margin="0,10,0,0">
+                        <ui:Button x:Name="BtnAdmin" Content="Jalankan ulang sebagai Administrator"
+                                   Margin="0,0,8,0" Visibility="Collapsed" Click="BtnAdmin_Click"/>
+                        <ui:Button x:Name="BtnPembaruan" Content="Unduh pembaruan"
+                                   Appearance="Primary" Visibility="Collapsed" Click="BtnPembaruan_Click"/>
+                    </WrapPanel>
                 </StackPanel>
             </Border>
 

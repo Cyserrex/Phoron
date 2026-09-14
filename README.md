@@ -150,7 +150,7 @@ tidak pernah tersentuh:
 - **Ekstensi PHP** — centang ekstensi per profil, plus setelan php.ini yang sering
   diubah. Tombol **Uji: php -m** memperlihatkan apa yang benar-benar dimuat.
 - **Log** — pembaca log Apache/MySQL/PHP/Phoron yang ikut mengekor otomatis.
-- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray, log.
+- **Pengaturan** — folder bin yang dipindai, terminal, auto-start, tray, log, cek pembaruan.
 
 ---
 
@@ -265,6 +265,15 @@ abjad, bukan folder proyek utama — gejala yang baru muncul setelah situs perta
 dibuat, jadi mudah disangka kesalahan lain. Phoron selalu menulis
 `sites-enabled\000-default.conf` yang urutannya dijamin paling awal.
 
+**Cek pembaruan lewat API rilis GitHub, bukan mengikis halaman.** Tata letak
+halaman berubah sewaktu-waktu tanpa pemberitahuan; bentuk JSON-nya stabil. Aset
+yang diambil khusus `*-Setup.exe` — rilis juga memuat `Phoron.exe`, dan mengambil
+aset pertama begitu saja akan mengunduh berkas yang salah. Pengecekan otomatis
+dilewati kalau baru dilakukan dalam 6 jam terakhir: API tanpa token dibatasi 60
+permintaan per jam per IP. Perbandingannya angka per bagian, bukan teks — secara
+abjad `1.10.0` lebih kecil daripada `1.9.0`, dan pembaruan justru akan berhenti
+ditawarkan persis saat versi minor menembus angka sepuluh.
+
 **Log rinci mati secara baku.** Log akses Apache dan seluruh keluaran layanan
 tidak ditulis kecuali diminta di Pengaturan — mysqld saja mencetak ratusan baris
 tiap kali menyala. Log **galat** Apache, MySQL, dan PHP tetap menyala: itulah yang
@@ -302,7 +311,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (140 uji)
+build.bat test         harness uji (154 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

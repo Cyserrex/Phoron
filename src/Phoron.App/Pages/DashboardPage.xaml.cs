@@ -100,6 +100,10 @@ namespace Phoron.App.Pages
                 pesan.Add("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser "
                           + "akan memperingatkan - dan pada host ber-HSTS tidak ada tombol "
                           + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
+            var baru = _e.Pembaruan;
+            if (baru != null && baru.Galat == null && baru.LebihBaru)
+                pesan.Add("Phoron " + baru.Versi + " sudah rilis; yang terpasang "
+                          + AppInfo.Version + ".");
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin())
                 pesan.Add("Phoron tidak jalan sebagai Administrator, jadi berkas hosts tidak bisa disunting. "
                           + "Nama situs .test belum tentu bisa dibuka.");
@@ -107,6 +111,13 @@ namespace Phoron.App.Pages
             TxtPeringatan.Text = string.Join(Environment.NewLine, pesan);
             PanelPeringatan.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnAdmin.Visibility = HostsFile.IsAdmin() ? Visibility.Collapsed : Visibility.Visible;
+            BtnPembaruan.Visibility = baru != null && baru.Galat == null && baru.LebihBaru
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        void BtnPembaruan_Click(object sender, RoutedEventArgs e)
+        {
+            UpdateDialog.Tawarkan(_e, _e.Pembaruan);
         }
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)

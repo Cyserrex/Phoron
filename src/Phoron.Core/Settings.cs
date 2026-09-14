@@ -33,6 +33,14 @@ namespace Phoron.Core
         /// itulah yang dibutuhkan ketika ada yang rusak.
         /// </summary>
         public bool LogRinci;
+        /// <summary>Cek rilis baru di GitHub saat aplikasi dibuka. Baku menyala.</summary>
+        public bool CekPembaruan = true;
+        /// <summary>
+        /// Kapan terakhir kali GitHub ditanya. API tanpa token dibatasi 60
+        /// permintaan per jam per alamat IP; menanyakannya tiap kali jendela
+        /// dibuka akan menghabiskan jatah itu tanpa guna.
+        /// </summary>
+        public DateTime CekTerakhir = DateTime.MinValue;
         public string Terminal = "cmd";     // cmd | powershell | wt
         public string Editor = "";          // kosong = notepad
 
@@ -51,6 +59,12 @@ namespace Phoron.Core
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
+            s.CekPembaruan = ini.GetBool("umum", "cek_pembaruan", true);
+            DateTime kapan;
+            s.CekTerakhir = DateTime.TryParse(ini.Get("umum", "cek_terakhir", ""),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out kapan)
+                ? kapan : DateTime.MinValue;
             s.Terminal = ini.Get("umum", "terminal", "cmd");
             s.Editor = ini.Get("umum", "editor", "");
             return s;
@@ -79,6 +93,9 @@ namespace Phoron.Core
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");
+            ini.Set("umum", "cek_pembaruan", CekPembaruan ? "1" : "0");
+            ini.Set("umum", "cek_terakhir", CekTerakhir == DateTime.MinValue
+                ? "" : CekTerakhir.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
             ini.Set("umum", "terminal", Terminal ?? "cmd");
             ini.Set("umum", "editor", Editor ?? "");
             ini.Save(Paths.SettingsFile,

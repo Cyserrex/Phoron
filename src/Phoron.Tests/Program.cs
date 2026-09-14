@@ -48,6 +48,7 @@ namespace Phoron.Tests
                 UjiHosts();
                 UjiPortCheck();
                 UjiNodeApps();
+                UjiPembaruan();
                 UjiAutostart();
                 UjiLabelVersi();
             }
@@ -743,6 +744,45 @@ namespace Phoron.Tests
 
             File.Delete(Path.Combine(Paths.Root, "apps.ini"));
             Directory.Delete(proyek, true);
+        }
+
+        static void UjiPembaruan()
+        {
+            Bagian("Cek pembaruan");
+            // Perbandingan angka per bagian, bukan teks. Secara abjad "1.10.0"
+            // lebih kecil daripada "1.9.0" - kalau dibandingkan sebagai teks,
+            // pembaruan justru berhenti ditawarkan persis saat versi minor
+            // menembus angka sepuluh.
+            Ok("1.10.0 lebih baru daripada 1.9.0", Updater.LebihBaru("1.10.0", "1.9.0"));
+            Ok("1.7.1 lebih baru daripada 1.7.0", Updater.LebihBaru("1.7.1", "1.7.0"));
+            Ok("Versi sama bukan pembaruan", !Updater.LebihBaru("1.7.1", "1.7.1"));
+            Ok("Versi lebih tua bukan pembaruan", !Updater.LebihBaru("1.6.0", "1.7.0"));
+            Ok("Awalan v diabaikan", Updater.LebihBaru("v1.8.0", "1.7.1"));
+            // Versi rakitan membawa ekor "+<sha>"; System.Version menolaknya
+            // mentah-mentah, dan tanpa pembersihan ini pengecekan selalu diam.
+            Ok("Ekor +sha tidak mengacaukan perbandingan",
+                Updater.LebihBaru("1.8.0", "1.7.1+efdc376628af09d14093dd6a1113dcc0"));
+            Ok("Teks sampah tidak dianggap pembaruan", !Updater.LebihBaru("entah", "1.0.0"));
+
+            var json = "{\"tag_name\":\"v1.9.0\","
+                     + "\"html_url\":\"https://github.com/Cyserrex/Phoron/releases/tag/v1.9.0\","
+                     + "\"body\":\"Baris satu\r\nBaris \\\"dua\\\"\","
+                     + "\"assets\":[{\"browser_download_url\":\"https://x/Phoron.exe\"},"
+                     + "{\"browser_download_url\":\"https://x/Phoron-1.9.0-Setup.exe\"}]}";
+            var h = Updater.Urai(json);
+            Ok("Versi terurai dari tag_name", h.Versi == "1.9.0", h.Versi);
+            Ok("Halaman rilis terurai", h.UrlHalaman.EndsWith("/releases/tag/v1.9.0"), h.UrlHalaman);
+            // Rilis memuat beberapa aset; yang diambil harus installer-nya,
+            // bukan aset pertama yang kebetulan Phoron.exe.
+            Ok("Aset yang diambil adalah installer, bukan exe biasa",
+                h.UrlInstaller.EndsWith("Phoron-1.9.0-Setup.exe"), h.UrlInstaller);
+            Ok("Catatan rilis dibaca dan escape-nya dipulihkan",
+                h.Catatan.Contains("Baris satu") && h.Catatan.Contains("\"dua\""), h.Catatan);
+            Ok("Tidak ada galat pada jawaban yang sah", h.Galat == null, h.Galat ?? "");
+
+            var rusak = Updater.Urai("{\"pesan\":\"apa pun\"}");
+            Ok("Jawaban tanpa tag_name dilaporkan sebagai galat", rusak.Galat != null);
+            Ok("Jawaban kosong dilaporkan sebagai galat", Updater.Urai("").Galat != null);
         }
 
         static void UjiAutostart()

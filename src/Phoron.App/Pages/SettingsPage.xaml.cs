@@ -35,6 +35,7 @@ namespace Phoron.App.Pages
             SwHosts.IsChecked = s.ManageHosts;
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
             SwLogRinci.IsChecked = s.LogRinci;
+            SwCekPembaruan.IsChecked = s.CekPembaruan;
             TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             foreach (ComboBoxItem item in CmbTerminal.Items)
                 if ((item.Tag ?? "").ToString() == s.Terminal) CmbTerminal.SelectedItem = item;
@@ -48,6 +49,7 @@ namespace Phoron.App.Pages
             BtnAdmin.IsEnabled = !admin;
             TxtRoot.Text = Paths.Root;
             TxtVersi.Text = "Phoron " + AppInfo.Version;
+            SegarkanKeteranganPembaruan();
             _mengisi = false;
         }
 
@@ -116,6 +118,7 @@ namespace Phoron.App.Pages
             s.AutoVhost = SwVhost.IsChecked == true;
             s.ManageHosts = SwHosts.IsChecked == true;
             s.LogRinci = SwLogRinci.IsChecked == true;
+            s.CekPembaruan = SwCekPembaruan.IsChecked == true;
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
             s.Terminal = item != null ? (item.Tag ?? "cmd").ToString() : "cmd";
@@ -144,6 +147,40 @@ namespace Phoron.App.Pages
                 _e.Apply();
             }
         }
+
+        void SegarkanKeteranganPembaruan()
+        {
+            var h = _e.Pembaruan;
+            if (h == null)
+                TxtPembaruan.Text = "Versi terpasang " + AppInfo.Version + ". Belum dicek.";
+            else if (h.Galat != null)
+                TxtPembaruan.Text = "Versi terpasang " + AppInfo.Version + ". " + h.Galat;
+            else if (h.LebihBaru)
+                TxtPembaruan.Text = "Phoron " + h.Versi + " sudah rilis; yang terpasang "
+                                    + AppInfo.Version + ".";
+            else
+                TxtPembaruan.Text = "Phoron " + AppInfo.Version + " sudah versi terbaru.";
+        }
+
+        async void BtnCek_Click(object sender, RoutedEventArgs e)
+        {
+            BtnCek.IsEnabled = false;
+            TxtPembaruan.Text = "Menghubungi GitHub...";
+            try
+            {
+                // Dipaksa: tombol ini ditekan justru ketika orang ingin tahu
+                // SEKARANG, jadi jeda enam jam tidak berlaku di sini.
+                var hasil = await _e.CekPembaruanAsync(true);
+                SegarkanKeteranganPembaruan();
+                if (hasil != null && hasil.Galat == null && hasil.LebihBaru)
+                    UpdateDialog.Tawarkan(_e, hasil);
+                else if (hasil != null && hasil.Galat != null) AppState.Warn(hasil.Galat);
+                else AppState.Info("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+            }
+            finally { BtnCek.IsEnabled = true; }
+        }
+
+        void BtnRilis_Click(object sender, RoutedEventArgs e) { Shell.Open(Updater.HalamanRilis); }
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)
         {

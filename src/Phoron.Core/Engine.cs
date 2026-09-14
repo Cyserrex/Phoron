@@ -21,6 +21,8 @@ namespace Phoron.Core
         /// <summary>Proyek Node/TypeScript yang terdaftar, dan pengendali prosesnya.</summary>
         public NodeRunner Node { get; private set; }
         public List<NodeApp> NodeAppsList { get; private set; }
+        /// <summary>Hasil pengecekan rilis terakhir; null bila belum pernah dicek.</summary>
+        public HasilCek Pembaruan { get; private set; }
         public ConfigWriter.Result LastBuild { get; private set; }
         public List<Site> Sites { get; private set; }
 
@@ -41,6 +43,29 @@ namespace Phoron.Core
             Services.LogRinci = Settings.LogRinci;
             Node = new NodeRunner();
             NodeAppsList = new List<NodeApp>();
+        }
+
+        /// <summary>
+        /// Cek rilis terbaru di GitHub. Dengan <paramref name="paksa"/> false,
+        /// pengecekan dilewati bila baru saja dilakukan - API GitHub tanpa token
+        /// dibatasi 60 permintaan per jam per IP, dan menanyakannya tiap kali
+        /// jendela dibuka menghabiskan jatah itu tanpa menghasilkan apa pun baru.
+        /// </summary>
+        public async System.Threading.Tasks.Task<HasilCek> CekPembaruanAsync(bool paksa)
+        {
+            if (!paksa)
+            {
+                if (!Settings.CekPembaruan) return null;
+                if ((DateTime.UtcNow - Settings.CekTerakhir).TotalHours < 6) return Pembaruan;
+            }
+            var hasil = await Updater.CekAsync();
+            Settings.CekTerakhir = DateTime.UtcNow;
+            Settings.Save();
+            Pembaruan = hasil;
+            if (hasil.Galat != null) Say("Cek pembaruan: " + hasil.Galat);
+            else if (hasil.LebihBaru) Say("Pembaruan tersedia: Phoron " + hasil.Versi + ".");
+            else Say("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+            return hasil;
         }
 
         public void Say(string text)

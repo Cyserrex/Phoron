@@ -48,6 +48,22 @@ namespace Phoron.App
                 _engine.Say("Auto-start aktif - menyalakan layanan...");
                 await _engine.StartAllAsync();
             }
+
+            // Pengecekan rilis dilakukan PALING AKHIR dan tanpa kotak pesan.
+            // Menyalakan Apache dan MySQL jauh lebih mendesak daripada menanyakan
+            // GitHub, dan jaringan yang lambat tidak boleh menahan keduanya.
+            // Hasilnya muncul sebagai baris di panel Perhatian, bukan dialog yang
+            // menghadang pekerjaan orang begitu jendela terbuka.
+            try
+            {
+                var hasil = await _engine.CekPembaruanAsync(false);
+                if (hasil != null)
+                {
+                    var dash = Host.Content as DashboardPage;
+                    if (dash != null) dash.RefreshState();
+                }
+            }
+            catch { /* tidak ada internet bukan alasan aplikasi gagal dibuka */ }
         }
 
         /// <summary>
