@@ -24,6 +24,11 @@
             <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
                              Content="Sinkronkan berkas hosts Windows (butuh Administrator)"/>
 
+            <ui:ToggleSwitch x:Name="SwBerandaAkar" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                             Content="Tampilkan beranda Phoron di http://localhost/"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                       Text="Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri."/>
+
             <ui:ToggleSwitch x:Name="SwLogRinci" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="Catat log rinci"/>
             <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"

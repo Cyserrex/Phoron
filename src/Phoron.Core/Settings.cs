@@ -33,6 +33,14 @@ namespace Phoron.Core
         /// itulah yang dibutuhkan ketika ada yang rusak.
         /// </summary>
         public bool LogRinci;
+        /// <summary>
+        /// Layani beranda Phoron di http://localhost/ (akar), bukan hanya di
+        /// /phoron/. Baku menyala - itulah yang orang harapkan dari perkakas
+        /// semacam ini. Hanya alamat akar PERSIS yang dialihkan; subfolder
+        /// seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek
+        /// tetap bisa dibuka di /index.php.
+        /// </summary>
+        public bool BerandaDiAkar = true;
         /// <summary>Cek rilis baru di GitHub saat aplikasi dibuka. Baku menyala.</summary>
         public bool CekPembaruan = true;
         /// <summary>
@@ -59,6 +67,7 @@ namespace Phoron.Core
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
+            s.BerandaDiAkar = ini.GetBool("umum", "beranda_di_akar", true);
             s.CekPembaruan = ini.GetBool("umum", "cek_pembaruan", true);
             DateTime kapan;
             s.CekTerakhir = DateTime.TryParse(ini.Get("umum", "cek_terakhir", ""),
@@ -93,6 +102,7 @@ namespace Phoron.Core
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");
+            ini.Set("umum", "beranda_di_akar", BerandaDiAkar ? "1" : "0");
             ini.Set("umum", "cek_pembaruan", CekPembaruan ? "1" : "0");
             ini.Set("umum", "cek_terakhir", CekTerakhir == DateTime.MinValue
                 ? "" : CekTerakhir.ToString("o", System.Globalization.CultureInfo.InvariantCulture));

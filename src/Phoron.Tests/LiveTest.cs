@@ -42,6 +42,14 @@ namespace Phoron.Tests
                 // Folder proyek KEDUA, di luar www: inilah yang membuktikan
                 // dukungan banyak folder benar-benar sampai ke Apache, bukan
                 // sekadar muncul di daftar situs.
+                // Subfolder DI DALAM akar utama - inilah bentuk alamat yang
+                // dipakai orang sehari-hari (http://localhost/simpdam/), dan
+                // yang paling mudah rusak oleh pengalihan akar yang dipasang
+                // terlalu luas.
+                Directory.CreateDirectory(Path.Combine(Paths.Www, "subproyek"));
+                File.WriteAllText(Path.Combine(Paths.Www, "subproyek", "index.php"),
+                    "<?php echo 'SUB|' . PHP_VERSION;", new UTF8Encoding(false));
+
                 Directory.CreateDirectory(Path.Combine(FolderKedua, "tokolive"));
                 File.WriteAllText(Path.Combine(FolderKedua, "tokolive", "index.php"),
                     "<?php echo 'KEDUA|' . __DIR__;", new UTF8Encoding(false));
@@ -120,8 +128,30 @@ namespace Phoron.Tests
                 var ok = svc.StartWebAsync(profil, apache, php, cfg).GetAwaiter().GetResult();
                 if (!ok) { Console.WriteLine("   GAGAL: Apache tidak menyala."); return false; }
 
-                var body = Ambil("http://127.0.0.1:" + Port + "/");
-                Console.WriteLine("   jawaban: " + body);
+                // Akar kini menampilkan beranda Phoron. Yang WAJIB tetap utuh:
+                // berkas milik folder proyek masih terjangkau, dan subfolder
+                // tidak ikut dibajak - dua hal itulah yang bisa rusak oleh
+                // pengalihan yang dipasang terlalu luas.
+                var akar = Ambil("http://127.0.0.1:" + Port + "/");
+                if (akar.IndexOf("Profil aktif", StringComparison.Ordinal) < 0)
+                {
+                    Console.WriteLine("   GAGAL: akar tidak menampilkan beranda Phoron. Jawaban: "
+                                      + akar.Substring(0, Math.Min(120, akar.Length)));
+                    return false;
+                }
+                Console.WriteLine("   ok: akar / menampilkan beranda Phoron");
+
+                var sub = Ambil("http://127.0.0.1:" + Port + "/subproyek/");
+                if (!sub.StartsWith("SUB|"))
+                {
+                    Console.WriteLine("   GAGAL: subfolder ikut dibajak pengalihan akar. Jawaban: "
+                                      + sub.Substring(0, Math.Min(120, sub.Length)));
+                    return false;
+                }
+                Console.WriteLine("   ok: subfolder /subproyek/ tetap milik proyek");
+
+                var body = Ambil("http://127.0.0.1:" + Port + "/index.php");
+                Console.WriteLine("   jawaban /index.php: " + body);
 
                 if (!body.StartsWith("PHORON|"))
                 {
@@ -158,7 +188,10 @@ namespace Phoron.Tests
                     Console.WriteLine("   GAGAL: sertifikat ada tapi HTTPS tidak diaktifkan.");
                     return false;
                 }
-                var aman = Ambil("https://127.0.0.1:" + (Port + 1) + "/");
+                // Lewat /index.php, bukan akar: akar kini dialihkan ke beranda
+                // Phoron, dan yang perlu dibuktikan di sini adalah PHP benar-benar
+                // dijalankan di atas TLS.
+                var aman = Ambil("https://127.0.0.1:" + (Port + 1) + "/index.php");
                 Console.WriteLine("   https: " + aman);
                 if (!aman.StartsWith("PHORON|"))
                 {

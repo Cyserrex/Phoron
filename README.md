@@ -102,14 +102,27 @@ diam-diam, dan Phoron memberi tahu pasangan mana yang bentrok.
 
 ### Beranda Phoron
 
-Ada di **`http://localhost/phoron/`** - ringkasan profil aktif, versi PHP/Apache/MySQL,
-daftar situs yang bisa diklik, dan ekstensi yang benar-benar termuat.
+Ada di **`http://localhost/`** - ringkasan profil aktif, versi PHP/Apache/MySQL,
+daftar situs yang bisa diklik, dan ekstensi yang benar-benar termuat. Selalu bisa
+dijangkau juga di `/phoron/`.
 
-Sengaja di `/phoron`, bukan di akar. Akar itu milik folder proyek Anda: kalau folder
-itu sudah punya `index.php` sendiri - `C:\laragon\www` punya halaman sambutan Laragon,
-misalnya - halaman itulah yang muncul di `http://localhost/`, dan memang seharusnya
-begitu. Phoron tidak menimpa berkas di folder kerja orang. Berkas berandanya sendiri
-tinggal di `etc\dashboard\` dan dijangkau lewat `Alias` Apache.
+Berkasnya tinggal di `etc\dashboard\`, bukan di folder proyek Anda - Phoron tidak
+menaruh apa pun di folder kerja orang. Akar dialihkan ke sana lewat `RewriteRule`
+yang mengikat alamat akar **persis**, di dalam VirtualHost bawaan:
+
+- `http://localhost/` → beranda Phoron
+- `http://localhost/simpdam/` → tetap proyek Anda, tidak tersentuh
+- `http://localhost/index.php` → `index.php` milik folder proyek, tetap terjangkau
+
+`DirectoryIndex` tidak dipakai untuk ini: ia berlaku pada **setiap** folder di
+bawahnya, jadi menaruh beranda di urutan pertama akan membajak semua subfolder, dan
+menaruhnya di urutan terakhir hanya berlaku kalau foldernya tidak punya index sendiri.
+Aturan `mod_rewrite` juga harus berada di dalam VirtualHost - di konteks server ia
+tidak diwarisi, dan gagalnya senyap: konfigurasi tetap lolos `httpd -t`, Apache tetap
+menyala, aturannya saja yang tidak pernah dipakai.
+
+Matikan lewat **Pengaturan → Tampilkan beranda Phoron di http://localhost/** kalau
+akar folder proyek Anda memang aplikasi sendiri.
 
 ### HTTPS
 

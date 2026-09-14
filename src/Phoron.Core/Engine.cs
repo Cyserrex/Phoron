@@ -252,7 +252,8 @@ namespace Phoron.Core
             Services.LogRinci = Settings.LogRinci;
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>(),
-                                           Settings.PhpIniKeFolderPhp, Settings.LogRinci);
+                                           Settings.PhpIniKeFolderPhp, Settings.LogRinci,
+                                           Settings.BerandaDiAkar);
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.

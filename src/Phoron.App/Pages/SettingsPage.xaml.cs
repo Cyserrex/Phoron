@@ -35,6 +35,7 @@ namespace Phoron.App.Pages
             SwHosts.IsChecked = s.ManageHosts;
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
             SwLogRinci.IsChecked = s.LogRinci;
+            SwBerandaAkar.IsChecked = s.BerandaDiAkar;
             SwCekPembaruan.IsChecked = s.CekPembaruan;
             TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             foreach (ComboBoxItem item in CmbTerminal.Items)
@@ -110,6 +111,7 @@ namespace Phoron.App.Pages
             var vhostLama = s.AutoVhost;
             var hostsLama = s.ManageHosts;
             var logLama = s.LogRinci;
+            var berandaLama = s.BerandaDiAkar;
             var phpIniLama = s.PhpIniKeFolderPhp;
             var rootsLama = string.Join(";", s.BinRoots);
 
@@ -118,6 +120,7 @@ namespace Phoron.App.Pages
             s.AutoVhost = SwVhost.IsChecked == true;
             s.ManageHosts = SwHosts.IsChecked == true;
             s.LogRinci = SwLogRinci.IsChecked == true;
+            s.BerandaDiAkar = SwBerandaAkar.IsChecked == true;
             s.CekPembaruan = SwCekPembaruan.IsChecked == true;
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
@@ -140,7 +143,8 @@ namespace Phoron.App.Pages
                 TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             }
             if (rootsBerubah || s.AutoVhost != vhostLama || s.ManageHosts != hostsLama
-                || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama)
+                || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama
+                || s.BerandaDiAkar != berandaLama)
             {
                 // Peringatannya cukup masuk log; kotak pesan modal tiap kali
                 // sakelar disentuh justru mengganggu.

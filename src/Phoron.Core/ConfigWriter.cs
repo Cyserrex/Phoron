@@ -39,14 +39,15 @@ namespace Phoron.Core
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
                                    BinPackage mysql, BinPackage nginx, List<Site> sites,
-                                   bool phpIniKeFolderPhp = false, bool logAkses = true)
+                                   bool phpIniKeFolderPhp = false, bool logAkses = true,
+                                   bool berandaDiAkar = true)
         {
             var r = new Result();
             if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp);
             if (profile.WebServer == "nginx" && nginx != null)
                 r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
             else if (apache != null)
-                r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses);
+                r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses, berandaDiAkar);
             else
                 r.Warnings.Add("Profil belum menunjuk versi Apache mana pun.");
             if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
@@ -57,7 +58,8 @@ namespace Phoron.Core
         // ---------------------------------------------------------------- Apache
 
         static string WriteApache(Profile profile, BinPackage apache, BinPackage php,
-                                  List<Site> sites, Result r, bool logAkses)
+                                  List<Site> sites, Result r, bool logAkses,
+                                  bool berandaDiAkar)
         {
             var baseConf = PristineConf(apache);
             if (baseConf == null)
@@ -145,6 +147,13 @@ namespace Phoron.Core
             sb.AppendLine("    Require all granted");
             sb.AppendLine("    DirectoryIndex index.php");
             sb.AppendLine("</Directory>");
+
+            // Pengalihan akar ke beranda Phoron TIDAK ditaruh di sini, melainkan
+            // di dalam VirtualHost bawaan - lihat DefaultBlock. Aturan mod_rewrite
+            // di konteks server tidak diwarisi VirtualHost mana pun kecuali
+            // diminta dengan RewriteOptions Inherit, dan kegagalannya senyap:
+            // konfigurasi tetap lolos httpd -t, Apache tetap menyala, aturannya
+            // saja yang tidak pernah dipakai.
             sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "mod_php.conf")) + "\"");
             sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "ssl.conf")) + "\"");
             sb.AppendLine("IncludeOptional \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "alias")) + "/*.conf\"");
@@ -156,7 +165,7 @@ namespace Phoron.Core
 
             WriteModPhp(profile, apache, php, r);
             WriteSslConf(profile, apache, r);
-            WriteVhosts(profile, sites, r);
+            WriteVhosts(profile, sites, r, berandaDiAkar);
             return confPath;
         }
 
@@ -244,13 +253,13 @@ namespace Phoron.Core
             WriteIfChanged(Path.Combine(Paths.EtcApache, "ssl.conf"), sb.ToString());
         }
 
-        static void WriteVhosts(Profile profile, List<Site> sites, Result r)
+        static void WriteVhosts(Profile profile, List<Site> sites, Result r, bool berandaDiAkar)
         {
             Directory.CreateDirectory(Paths.SitesEnabled);
             var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             bool ssl = File.Exists(Path.Combine(Paths.EtcSsl, "phoron.crt"));
 
-            WriteDefaultVhost(profile, ssl);
+            WriteDefaultVhost(profile, ssl, berandaDiAkar);
 
             foreach (var s in sites ?? new List<Site>())
             {
@@ -285,25 +294,40 @@ namespace Phoron.Core
         /// menampilkan isi salah satu proyek) dan baru muncul setelah situs
         /// pertama dibuat, jadi mudah disangka kesalahan lain.
         /// </summary>
-        static void WriteDefaultVhost(Profile profile, bool ssl)
+        static void WriteDefaultVhost(Profile profile, bool ssl, bool berandaDiAkar)
         {
             var root = Paths.Fwd(SiteScanner.DocumentRoot(profile));
             var sb = new StringBuilder();
             sb.AppendLine(GeneratedHeader);
             sb.AppendLine("define ROOT \"" + root + "\"");
             sb.AppendLine();
-            sb.AppendLine(DefaultBlock(profile.HttpPort, false));
-            if (ssl) sb.AppendLine(DefaultBlock(profile.HttpsPort, true));
+            sb.AppendLine(DefaultBlock(profile.HttpPort, false, berandaDiAkar));
+            if (ssl) sb.AppendLine(DefaultBlock(profile.HttpsPort, true, berandaDiAkar));
             // Awalan "000-" menjamin urutannya sebelum semua berkas "auto.*.conf".
             WriteIfChanged(Path.Combine(Paths.SitesEnabled, "000-default.conf"), sb.ToString());
         }
 
-        static string DefaultBlock(int port, bool ssl)
+        static string DefaultBlock(int port, bool ssl, bool berandaDiAkar)
         {
             var sb = new StringBuilder();
             sb.AppendLine("<VirtualHost _default_:" + port + ">");
             sb.AppendLine("    DocumentRoot \"${ROOT}\"");
             sb.AppendLine("    ServerName localhost");
+            if (berandaDiAkar)
+            {
+                // Polanya mengikat alamat akar PERSIS. DirectoryIndex tidak bisa
+                // dipakai di sini: ia berlaku untuk SETIAP folder di bawahnya,
+                // jadi menaruh beranda di urutan pertama akan membajak /simpdam/
+                // dan semua subfolder lain; menaruhnya di urutan terakhir hanya
+                // berlaku kalau foldernya tidak punya index sendiri - padahal
+                // justru folder yang SUDAH punya index.php yang jadi pangkal
+                // pertanyaannya. index.php milik folder proyek tetap terjangkau
+                // di /index.php.
+                sb.AppendLine("    <IfModule rewrite_module>");
+                sb.AppendLine("        RewriteEngine On");
+                sb.AppendLine("        RewriteRule \"^/?$\" \"" + Beranda.Alias + "/index.php\" [PT,L]");
+                sb.AppendLine("    </IfModule>");
+            }
             sb.AppendLine("    <Directory \"${ROOT}\">");
             sb.AppendLine("        Options Indexes FollowSymLinks ExecCGI");
             sb.AppendLine("        AllowOverride All");
