@@ -30,6 +30,7 @@ namespace Phoron.App
             SetupTray();
             Closing += OnClosing;
             SourceInitialized += (s, e) => PasangPengawasSesi();
+            PasangSinyalKeluar();
             Nav.SelectedIndex = 0;
             RefreshStatus();
 
@@ -203,6 +204,40 @@ namespace Phoron.App
             });
         }
 
+        /// <summary>
+        /// Event bernama yang bisa disetel pihak lain - khususnya pemasang
+        /// pembaruan - untuk meminta Phoron menutup diri dengan rapi.
+        ///
+        /// Restart Manager saja tidak cukup: ia hanya menyasar aplikasi yang
+        /// mengunci berkas yang akan ditimpa, dan permintaannya bisa tidak
+        /// terjawab kalau versi yang sedang berjalan belum mengenal pesan itu.
+        /// Sinyal ini memberi pemasang jalan yang lugas untuk meminta - bukan
+        /// memaksa - Phoron berhenti, sehingga Apache dan MySQL sempat dimatikan
+        /// dengan rapi sebelum berkasnya diganti.
+        /// </summary>
+        System.Threading.EventWaitHandle _sinyalKeluar;
+        System.Threading.RegisteredWaitHandle _daftarSinyal;
+
+        void PasangSinyalKeluar()
+        {
+            try
+            {
+                bool baru;
+                _sinyalKeluar = new System.Threading.EventWaitHandle(
+                    false, System.Threading.EventResetMode.AutoReset,
+                    "Phoron.KeluarSekarang", out baru);
+                _daftarSinyal = System.Threading.ThreadPool.RegisterWaitForSingleObject(
+                    _sinyalKeluar,
+                    (keadaan, kehabisanWaktu) => Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        _engine.Say("Diminta menutup diri oleh pemasang - mematikan layanan dulu.");
+                        TutupUntukPembaruan();
+                    })),
+                    null, System.Threading.Timeout.Infinite, true);
+            }
+            catch { /* tanpa sinyal, pemasang masih punya jalur paksa */ }
+        }
+
         /// <summary>Tutup Phoron sepenuhnya karena pemasang pembaruan akan berjalan.</summary>
         public void TutupUntukPembaruan()
         {
@@ -276,6 +311,8 @@ namespace Phoron.App
             // Server pengembangan Node juga proses anak; kalau ditinggal hidup,
             // port 3000/4321 tetap terpakai oleh proses tanpa jendela.
             _engine.Node.StopAll();
+            if (_daftarSinyal != null) { try { _daftarSinyal.Unregister(null); } catch { } }
+            if (_sinyalKeluar != null) { try { _sinyalKeluar.Close(); } catch { } }
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
             // ShutdownMode aplikasi ini OnExplicitShutdown (lihat Program.cs),
             // jadi menutup jendela saja tidak mengakhiri prosesnya.
