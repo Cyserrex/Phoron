@@ -210,6 +210,16 @@ namespace Phoron.App.Pages
 
         void BtnLocalhost_Click(object sender, RoutedEventArgs e) { Shell.Open(_e.RootUrl()); }
 
+        /// <summary>
+        /// Beranda Phoron ada di /phoron, bukan di akar. Akar itu milik folder
+        /// proyek pengguna - kalau folder itu sudah punya index.php sendiri,
+        /// halaman itulah yang muncul di localhost, dan memang seharusnya begitu.
+        /// </summary>
+        void BtnBeranda_Click(object sender, RoutedEventArgs e)
+        {
+            Shell.Open(_e.RootUrl().TrimEnd('/') + Beranda.Alias + "/");
+        }
+
         void BtnEtc_Click(object sender, RoutedEventArgs e) { Shell.Open(Paths.Etc); }
 
         void BtnTerminal_Click(object sender, RoutedEventArgs e)

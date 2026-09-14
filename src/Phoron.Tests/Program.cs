@@ -43,6 +43,7 @@ namespace Phoron.Tests
                 UjiDaftarEkstensiTersedia();
                 UjiWarisanPhpIni();
                 UjiPhpIniKeFolderPhp();
+                UjiBeranda();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
                 UjiHosts();
@@ -540,6 +541,39 @@ namespace Phoron.Tests
                 File.ReadAllText(Path.Combine(palsu, "php.ini")) == "; disentuh pengelola lain\n");
 
             Directory.Delete(palsu, true);
+        }
+
+        static void UjiBeranda()
+        {
+            Bagian("Beranda Phoron");
+            var profil = new Profile { Name = "Uji beranda", HttpPort = 8080, MySqlPort = 3307 };
+            var situs = new List<Site>
+            {
+                new Site { Folder = "toko", Path = @"C:\proyek\toko", HostName = "toko.test" },
+                // Nama yang memuat petik dan garis miring terbalik: satu saja
+                // cukup merusak seluruh halaman kalau kutipnya tidak diamankan.
+                new Site { Folder = "d'Art" + @"\beta", Path = @"C:\proyek\d'Art", HostName = "d-art.test" },
+            };
+            var php = new BinPackage { Kind = BinKind.Php, Id = "php-uji", Version = "8.3.0" };
+            Beranda.Tulis(profil, situs, php, null, null);
+
+            var berkas = Path.Combine(Beranda.Folder, "index.php");
+            Ok("Beranda ditulis ke etc\\dashboard", File.Exists(berkas), berkas);
+            var isi = File.ReadAllText(berkas);
+            Ok("Nama profil ikut disuntikkan", isi.Contains("Uji beranda"));
+            Ok("Port situs mengikuti profil", isi.Contains("http://toko.test:8080/"));
+            Ok("Petik dalam nama diamankan", isi.Contains(@"d\'Art"), Baris(isi, "  array('nama'"));
+            Ok("Beranda TIDAK ditulis ke folder proyek",
+                !File.Exists(Path.Combine(SiteScanner.DocumentRoot(profil), "index.php"))
+                || !File.ReadAllText(Path.Combine(SiteScanner.DocumentRoot(profil), "index.php")).Contains("Uji beranda"));
+
+            var daftarPhp = Nyata().Where(x => x.Kind == BinKind.Php).ToList();
+            if (daftarPhp.Count == 0) { Console.WriteLine("     dilewati: tidak ada PHP terpasang"); return; }
+            foreach (var v in daftarPhp)
+            {
+                var res = Shell.Run(v.MainExe, "-n -l \"" + berkas + "\"", v.Path, 30000);
+                Ok(v.Version + ": beranda lolos php -l", res.Ok, res.All.Trim());
+            }
         }
 
         static void UjiHalamanSambutan()

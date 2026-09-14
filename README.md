@@ -100,6 +100,17 @@ Kalau dua folder berisi proyek bernama sama, yang pertama memegang nama aslinya 
 yang berikutnya diberi angka (`api.test`, `api-2.test`) — tidak ada yang dibuang
 diam-diam, dan Phoron memberi tahu pasangan mana yang bentrok.
 
+### Beranda Phoron
+
+Ada di **`http://localhost/phoron/`** - ringkasan profil aktif, versi PHP/Apache/MySQL,
+daftar situs yang bisa diklik, dan ekstensi yang benar-benar termuat.
+
+Sengaja di `/phoron`, bukan di akar. Akar itu milik folder proyek Anda: kalau folder
+itu sudah punya `index.php` sendiri - `C:\laragon\www` punya halaman sambutan Laragon,
+misalnya - halaman itulah yang muncul di `http://localhost/`, dan memang seharusnya
+begitu. Phoron tidak menimpa berkas di folder kerja orang. Berkas berandanya sendiri
+tinggal di `etc\dashboard\` dan dijangkau lewat `Alias` Apache.
+
 ### HTTPS
 
 Sertifikat wildcard untuk `*.test` dibuat **otomatis** pada penulisan konfigurasi
@@ -329,7 +340,7 @@ Windows 10/11).
 ```
 build.bat              build Release -> dist\Phoron.exe (satu berkas, ~2,9 MB)
 build.bat run          build Debug lalu jalankan
-build.bat test         harness uji (154 uji)
+build.bat test         harness uji (162 uji)
 build.bat live         uji ujung-ke-ujung: menyalakan Apache & MySQL sungguhan
 build.bat clean
 build_installer.bat    exe + installer (butuh Inno Setup 6)

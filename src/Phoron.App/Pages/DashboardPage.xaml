@@ -92,6 +92,7 @@
                     <WrapPanel>
                         <ui:Button Content="Buka www" Margin="0,0,8,8" Click="BtnWww_Click"/>
                         <ui:Button Content="Buka localhost" Margin="0,0,8,8" Click="BtnLocalhost_Click"/>
+                        <ui:Button Content="Beranda Phoron" Margin="0,0,8,8" Click="BtnBeranda_Click"/>
                         <ui:Button Content="Terminal" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
                         <ui:Button Content="phpinfo()" Margin="0,0,8,8" Click="BtnPhpInfo_Click"/>
                         <ui:Button Content="Uji konfigurasi Apache" Margin="0,0,8,8" Click="BtnTest_Click"/>

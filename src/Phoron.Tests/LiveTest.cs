@@ -166,6 +166,19 @@ namespace Phoron.Tests
                     return false;
                 }
                 Console.WriteLine("   ok: HTTPS melayani di port " + (Port + 1));
+
+                // Beranda Phoron lewat Alias. Inilah yang membuatnya tetap
+                // terjangkau walau folder proyeknya milik orang lain dan sudah
+                // punya index.php sendiri.
+                var brnd = Ambil("http://127.0.0.1:" + Port + Phoron.Core.Beranda.Alias + "/");
+                if (brnd.IndexOf("Phoron", StringComparison.Ordinal) < 0
+                    || brnd.IndexOf("Profil aktif", StringComparison.Ordinal) < 0)
+                {
+                    Console.WriteLine("   GAGAL: beranda /phoron tidak dilayani. Jawaban: "
+                                      + brnd.Substring(0, Math.Min(160, brnd.Length)));
+                    return false;
+                }
+                Console.WriteLine("   ok: beranda Phoron dilayani di " + Phoron.Core.Beranda.Alias);
                 return true;
             }
             catch (Exception ex)

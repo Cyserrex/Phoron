@@ -50,6 +50,7 @@ namespace Phoron.Core
             else
                 r.Warnings.Add("Profil belum menunjuk versi Apache mana pun.");
             if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
+            Beranda.Tulis(profile, sites, php, apache ?? nginx, mysql);
             return r;
         }
 
@@ -131,6 +132,19 @@ namespace Phoron.Core
             sb.AppendLine("    DirectoryIndex index.php index.html index.htm");
             sb.AppendLine("</IfModule>");
             sb.AppendLine("AddDefaultCharset UTF-8");
+            // Beranda Phoron dijangkau lewat alias, bukan dengan menaruh berkas
+            // di folder proyek. Folder itu milik pengguna - sering kali www
+            // milik Laragon yang sudah punya index.php sendiri - dan menimpanya
+            // berarti menghapus pekerjaan orang. Dengan alias, /phoron selalu
+            // ada apa pun isi folder proyeknya.
+            var beranda = Paths.Fwd(Beranda.Folder);
+            sb.AppendLine("Alias " + Beranda.Alias + " \"" + beranda + "\"");
+            sb.AppendLine("<Directory \"" + beranda + "\">");
+            sb.AppendLine("    Options FollowSymLinks ExecCGI");
+            sb.AppendLine("    AllowOverride None");
+            sb.AppendLine("    Require all granted");
+            sb.AppendLine("    DirectoryIndex index.php");
+            sb.AppendLine("</Directory>");
             sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "mod_php.conf")) + "\"");
             sb.AppendLine("Include \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "ssl.conf")) + "\"");
             sb.AppendLine("IncludeOptional \"" + Paths.Fwd(Path.Combine(Paths.EtcApache, "alias")) + "/*.conf\"");
@@ -696,6 +710,16 @@ namespace Phoron.Core
             sb.AppendLine("        root         \"" + root + "\";");
             sb.AppendLine("        index        index.php index.html index.htm;");
             sb.AppendLine("        location / { try_files $uri $uri/ /index.php?$query_string; }");
+            // Setara Alias di Apache - lihat catatan di sana.
+            sb.AppendLine("        location " + Beranda.Alias + "/ {");
+            sb.AppendLine("            alias \"" + Paths.Fwd(Beranda.Folder) + "/\";");
+            sb.AppendLine("            index index.php;");
+            sb.AppendLine("            location ~ \\.php$ {");
+            sb.AppendLine("                fastcgi_pass   127.0.0.1:" + fcgiPort + ";");
+            sb.AppendLine("                fastcgi_param  SCRIPT_FILENAME $request_filename;");
+            sb.AppendLine("                include        fastcgi_params;");
+            sb.AppendLine("            }");
+            sb.AppendLine("        }");
             sb.AppendLine("        location ~ \\.php$ {");
             sb.AppendLine("            fastcgi_pass   127.0.0.1:" + fcgiPort + ";");
             sb.AppendLine("            fastcgi_index  index.php;");
