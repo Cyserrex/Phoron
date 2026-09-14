@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using Phoron.Core;
 
@@ -766,6 +767,49 @@ namespace Phoron.Tests
             }
             Ok("Tidak ada loc:T berbentuk atribut yang memuat backslash",
                nakal.Count == 0, string.Join(" | ", nakal.ToArray()));
+
+            UjiBanjarTidakBercampur(dirApp);
+        }
+
+        static void UjiBanjarTidakBercampur(string dirApp)
+        {
+            // Keluhan yang menimbulkan uji ini: bahasa Banjarnya "bercampur".
+            // Penyebabnya bukan kata yang salah, melainkan kata tugas Indonesia
+            // yang lolos di tengah kalimat - satu "yang" atau "dan" saja sudah
+            // membuat seluruh kalimat terasa bukan Banjar. Kata di bawah ini
+            // punya padanan Banjar yang wajib dipakai (nang, wan, matan, gasan,
+            // kada, atawa, amun, samunyaan, barakas, daptar, surang, kawa,
+            // lawan, hanyar, rancak, suah, ngaran, laman, kulihan, janis).
+            var terlarang = new[]
+            {
+                "yang", "dan", "dari", "untuk", "tidak", "atau", "kalau", "semua",
+                "berkas", "daftar", "sendiri", "bisa", "dengan", "baru", "sering",
+                "pernah", "nama", "halaman", "hasil", "jenis", "harus", "setiap",
+            };
+
+            Lang.Pakai(Lang.Banjar);
+            var bocor = new List<string>();
+            foreach (var f in Directory.GetFiles(dirApp, "*.xaml", SearchOption.AllDirectories))
+            {
+                var isi = File.ReadAllText(f);
+                foreach (Match m in Regex.Matches(isi, @"\{loc:T\s+'([^']*)'\}"))
+                    PeriksaBocor(m.Groups[1].Value, terlarang, bocor);
+                foreach (Match m in Regex.Matches(isi, "<loc:T\\s+Teks=\"([^\"]*)\"\\s*/>"))
+                    PeriksaBocor(WebUtility.HtmlDecode(m.Groups[1].Value), terlarang, bocor);
+            }
+            Lang.Pakai(Lang.Indonesia);
+
+            Ok("Terjemahan Banjar tidak bercampur kata tugas Indonesia",
+               bocor.Count == 0, string.Join(" | ", bocor.ToArray()));
+        }
+
+        static void PeriksaBocor(string kunci, string[] terlarang, List<string> bocor)
+        {
+            var hasil = Lang.T(kunci);
+            if (hasil == kunci) return;   // memang belum/tidak perlu diterjemahkan
+            foreach (var w in terlarang)
+                if (Regex.IsMatch(hasil, "(?<![A-Za-z])" + w + "(?![A-Za-z])", RegexOptions.IgnoreCase))
+                    bocor.Add("\"" + w + "\" di: " + hasil.Substring(0, Math.Min(50, hasil.Length)));
         }
 
         static string CariFolderApp()
