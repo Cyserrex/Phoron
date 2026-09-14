@@ -84,7 +84,7 @@
 
                     <TextBlock Text="{loc:T 'Folder proyek'}" Style="{StaticResource Label}"/>
                     <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
-                               Text="Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan."/>
+                               Text="{loc:T 'Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan.'}"/>
                     <ui:TextBox x:Name="TxtDocRoot" AcceptsReturn="True" Height="80"
                                 TextWrapping="NoWrap" VerticalContentAlignment="Top"
                                 VerticalScrollBarVisibility="Auto"/>

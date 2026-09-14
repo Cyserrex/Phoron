@@ -27,12 +27,12 @@
             <ProgressBar x:Name="Bar" Height="6" Minimum="0" Maximum="100"/>
 
             <Grid Margin="0,8,0,0">
-                <TextBlock x:Name="TxtUkuran" Text="Menyambung..." FontSize="12" Opacity="0.8"/>
+                <TextBlock x:Name="TxtUkuran" Text="{loc:T 'Menyambung...'}" FontSize="12" Opacity="0.8"/>
                 <TextBlock x:Name="TxtPersen" Text="" FontSize="12" FontWeight="SemiBold"
                            HorizontalAlignment="Right"/>
             </Grid>
 
-            <ui:Button x:Name="BtnBatal" Content="Batalkan" Margin="0,18,0,0"
+            <ui:Button x:Name="BtnBatal" Content="{loc:T 'Batalkan'}" Margin="0,18,0,0"
                        HorizontalAlignment="Right" Click="BtnBatal_Click"/>
         </StackPanel>
     </Grid>

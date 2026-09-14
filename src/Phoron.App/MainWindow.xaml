@@ -107,12 +107,12 @@
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <Ellipse x:Name="DotWeb" Width="10" Height="10" Fill="Gray"
                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="TxtWeb" Text="Apache berhenti" FontSize="12"/>
+                            <TextBlock x:Name="TxtWeb" Text="{loc:T 'Apache berhenti'}" FontSize="12"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                             <Ellipse x:Name="DotDb" Width="10" Height="10" Fill="Gray"
                                      VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBlock x:Name="TxtDb" Text="MySQL berhenti" FontSize="12"/>
+                            <TextBlock x:Name="TxtDb" Text="{loc:T 'MySQL berhenti'}" FontSize="12"/>
                         </StackPanel>
                         <ui:Button x:Name="BtnPower" Content="{loc:T 'Nyalakan semua'}"
                                    Appearance="Primary" HorizontalAlignment="Stretch"

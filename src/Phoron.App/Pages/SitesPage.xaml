@@ -14,7 +14,7 @@
         <StackPanel Grid.Row="0">
             <TextBlock Text="{loc:T 'Situs'}" Style="{StaticResource Judul}"/>
             <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"
-                       Text="Tiap subfolder di www otomatis dapat alamat sendiri."/>
+                       Text="{loc:T 'Tiap subfolder di www otomatis dapat alamat sendiri.'}"/>
         </StackPanel>
 
         <Border Grid.Row="1" Background="{DynamicResource ControlFillColorDefaultBrush}"
@@ -53,7 +53,7 @@
             <ui:Button Content="{loc:T 'Buka di browser'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
             <ui:Button Content="{loc:T 'Buka folder'}" Margin="0,0,8,0" Click="BtnFolder_Click"/>
             <ui:Button Content="{loc:T 'Terminal di sini'}" Margin="0,0,8,0" Click="BtnTerminal_Click"/>
-            <ui:Button Content="Segarkan &amp; sinkronkan" Margin="0,0,8,0" Click="BtnSegarkan_Click"/>
+            <ui:Button Content="{loc:T 'Segarkan &amp; sinkronkan'}" Margin="0,0,8,0" Click="BtnSegarkan_Click"/>
             <ui:Button Content="{loc:T 'Buka berkas hosts'}" Click="BtnHosts_Click"/>
         </WrapPanel>
     </Grid>

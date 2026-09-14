@@ -42,7 +42,7 @@
                              Checked="SwWindows_Ubah" Unchecked="SwWindows_Ubah"/>
             <TextBlock x:Name="TxtWindows" Style="{StaticResource SubJudul}" FontSize="12"
                        Margin="52,0,0,10"
-                       Text="Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela."/>
+                       Text="{loc:T 'Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela.'}"/>
 
             <ui:ToggleSwitch x:Name="SwAutoStart" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
                              Content="{loc:T 'Nyalakan layanan otomatis saat Phoron dibuka'}"/>
@@ -56,17 +56,21 @@
             <ui:ToggleSwitch x:Name="SwBerandaAkar" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Tampilkan beranda Phoron di http://localhost/'}"/>
             <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri."/>
+                       Text="{loc:T 'Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri.'}"/>
 
             <ui:ToggleSwitch x:Name="SwLogRinci" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Catat log rinci'}"/>
             <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="Baku mati agar Phoron ringan: log akses Apache dan seluruh keluaran layanan tidak ditulis (mysqld sendiri mencetak ratusan baris tiap kali menyala). Log GALAT Apache, MySQL, dan PHP tetap menyala — itulah yang menjelaskan kalau ada yang rusak."/>
+                       Text="{loc:T 'Baku mati agar Phoron ringan: log akses Apache dan seluruh keluaran layanan tidak ditulis (mysqld sendiri mencetak ratusan baris tiap kali menyala). Log GALAT Apache, MySQL, dan PHP tetap menyala — itulah yang menjelaskan kalau ada yang rusak.'}"/>
 
             <ui:ToggleSwitch x:Name="SwPhpIni" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Tulis php.ini ke dalam folder PHP'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="Baku: php.ini ditulis ke etc\php\&lt;versi&gt;\ dan folder PHP tidak disentuh. Nyalakan kalau Anda ingin php.exe dari editor atau Composer di luar Phoron ikut memakai setelan yang sama. Hati-hati bila versi PHP-nya dipinjam dari Laragon - berkasnya dipakai bersama. php.ini asli dicadangkan sekali ke php.ini.sebelum-phoron."/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10">
+                <TextBlock.Text>
+                    <!-- Bentuk elemen: parser markup extension memakan "\". -->
+                    <loc:T Teks="Baku: php.ini ditulis ke etc\php\&lt;versi&gt;\ dan folder PHP tidak disentuh. Nyalakan kalau Anda ingin php.exe dari editor atau Composer di luar Phoron ikut memakai setelan yang sama. Hati-hati bila versi PHP-nya dipinjam dari Laragon - berkasnya dipakai bersama. php.ini asli dicadangkan sekali ke php.ini.sebelum-phoron."/>
+                </TextBlock.Text>
+            </TextBlock>
 
             <TextBlock Text="{loc:T 'Terminal'}" Style="{StaticResource Label}"/>
             <ComboBox x:Name="CmbTerminal" Width="240" HorizontalAlignment="Left"
@@ -78,7 +82,7 @@
 
             <TextBlock Text="{loc:T 'Folder bin yang dipindai'}" Style="{StaticResource Label}"/>
             <TextBlock Style="{StaticResource SubJudul}"
-                       Text="Satu folder per baris. Folder bin Laragon boleh ikut - Phoron tidak pernah menulis ke dalamnya."/>
+                       Text="{loc:T 'Satu folder per baris. Folder bin Laragon boleh ikut - Phoron tidak pernah menulis ke dalamnya.'}"/>
             <!-- Disimpan saat kehilangan fokus, bukan tiap ketukan: mengubah
                  daftar folder bin memicu pemindaian ulang seluruh versi, dan
                  melakukannya per huruf yang diketik akan membuat kotak ini macet. -->
@@ -118,7 +122,7 @@
                                      Margin="0,0,0,4"
                                      Content="{loc:T 'Cek rilis baru di GitHub saat Phoron dibuka'}"/>
                     <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                               Text="Pengecekan dilewati kalau baru dilakukan dalam 6 jam terakhir - API GitHub tanpa token dibatasi 60 permintaan per jam."/>
+                               Text="{loc:T 'Pengecekan dilewati kalau baru dilakukan dalam 6 jam terakhir - API GitHub tanpa token dibatasi 60 permintaan per jam.'}"/>
                     <TextBlock x:Name="TxtPembaruan" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <WrapPanel>
                         <ui:Button x:Name="BtnCek" Content="{loc:T 'Cek pembaruan sekarang'}"

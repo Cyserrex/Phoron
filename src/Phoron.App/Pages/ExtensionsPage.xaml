@@ -13,7 +13,7 @@
         <StackPanel Grid.Row="0">
             <TextBlock Text="{loc:T 'Ekstensi PHP'}" Style="{StaticResource Judul}"/>
             <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"
-                       Text="Centang ekstensi yang dipakai profil aktif."/>
+                       Text="{loc:T 'Centang ekstensi yang dipakai profil aktif.'}"/>
         </StackPanel>
 
         <Grid Grid.Row="1">
@@ -24,7 +24,7 @@
 
             <DockPanel Grid.Column="0" Margin="0,0,12,0">
                 <ui:TextBox x:Name="TxtCari" DockPanel.Dock="Top" Margin="0,0,0,8"
-                            PlaceholderText="Cari ekstensi..." TextChanged="TxtCari_Changed"/>
+                            PlaceholderText="{loc:T 'Cari ekstensi...'}" TextChanged="TxtCari_Changed"/>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="DaftarExt">
                         <ItemsControl.ItemsPanel>

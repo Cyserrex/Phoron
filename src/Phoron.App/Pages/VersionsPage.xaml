@@ -13,7 +13,7 @@
         <StackPanel Grid.Row="0">
             <TextBlock Text="{loc:T 'Versi terpasang'}" Style="{StaticResource Judul}"/>
             <TextBlock Style="{StaticResource SubJudul}"
-                       Text="Semua folder versi yang ditemukan di folder bin yang terdaftar. Folder bin Laragon ikut dipindai bila ada."/>
+                       Text="{loc:T 'Semua folder versi yang ditemukan di folder bin yang terdaftar. Folder bin Laragon ikut dipindai bila ada.'}"/>
         </StackPanel>
 
         <ListView x:Name="Daftar" Grid.Row="1" Margin="0,0,0,10">
@@ -34,7 +34,12 @@
                 <ui:Button Content="{loc:T 'Pindai ulang'}" Margin="0,0,8,0" Click="BtnPindai_Click"/>
                 <ui:Button Content="{loc:T 'Tambah folder bin'}" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>
                 <ui:Button Content="{loc:T 'Buka folder versi'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
-                <ui:Button Content="Katalog unduhan (etc\catalog.ini)" Click="BtnKatalog_Click"/>
+                <ui:Button Click="BtnKatalog_Click">
+                    <ui:Button.Content>
+                        <!-- Bentuk elemen: parser markup extension memakan "\". -->
+                        <loc:T Teks="Katalog unduhan (etc\catalog.ini)"/>
+                    </ui:Button.Content>
+                </ui:Button>
             </WrapPanel>
 
             <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8" Padding="14">
@@ -49,15 +54,15 @@
                         <ComboBox x:Name="CmbSumber" Grid.Column="0" Margin="0,0,8,0"
                                   SelectionChanged="CmbSumber_Changed">
                             <ComboBoxItem Content="PHP (windows.php.net)" Tag="php" IsSelected="True"/>
-                            <ComboBoxItem Content="Katalog lokal" Tag="katalog"/>
+                            <ComboBoxItem Content="{loc:T 'Katalog lokal'}" Tag="katalog"/>
                         </ComboBox>
                         <ComboBox x:Name="CmbPaket" Grid.Column="1" Margin="0,0,8,0"/>
-                        <ui:Button x:Name="BtnPasang" Grid.Column="2" Content="Unduh &amp; pasang"
+                        <ui:Button x:Name="BtnPasang" Grid.Column="2" Content="{loc:T 'Unduh &amp; pasang'}"
                                    Appearance="Primary" Click="BtnPasang_Click"/>
                     </Grid>
                     <ProgressBar x:Name="Bar" Height="4" Margin="0,10,0,0" Visibility="Collapsed"/>
                     <TextBlock x:Name="TxtStatus" Margin="0,8,0,0" Opacity="0.75" TextWrapping="Wrap"
-                               Text="Paket diunduh ke folder bin milik Phoron, tidak menyentuh folder Laragon."/>
+                               Text="{loc:T 'Paket diunduh ke folder bin milik Phoron, tidak menyentuh folder Laragon.'}"/>
                 </StackPanel>
             </Border>
         </StackPanel>

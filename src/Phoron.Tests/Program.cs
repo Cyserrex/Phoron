@@ -52,6 +52,7 @@ namespace Phoron.Tests
                 UjiPembaruan();
                 UjiAutostart();
                 UjiLabelVersi();
+                UjiBahasa();
             }
             catch (Exception ex)
             {
@@ -712,6 +713,71 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiBahasa()
+        {
+            Bagian("Bahasa");
+
+            // Kamus dibangun di konstruktor statis. Satu kunci ganda saja membuat
+            // SELURUH aplikasi mati begitu teks pertama diterjemahkan, dan
+            // kompilasi tidak melihatnya sama sekali - sudah pernah terjadi.
+            string ledak = null;
+            try
+            {
+                foreach (var kode in Lang.Semua)
+                {
+                    Lang.Pakai(kode);
+                    Lang.T("Beranda");
+                }
+            }
+            catch (Exception ex)
+            {
+                var akar = ex;
+                while (akar.InnerException != null) akar = akar.InnerException;
+                ledak = akar.Message;
+            }
+            finally { Lang.Pakai(Lang.Indonesia); }
+            Ok("Kamus tiap bahasa terbentuk (tidak ada kunci ganda)", ledak == null, ledak);
+
+            Lang.Pakai(Lang.Inggris);
+            Ok("Teks diterjemahkan", Lang.T("Beranda") == "Home", Lang.T("Beranda"));
+            Ok("Teks tanpa padanan jatuh ke Indonesia",
+               Lang.T("Kalimat yang tidak ada di kamus") == "Kalimat yang tidak ada di kamus");
+            Lang.Pakai(Lang.Indonesia);
+            Ok("Bahasa Indonesia mengembalikan kuncinya sendiri", Lang.T("Beranda") == "Beranda");
+
+            // Parser markup extension WPF memakan "\" di dalam argumen, jadi
+            // {loc:T 'etc\catalog.ini'} tampil sebagai "etccatalog.ini" tanpa
+            // galat apa pun. Teks berbackslash harus memakai bentuk elemen
+            // <loc:T Teks="..."/>.
+            var dirApp = CariFolderApp();
+            if (dirApp == null)
+            {
+                Ok("Folder sumber XAML ditemukan", false, "tidak ketemu dari " + AppDomain.CurrentDomain.BaseDirectory);
+                return;
+            }
+            var nakal = new List<string>();
+            foreach (var f in Directory.GetFiles(dirApp, "*.xaml", SearchOption.AllDirectories))
+            {
+                foreach (Match m in Regex.Matches(File.ReadAllText(f), @"\{loc:T\s+'([^']*)'\}"))
+                    if (m.Groups[1].Value.IndexOf('\\') >= 0)
+                        nakal.Add(Path.GetFileName(f) + ": " + m.Groups[1].Value);
+            }
+            Ok("Tidak ada loc:T berbentuk atribut yang memuat backslash",
+               nakal.Count == 0, string.Join(" | ", nakal.ToArray()));
+        }
+
+        static string CariFolderApp()
+        {
+            var d = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (d != null)
+            {
+                var calon = Path.Combine(d.FullName, Path.Combine("src", "Phoron.App"));
+                if (Directory.Exists(calon)) return calon;
+                d = d.Parent;
+            }
+            return null;
         }
 
         static void UjiNodeApps()
