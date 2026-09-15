@@ -97,6 +97,15 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Simpan-seketika di Profil dan Ekstensi
+                { "Nyalakan ulang web server",
+                  "Restart the web server" },
+                { "Switch ke profil ini",
+                  "Switch to this profile" },
+                { "Setiap centangan langsung tersimpan ke profil dan php.ini ditulis ulang - tidak ada tombol simpan.",
+                  "Every tick is saved to the profile straight away and php.ini is rewritten - there is no save button." },
+                { "Setiap perubahan langsung tersimpan ke berkas profil - tidak ada tombol simpan.",
+                  "Every change is saved to the profile file straight away - there is no save button." },
                 // Halaman Tentang
                 { "Tentang",
                   "About" },
@@ -320,6 +329,15 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Simpan-seketika di Profil dan Ekstensi
+                { "Nyalakan ulang web server",
+                  "Uripna maneh web server" },
+                { "Switch ke profil ini",
+                  "Ganti menyang profil iki" },
+                { "Setiap centangan langsung tersimpan ke profil dan php.ini ditulis ulang - tidak ada tombol simpan.",
+                  "Saben centhangan langsung disimpen menyang profil lan php.ini ditulis maneh - ora ana tombol simpen." },
+                { "Setiap perubahan langsung tersimpan ke berkas profil - tidak ada tombol simpan.",
+                  "Saben owahan langsung disimpen menyang berkas profil - ora ana tombol simpen." },
                 // Halaman Tentang
                 { "Tentang",
                   "Ngenani" },
@@ -515,6 +533,15 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Simpan-seketika di Profil dan Ekstensi
+                { "Nyalakan ulang web server",
+                  "Hidupakan pulang web server" },
+                { "Switch ke profil ini",
+                  "Ganti ka profil ngini" },
+                { "Setiap centangan langsung tersimpan ke profil dan php.ini ditulis ulang - tidak ada tombol simpan.",
+                  "Satiap centangan langsung tasimpan ka profil wan php.ini ditulis pulang - kadada tombol simpan." },
+                { "Setiap perubahan langsung tersimpan ke berkas profil - tidak ada tombol simpan.",
+                  "Satiap paubahan langsung tasimpan ka barakas profil - kadada tombol simpan." },
                 // Halaman Tentang
                 { "Tentang",
                   "Maklumat" },

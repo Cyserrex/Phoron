@@ -42,7 +42,7 @@
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
                 <StackPanel x:Name="Editor">
                     <TextBlock Text="{loc:T 'Nama profil'}" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtNama"/>
+                    <ui:TextBox x:Name="TxtNama" LostFocus="Teks_Lepas"/>
 
                     <TextBlock Text="{loc:T 'Web server'}" Style="{StaticResource Label}"/>
                     <ComboBox x:Name="CmbWeb" SelectionChanged="CmbWeb_Changed">
@@ -51,16 +51,16 @@
                     </ComboBox>
 
                     <TextBlock Text="{loc:T 'Versi PHP'}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbPhp"/>
+                    <ComboBox x:Name="CmbPhp" SelectionChanged="Kendali_Ubah"/>
 
                     <TextBlock x:Name="LblApache" Text="{loc:T 'Versi Apache'}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbApache"/>
+                    <ComboBox x:Name="CmbApache" SelectionChanged="Kendali_Ubah"/>
 
                     <TextBlock x:Name="LblNginx" Text="{loc:T 'Versi Nginx'}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbNginx"/>
+                    <ComboBox x:Name="CmbNginx" SelectionChanged="Kendali_Ubah"/>
 
                     <TextBlock Text="{loc:T 'Versi MySQL / MariaDB'}" Style="{StaticResource Label}"/>
-                    <ComboBox x:Name="CmbMysql"/>
+                    <ComboBox x:Name="CmbMysql" SelectionChanged="Kendali_Ubah"/>
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -70,38 +70,61 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Margin="0,0,6,0">
                             <TextBlock Text="{loc:T 'Port HTTP'}" Style="{StaticResource Label}"/>
-                            <ui:TextBox x:Name="TxtPortHttp"/>
+                            <ui:TextBox x:Name="TxtPortHttp" LostFocus="Teks_Lepas"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="3,0,3,0">
                             <TextBlock Text="{loc:T 'Port HTTPS'}" Style="{StaticResource Label}"/>
-                            <ui:TextBox x:Name="TxtPortHttps"/>
+                            <ui:TextBox x:Name="TxtPortHttps" LostFocus="Teks_Lepas"/>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Margin="6,0,0,0">
                             <TextBlock Text="{loc:T 'Port MySQL'}" Style="{StaticResource Label}"/>
-                            <ui:TextBox x:Name="TxtPortMysql"/>
+                            <ui:TextBox x:Name="TxtPortMysql" LostFocus="Teks_Lepas"/>
                         </StackPanel>
                     </Grid>
 
                     <TextBlock Text="{loc:T 'Folder proyek'}" Style="{StaticResource Label}"/>
                     <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
                                Text="{loc:T 'Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan.'}"/>
-                    <ui:TextBox x:Name="TxtDocRoot" AcceptsReturn="True" Height="80"
+                    <ui:TextBox x:Name="TxtDocRoot" LostFocus="Teks_Lepas" AcceptsReturn="True" Height="80"
                                 TextWrapping="NoWrap" VerticalContentAlignment="Top"
                                 VerticalScrollBarVisibility="Auto"/>
                     <ui:Button Content="{loc:T 'Tambah folder...'}" Margin="0,6,0,0"
                                HorizontalAlignment="Left" Click="BtnPilihFolder_Click"/>
 
                     <TextBlock Text="{loc:T 'Akhiran nama situs'}" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtSuffix" PlaceholderText="test"/>
+                    <ui:TextBox x:Name="TxtSuffix" LostFocus="Teks_Lepas" PlaceholderText="test"/>
 
                     <TextBlock Text="{loc:T 'Catatan'}" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtCatatan" AcceptsReturn="True" Height="60"
+                    <ui:TextBox x:Name="TxtCatatan" LostFocus="Teks_Lepas" AcceptsReturn="True" Height="60"
                                 TextWrapping="Wrap" VerticalContentAlignment="Top"/>
 
+                    <!-- Pengganti kotak dialog yang dulu muncul saat menekan
+                         Simpan. Simpan-seketika tidak boleh menyela ketikan
+                         dengan dialog, jadi keberatannya ditulis di sini dan
+                         tinggal di layar selama masih berlaku. -->
+                    <Border x:Name="PanelMasalah" Visibility="Collapsed" Margin="0,14,0,0"
+                            Background="#33E0A020" CornerRadius="8" Padding="12">
+                        <TextBlock x:Name="TxtMasalah" TextWrapping="Wrap"/>
+                    </Border>
+
+                    <Border x:Name="PanelRestart" Visibility="Collapsed" Margin="0,10,0,0"
+                            Background="#33E0A020" CornerRadius="8" Padding="12">
+                        <DockPanel>
+                            <ui:Button DockPanel.Dock="Right" VerticalAlignment="Center"
+                                       Content="{loc:T 'Nyalakan ulang web server'}" Click="BtnRestart_Click"/>
+                            <TextBlock x:Name="TxtRestart" TextWrapping="Wrap" VerticalAlignment="Center"
+                                       Margin="0,0,12,0"/>
+                        </DockPanel>
+                    </Border>
+
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
-                        <ui:Button Content="{loc:T 'Simpan'}" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
-                        <ui:Button Content="{loc:T 'Simpan lalu switch ke profil ini'}" Click="BtnSimpanSwitch_Click"/>
+                        <ui:Button Content="{loc:T 'Switch ke profil ini'}" Appearance="Primary"
+                                   Click="BtnSwitch_Click"/>
                     </StackPanel>
+
+                    <TextBlock x:Name="TxtStatusSimpan" Style="{StaticResource SubJudul}" FontSize="12"
+                               Margin="0,0,0,10" TextWrapping="Wrap"
+                               Text="{loc:T 'Setiap perubahan langsung tersimpan ke berkas profil - tidak ada tombol simpan.'}"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

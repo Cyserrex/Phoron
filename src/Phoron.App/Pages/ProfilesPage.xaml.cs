@@ -14,6 +14,9 @@ namespace Phoron.App.Pages
         Profile _current;
         bool _loading;
 
+        /// <summary>Profil aktif sudah berubah tapi layanan masih memakai yang lama.</summary>
+        bool _perluRestart;
+
         /// <summary>Baris ComboBox versi; entri kosong dipakai untuk "tidak dipakai".</summary>
         class Row
         {
@@ -147,7 +150,7 @@ namespace Phoron.App.Pages
             return row != null && row.Pkg != null ? row.Pkg.Id : "";
         }
 
-        void CmbWeb_Changed(object sender, SelectionChangedEventArgs e) { AturTampilanWeb(); }
+        void CmbWeb_Changed(object sender, SelectionChangedEventArgs e) { AturTampilanWeb(); Simpan(); }
 
         /// <summary>Sembunyikan pilihan yang tidak relevan - profil Nginx tidak memakai Apache dan sebaliknya.</summary>
         void AturTampilanWeb()
@@ -160,37 +163,41 @@ namespace Phoron.App.Pages
 
         // ------------------------------------------------------------------ Aksi
 
-        bool Kumpulkan(Profile p)
+        /// <summary>
+        /// Pindahkan isi layar ke profil. TIDAK memunculkan dialog: fungsi ini
+        /// berjalan setiap kali kendali berubah, dan dialog di tengah ketikan
+        /// jauh lebih mengganggu daripada tombol simpan yang tadinya ada.
+        /// Keberatan dikembalikan sebagai teks untuk ditempel di layar.
+        /// Kolom yang nilainya tidak masuk akal TIDAK ditulis - nilai lamanya
+        /// dipertahankan, bukan ditimpa dengan sesuatu yang rusak.
+        /// </summary>
+        List<string> Kumpulkan(Profile p)
         {
-            if (string.IsNullOrWhiteSpace(TxtNama.Text)) { AppState.Warn("Nama profil belum diisi."); return false; }
-            int http, https, mysql;
-            if (!int.TryParse(TxtPortHttp.Text, out http) || http < 1 || http > 65535)
-            { AppState.Warn("Port HTTP tidak masuk akal."); return false; }
-            if (!int.TryParse(TxtPortHttps.Text, out https) || https < 1 || https > 65535)
-            { AppState.Warn("Port HTTPS tidak masuk akal."); return false; }
-            if (!int.TryParse(TxtPortMysql.Text, out mysql) || mysql < 1 || mysql > 65535)
-            { AppState.Warn("Port MySQL tidak masuk akal."); return false; }
+            var masalah = new List<string>();
 
-            p.Name = TxtNama.Text.Trim();
+            if (string.IsNullOrWhiteSpace(TxtNama.Text)) masalah.Add("Nama profil belum diisi.");
+            else p.Name = TxtNama.Text.Trim();
+
+            p.HttpPort = Port(TxtPortHttp.Text, p.HttpPort, "HTTP", masalah);
+            p.HttpsPort = Port(TxtPortHttps.Text, p.HttpsPort, "HTTPS", masalah);
+            p.MySqlPort = Port(TxtPortMysql.Text, p.MySqlPort, "MySQL", masalah);
+
             var item = CmbWeb.SelectedItem as ComboBoxItem;
             p.WebServer = item != null ? (item.Tag ?? "apache").ToString() : "apache";
             p.PhpId = IdDari(CmbPhp);
             p.ApacheId = IdDari(CmbApache);
             p.NginxId = IdDari(CmbNginx);
             p.MySqlId = IdDari(CmbMysql);
-            p.HttpPort = http;
-            p.HttpsPort = https;
-            p.MySqlPort = mysql;
             p.ProjectRoots = (TxtDocRoot.Text ?? "")
                 .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(x => x.Trim().TrimEnd('\\')).Where(x => x.Length > 0)
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var hilang = p.ProjectRoots.Where(r => !System.IO.Directory.Exists(r)).ToList();
-            if (hilang.Count > 0
-                && !AppState.Ask("Folder ini belum ada:\n\n" + string.Join("\n", hilang)
-                                 + "\n\nTetap simpan?")) return false;
             p.SiteSuffix = string.IsNullOrWhiteSpace(TxtSuffix.Text) ? "test" : TxtSuffix.Text.Trim();
             p.Notes = TxtCatatan.Text;
+
+            var hilang = p.ProjectRoots.Where(r => !System.IO.Directory.Exists(r)).ToList();
+            if (hilang.Count > 0)
+                masalah.Add("Folder ini belum ada: " + string.Join(", ", hilang));
 
             var php = _e.Find(BinKind.Php, p.PhpId);
             var apache = _e.Find(BinKind.Apache, p.ApacheId);
@@ -200,28 +207,83 @@ namespace Phoron.App.Pages
             {
                 // Bukan penghalang - ada kombinasi yang tetap jalan - tapi ini
                 // penyebab paling umum Apache mati seketika tanpa pesan.
-                if (!AppState.Ask("PHP dibangun dengan " + php.Compiler + " sedangkan Apache dengan "
-                    + apache.Compiler + ".\n\nKombinasi beda toolset biasanya membuat Apache gagal start. "
-                    + "Tetap simpan?")) return false;
+                masalah.Add("PHP dibangun dengan " + php.Compiler + " sedangkan Apache dengan "
+                    + apache.Compiler + ". Kombinasi beda toolset biasanya membuat Apache gagal start.");
             }
-            return true;
+            return masalah;
         }
 
-        void BtnSimpan_Click(object sender, RoutedEventArgs e) { Simpan(); }
+        static int Port(string teks, int lama, string nama, List<string> masalah)
+        {
+            int n;
+            if (int.TryParse((teks ?? "").Trim(), out n) && n >= 1 && n <= 65535) return n;
+            masalah.Add("Port " + nama + " tidak masuk akal, jadi tetap " + lama + ".");
+            return lama;
+        }
 
+        void Kendali_Ubah(object sender, SelectionChangedEventArgs e) { Simpan(); }
+
+        void Teks_Lepas(object sender, RoutedEventArgs e) { Simpan(); }
+
+        /// <summary>
+        /// Tulis profil ke berkasnya. Dipanggil sendiri setiap kali ada
+        /// perubahan; tidak ada tombol simpan lagi.
+        /// </summary>
         Profile Simpan()
         {
-            if (_current == null) return null;
-            if (!Kumpulkan(_current)) return null;
+            if (_loading || _current == null) return null;
+
+            var masalah = Kumpulkan(_current);
             ProfileStore.Save(_current);
-            _e.Reload();
+
+            // _e.Reload() sengaja TIDAK dipanggil: ia membaca ulang seluruh
+            // profil dari disk dan mengganti objeknya dengan yang baru, sehingga
+            // _current jadi menunjuk objek yatim dan suntingan berikutnya masuk
+            // ke tempat yang salah. Nama di daftar cukup digambar ulang.
+            Daftar.Items.Refresh();
             AppState.RaiseChanged();
-            IsiDaftar(_current);
-            _e.Say("Profil \"" + _current.Name + "\" disimpan.");
+
+            // Profil yang sedang dipakai layanan: berkasnya sudah berubah, tapi
+            // Apache/MySQL masih berjalan dengan yang lama.
+            if (_e.Active != null && _e.Active.FileName == _current.FileName
+                && _e.Services.WebState == ServiceState.Jalan)
+                _perluRestart = true;
+
+            TxtStatusSimpan.Text = "Tersimpan " + DateTime.Now.ToString("HH:mm:ss")
+                + " ke profiles\\" + _current.FileName + ".ini";
+            TampilkanMasalah(masalah);
+            SegarkanBilah();
             return _current;
         }
 
-        async void BtnSimpanSwitch_Click(object sender, RoutedEventArgs e)
+        void TampilkanMasalah(List<string> masalah)
+        {
+            PanelMasalah.Visibility = masalah.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (masalah.Count > 0) TxtMasalah.Text = string.Join(Environment.NewLine, masalah);
+        }
+
+        void SegarkanBilah()
+        {
+            bool jalan = _e.Services.WebState == ServiceState.Jalan;
+            PanelRestart.Visibility = _perluRestart && jalan ? Visibility.Visible : Visibility.Collapsed;
+            if (PanelRestart.Visibility == Visibility.Visible)
+                TxtRestart.Text = "Profil yang sedang dipakai sudah berubah, tapi web server membaca "
+                    + "konfigurasinya HANYA saat start - jadi perubahan ini belum berlaku di browser.";
+        }
+
+        async void BtnRestart_Click(object sender, RoutedEventArgs e)
+        {
+            Simpan();
+            AppState.ShowWarnings(_e.Apply());
+            var main = Window.GetWindow(this) as MainWindow;
+            await _e.StopWebAsync();
+            await _e.StartWebAsync();
+            if (main != null) main.RefreshStatus();
+            _perluRestart = false;
+            SegarkanBilah();
+        }
+
+        async void BtnSwitch_Click(object sender, RoutedEventArgs e)
         {
             var p = Simpan();
             if (p == null) return;
@@ -232,6 +294,8 @@ namespace Phoron.App.Pages
             var main = Window.GetWindow(this) as MainWindow;
             if (main != null) main.RefreshStatus();
             AppState.ShowWarnings(warnings);
+            _perluRestart = false;
+            SegarkanBilah();
             AppState.Info("Sekarang memakai profil \"" + target.Name + "\".");
         }
 

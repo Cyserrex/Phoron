@@ -11,7 +11,7 @@ REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-set "VERSION=1.13.1"
+set "VERSION=1.14.0"
 set "SETUP=installer\Output\Phoron-%VERSION%-Setup.exe"
 
 rem Ikon dirakit ulang dari logo lebih dulu: installer dan exe harus memakai

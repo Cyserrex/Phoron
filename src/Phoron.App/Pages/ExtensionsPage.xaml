@@ -40,36 +40,55 @@
                 <StackPanel>
                     <TextBlock Text="{loc:T 'Setelan php.ini yang sering diubah'}" Style="{StaticResource Label}"/>
                     <TextBlock Text="memory_limit" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtMemory" PlaceholderText="512M"/>
+                    <ui:TextBox x:Name="TxtMemory" LostFocus="Teks_Lepas" PlaceholderText="512M"/>
                     <TextBlock Text="upload_max_filesize" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtUpload" PlaceholderText="128M"/>
+                    <ui:TextBox x:Name="TxtUpload" LostFocus="Teks_Lepas" PlaceholderText="128M"/>
                     <TextBlock Text="post_max_size" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtPost" PlaceholderText="128M"/>
+                    <ui:TextBox x:Name="TxtPost" LostFocus="Teks_Lepas" PlaceholderText="128M"/>
                     <TextBlock Text="max_execution_time" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtExec" PlaceholderText="120"/>
+                    <ui:TextBox x:Name="TxtExec" LostFocus="Teks_Lepas" PlaceholderText="120"/>
                     <TextBlock Text="date.timezone" Style="{StaticResource Label}"/>
-                    <ui:TextBox x:Name="TxtTz" PlaceholderText="Asia/Makassar"/>
+                    <ui:TextBox x:Name="TxtTz" LostFocus="Teks_Lepas" PlaceholderText="Asia/Makassar"/>
                     <!-- Banyak proyek PHP lama (CodeIgniter 3, skrip warisan)
                          memakai tag pendek; mematikannya membuat view gagal
                          diurai dengan galat yang tidak menyebut sebabnya. -->
-                    <CheckBox x:Name="ChkShortTag" Margin="0,14,0,0">
+                    <CheckBox x:Name="ChkShortTag" Margin="0,14,0,0" Checked="Chk_Ubah" Unchecked="Chk_Ubah">
                         <TextBlock Text="{loc:T 'short_open_tag (perlu untuk banyak proyek lama)'}"
                                    TextWrapping="Wrap"/>
                     </CheckBox>
                     <!-- Teks di dalam TextBlock supaya garis bawahnya tidak dimakan
                          sebagai penanda tombol akses. -->
-                    <CheckBox x:Name="ChkErrors" Margin="0,14,0,0">
+                    <CheckBox x:Name="ChkErrors" Margin="0,14,0,0" Checked="Chk_Ubah" Unchecked="Chk_Ubah">
                         <TextBlock Text="display_errors"/>
                     </CheckBox>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
 
-        <WrapPanel Grid.Row="2" Margin="0,12,0,0">
-            <ui:Button Content="{loc:T 'Simpan ke profil'}" Appearance="Primary" Margin="0,0,8,0" Click="BtnSimpan_Click"/>
-            <ui:Button Content="{loc:T 'Ambil dari php.ini asli'}" Margin="0,0,8,0" Click="BtnAmbil_Click"/>
-            <ui:Button Content="{loc:T 'Buka php.ini hasil'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
-            <ui:Button Content="{loc:T 'Uji: php -m'}" Click="BtnUji_Click"/>
-        </WrapPanel>
+        <StackPanel Grid.Row="2" Margin="0,12,0,0">
+            <!-- Apache membaca php.ini HANYA saat start. Tanpa pemberitahuan yang
+                 menetap di layar, centangan terasa "tidak berpengaruh" - padahal
+                 berkasnya sudah benar, servernya saja yang masih memakai yang
+                 lama. Inilah yang dulu bikin OCI_COMMIT_ON_SUCCESS hilang. -->
+            <Border x:Name="PanelRestart" Visibility="Collapsed" Margin="0,0,0,10"
+                    Background="#33E0A020" CornerRadius="8" Padding="12">
+                <DockPanel>
+                    <ui:Button DockPanel.Dock="Right" VerticalAlignment="Center"
+                               Content="{loc:T 'Nyalakan ulang web server'}" Click="BtnRestart_Click"/>
+                    <TextBlock x:Name="TxtRestart" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Margin="0,0,12,0"/>
+                </DockPanel>
+            </Border>
+
+            <WrapPanel>
+                <ui:Button Content="{loc:T 'Ambil dari php.ini asli'}" Margin="0,0,8,0" Click="BtnAmbil_Click"/>
+                <ui:Button Content="{loc:T 'Buka php.ini hasil'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
+                <ui:Button Content="{loc:T 'Uji: php -m'}" Click="BtnUji_Click"/>
+            </WrapPanel>
+
+            <TextBlock x:Name="TxtStatusSimpan" Style="{StaticResource SubJudul}" FontSize="12"
+                       Margin="0,8,0,0" TextWrapping="Wrap"
+                       Text="{loc:T 'Setiap centangan langsung tersimpan ke profil dan php.ini ditulis ulang - tidak ada tombol simpan.'}"/>
+        </StackPanel>
     </Grid>
 </UserControl>

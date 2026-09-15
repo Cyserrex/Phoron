@@ -13,13 +13,37 @@ namespace Phoron.App.Pages
         readonly Engine _e = AppState.Engine;
         readonly List<CheckBox> _kotak = new List<CheckBox>();
 
+        /// <summary>Sedang mengisi layar - perubahan kendali bukan dari pengguna, jangan disimpan.</summary>
+        bool _muat;
+
+        /// <summary>php.ini sudah ditulis ulang tapi web server masih memakai yang lama.</summary>
+        bool _perluRestart;
+
+        /// <summary>
+        /// Mencentang belasan ekstensi berturut-turut tidak boleh memicu belasan
+        /// penulisan konfigurasi penuh. Centangan dikumpulkan dulu sebentar, baru
+        /// ditulis sekali.
+        /// </summary>
+        readonly System.Windows.Threading.DispatcherTimer _tunda =
+            new System.Windows.Threading.DispatcherTimer
+            { Interval = TimeSpan.FromMilliseconds(700) };
+
         public ExtensionsPage()
         {
             InitializeComponent();
+            _tunda.Tick += (s, e) => Simpan();
             Isi();
+            SegarkanBilah();
         }
 
         void Isi()
+        {
+            _muat = true;
+            try { IsiDalam(); }
+            finally { _muat = false; }
+        }
+
+        void IsiDalam()
         {
             var php = _e.Php;
             var p = _e.Active;
@@ -46,6 +70,8 @@ namespace Phoron.App.Pages
                     Width = 165,
                     Margin = new Thickness(0, 2, 8, 2),
                 };
+                cb.Checked += Kotak_Ubah;
+                cb.Unchecked += Kotak_Ubah;
                 _kotak.Add(cb);
             }
             DaftarExt.ItemsSource = _kotak;
@@ -123,13 +149,38 @@ namespace Phoron.App.Pages
             if (hilang.Count > 0)
                 AppState.Warn("Tidak ada DLL-nya di " + php.Id + ", jadi dilewati: "
                               + string.Join(", ", hilang));
-            AppState.Info("Centangan disesuaikan. Tekan \"Simpan ke profil\" untuk menerapkannya.");
+            Simpan();
+            AppState.Info("Centangan disesuaikan dan langsung disimpan.");
         }
 
-        void BtnSimpan_Click(object sender, RoutedEventArgs e)
+        void Kotak_Ubah(object sender, RoutedEventArgs e) { Jadwalkan(); }
+
+        void Chk_Ubah(object sender, RoutedEventArgs e) { Jadwalkan(); }
+
+        // Kotak teks tidak ditunda: fokus sudah lepas, artinya pengguna selesai
+        // mengetik dan menunggu hasilnya.
+        void Teks_Lepas(object sender, RoutedEventArgs e) { Simpan(); }
+
+        void Jadwalkan()
         {
+            if (_muat) return;
+            _tunda.Stop();
+            _tunda.Start();
+        }
+
+        /// <summary>
+        /// Menulis centangan ke profil lalu menulis ulang php.ini. Sengaja TIDAK
+        /// memunculkan kotak dialog apa pun: fungsi ini berjalan sendiri setiap
+        /// kali ada perubahan, dan dialog yang muncul tiap centangan lebih buruk
+        /// daripada tombol simpan yang tadinya ada.
+        /// </summary>
+        void Simpan()
+        {
+            _tunda.Stop();
+            if (_muat) return;
             var p = _e.Active;
             if (p == null) return;
+
             p.PhpExtensions = _kotak.Where(c => c.IsChecked == true)
                                     .Select(c => (c.Tag ?? "").ToString()).ToList();
 
@@ -142,23 +193,34 @@ namespace Phoron.App.Pages
             p.PhpIniOverrides["short_open_tag"] = ChkShortTag.IsChecked == true ? "On" : "Off";
 
             ProfileStore.Save(p);
-            AppState.ShowWarnings(_e.Apply());
-            _e.Say("Ekstensi dan setelan php.ini profil \"" + p.Name + "\" disimpan.");
+            // Peringatan Apply masuk ke log, bukan ke kotak dialog - lihat alasan
+            // di ringkasan fungsi ini.
+            foreach (var w in _e.Apply()) _e.Say(w);
 
-            if (_e.Services.WebState == ServiceState.Jalan
-                && AppState.Ask("php.ini sudah ditulis ulang, tapi Apache membacanya hanya saat start. "
-                                + "Nyalakan ulang web server sekarang?"))
-            {
-                var main = Window.GetWindow(this) as MainWindow;
-                Restart(main);
-            }
+            if (_e.Services.WebState == ServiceState.Jalan) _perluRestart = true;
+            TxtStatusSimpan.Text = "Tersimpan " + DateTime.Now.ToString("HH:mm:ss")
+                + " - " + p.PhpExtensions.Count + " ekstensi dicentang, php.ini ditulis ulang.";
+            SegarkanBilah();
         }
 
-        async void Restart(MainWindow main)
+        void SegarkanBilah()
         {
+            bool jalan = _e.Services.WebState == ServiceState.Jalan;
+            PanelRestart.Visibility = _perluRestart && jalan ? Visibility.Visible : Visibility.Collapsed;
+            if (PanelRestart.Visibility == Visibility.Visible)
+                TxtRestart.Text = "php.ini sudah ditulis ulang, tapi web server membacanya HANYA saat start - "
+                    + "jadi perubahan ini belum berlaku di browser sampai dinyalakan ulang.";
+        }
+
+        async void BtnRestart_Click(object sender, RoutedEventArgs e)
+        {
+            Simpan();   // rapikan perubahan yang masih tertunda sebelum restart
+            var main = Window.GetWindow(this) as MainWindow;
             await _e.StopWebAsync();
             await _e.StartWebAsync();
             if (main != null) main.RefreshStatus();
+            _perluRestart = false;
+            SegarkanBilah();
         }
 
         static void Set(Profile p, string key, string value)
@@ -173,24 +235,55 @@ namespace Phoron.App.Pages
         void BtnBuka_Click(object sender, RoutedEventArgs e)
         {
             if (_e.Php == null) return;
-            // Jalurnya diambil dari hasil penulisan terakhir, bukan disusun ulang:
-            // php.ini bisa berada di etc\ atau di dalam folder PHP tergantung
-            // setelan, dan menebaknya di sini berarti tombol ini membuka berkas
-            // yang bukan yang sedang dipakai.
-            if (_e.LastBuild == null || _e.LastBuild.PhpIniDir == null) _e.Apply();
+            // Tombol ini bernama "hasil", jadi ia WAJIB menulis dulu. Dulu ia
+            // hanya menulis kalau belum pernah menulis sama sekali, sehingga
+            // centangan yang baru diubah tidak kelihatan di berkas yang dibuka -
+            // dan itu terbaca sebagai "centangannya tidak berpengaruh".
+            Simpan();
             var dir = _e.LastBuild != null ? _e.LastBuild.PhpIniDir : null;
             if (dir == null) { AppState.Warn("php.ini belum pernah ditulis."); return; }
             Shell.Open(Path.Combine(dir, "php.ini"));
+        }
+
+
+        /// <summary>
+        /// Menerjemahkan dua galat pemuatan DLL yang paling membingungkan.
+        /// Keduanya kalimat Windows apa adanya, dan tak satu pun menyebut apa
+        /// yang sebenarnya salah - orang lalu menyangka ekstensinya rusak atau
+        /// Phoron gagal menulis php.ini, padahal berkasnya sudah benar.
+        /// </summary>
+        static string Petunjuk(string keluaran)
+        {
+            var t = keluaran ?? "";
+            var sb = new System.Text.StringBuilder();
+
+            if (t.IndexOf("not a valid Win32 application", StringComparison.OrdinalIgnoreCase) >= 0)
+                sb.Append("\n\n--- Penjelasan ---\n"
+                    + "\"is not a valid Win32 application\" hampir selalu berarti BEDA ARSITEKTUR, "
+                    + "dan yang salah arsitektur biasanya bukan DLL ekstensinya, melainkan pustaka "
+                    + "yang dipanggilnya. Contoh paling sering: php_oci8_*.dll 64-bit memanggil "
+                    + "oci.dll milik Oracle Instant Client, lalu Windows menemukan client 32-bit "
+                    + "lebih dulu di PATH. Periksa urutan PATH: folder Instant Client 64-bit harus "
+                    + "berada SEBELUM yang 32-bit, atau yang 32-bit dibuang. Phoron tidak bisa "
+                    + "memperbaikinya dari sini - PATH itu milik Windows, bukan milik profil.");
+
+            if (t.IndexOf("specified module could not be found", StringComparison.OrdinalIgnoreCase) >= 0)
+                sb.Append("\n\n--- Penjelasan ---\n"
+                    + "\"The specified module could not be found\" berarti DLL ekstensinya ADA, "
+                    + "tapi pustaka yang dibutuhkannya tidak ketemu sama sekali - misalnya Oracle "
+                    + "Instant Client belum terpasang, atau foldernya belum masuk PATH.");
+
+            return sb.ToString();
         }
 
         void BtnUji_Click(object sender, RoutedEventArgs e)
         {
             var php = _e.Php;
             if (php == null) { AppState.Warn("Profil belum menunjuk PHP."); return; }
-            _e.Apply();
+            Simpan();
             var res = Shell.Run(Path.Combine(php.Path, "php.exe"), "-m", php.Path, 30000,
                                 ServiceManager.EnvFor(php));
-            AppState.Info(res.All, "Modul yang benar-benar dimuat");
+            AppState.Info(res.All + Petunjuk(res.All), "Modul yang benar-benar dimuat");
         }
     }
 }
