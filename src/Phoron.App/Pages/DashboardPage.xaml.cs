@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Documents;
+using System.Windows.Threading;
 using Phoron.Core;
 
 namespace Phoron.App.Pages
@@ -90,7 +91,30 @@ namespace Phoron.App.Pages
                 dok.Blocks.Add(par);
             }
             TxtLog.Document = dok;
+            GulungKeBawah();
+        }
+
+        /// <summary>
+        /// Selalu perlihatkan baris terbaru.
+        ///
+        /// Memanggil ScrollToEnd sekali saja tidak cukup. GambarLog()
+        /// pertama kali jalan dari konstruktor, saat kotak ini belum ditata
+        /// sama sekali - belum ada tinggi, belum ada yang bisa digulung - jadi
+        /// panggilan itu tidak berbuat apa-apa dan panel diam di baris TERTUA.
+        /// Justru itulah keadaan yang paling sering terlihat: halaman ini
+        /// dibuat ulang setiap kali navigasi berpindah, jadi tiap kali kembali
+        /// ke Beranda seluruh riwayat tampil dari awal, bukan dari ujungnya.
+        ///
+        /// Karena itu gulungannya diulang sekali lagi SETELAH tata letak
+        /// selesai. Yang pertama melayani hal yang lazim - satu baris baru
+        /// masuk ke panel yang sudah terbuka; yang kedua melayani halaman yang
+        /// baru saja dibuat.
+        /// </summary>
+        void GulungKeBawah()
+        {
             TxtLog.ScrollToEnd();
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded,
+                                   new Action(() => TxtLog.ScrollToEnd()));
         }
 
         void LoadProfiles()
