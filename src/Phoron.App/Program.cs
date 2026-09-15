@@ -13,6 +13,10 @@ namespace Phoron.App
         [STAThread]
         public static int Main(string[] args)
         {
+            // BARIS PERTAMA, sebelum apa pun yang bisa gagal. Galat yang terjadi
+            // sebelum kait ini terpasang tetap berujung pada kotak galat mentah
+            // Windows tanpa meninggalkan jejak.
+            App.PasangPenangkapGalat();
             EmbeddedAssemblies.Install();
             return Start(args);
         }
@@ -57,7 +61,26 @@ namespace Phoron.App
             // terbuka sama sekali, dan WPF akan menutup aplikasinya seketika.
             // Penutupan sekarang jadi urusan MainWindow yang memanggil Shutdown().
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            var win = new MainWindow();
+            // Engine dibuat DI SINI, bukan sebagai penginisialisasi medan di
+            // MainWindow. Penginisialisasi medan jalan sebelum badan konstruktor
+            // mana pun, jadi tidak ada satu pun tempat yang bisa menangkapnya:
+            // phoron.ini yang terkunci - berkas di drive jaringan yang putus,
+            // antivirus yang sedang memindainya - membuat Phoron mati saat start
+            // tanpa sepatah pun keterangan.
+            Phoron.Core.Engine engine;
+            try { engine = new Phoron.Core.Engine(); }
+            catch (Exception ex)
+            {
+                var jalur = Phoron.Core.Crash.Tulis(ex, "membuat Engine saat start");
+                MessageBox.Show(
+                    "Phoron tidak bisa membaca setelannya, jadi tidak bisa dijalankan."
+                    + "\n\n" + ex.Message
+                    + (jalur != null ? "\n\nRincian tersimpan di:\n" + jalur : ""),
+                    "Phoron", MessageBoxButton.OK, MessageBoxImage.Error);
+                return KeluarGalat;
+            }
+
+            var win = new MainWindow(engine);
             app.MainWindow = win;
             if (!keTray) win.Show();
             return app.Run();

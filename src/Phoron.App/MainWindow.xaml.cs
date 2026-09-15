@@ -13,12 +13,16 @@ namespace Phoron.App
 {
     public partial class MainWindow
     {
-        readonly Engine _engine = new Engine();
+        readonly Engine _engine;
         Forms.NotifyIcon _tray;
         bool _reallyClosing;
 
-        public MainWindow()
+        public MainWindow(Engine engine)
         {
+            // Engine disuntikkan, tidak dibuat di sini: pembuatannya bisa gagal
+            // membaca phoron.ini, dan kegagalan itu harus punya satu pemilik yang
+            // bisa menampilkan pesannya - lihat Program.Start.
+            _engine = engine;
             InitializeComponent();
 
             PasangIkon();
@@ -46,6 +50,23 @@ namespace Phoron.App
         }
 
         async System.Threading.Tasks.Task MulaiAsync()
+        {
+            try { await MulaiIntiAsync(); }
+            catch (Exception ex)
+            {
+                // Kait dispatcher juga menangkap ini, tapi kegagalan saat MEMULAI
+                // pantas menyebut langkahnya sendiri - "gagal menulis konfigurasi"
+                // jauh lebih berguna daripada "ada yang tidak beres".
+                var jalur = Crash.Tulis(ex, "saat memulai Phoron", _engine.Riwayat());
+                _engine.Say("Gagal memulai: " + ex.Message);
+                AppState.Warn("Phoron gagal menyiapkan konfigurasinya." + Environment.NewLine
+                              + Environment.NewLine + ex.Message
+                              + (jalur != null ? Environment.NewLine + Environment.NewLine
+                                                 + "Rincian: " + jalur : ""));
+            }
+        }
+
+        async System.Threading.Tasks.Task MulaiIntiAsync()
         {
             _engine.Apply();
             RefreshStatus();
@@ -330,6 +351,28 @@ namespace Phoron.App
 
         // ----------------------------------------------------------------- Tray
 
+        /// <summary>
+        /// Ikon untuk baki sistem, atau null bila tidak bisa diambil.
+        ///
+        /// SetupTray dipanggil dari KONSTRUKTOR, jadi satu galat di sini berarti
+        /// Phoron tidak pernah muncul sama sekali - bukan sekadar muncul tanpa
+        /// ikon. Dulu barisnya memanggil GetEntryAssembly().Location tanpa
+        /// penjaga apa pun; nilainya null di setiap proses yang bukan exe biasa,
+        /// dan ExtractAssociatedIcon sendiri bisa melempar untuk berkas yang
+        /// sedang terkunci. Ikon yang tidak ada jauh lebih ringan akibatnya
+        /// daripada aplikasi yang tidak menyala.
+        /// </summary>
+        static System.Drawing.Icon IkonAplikasi()
+        {
+            try
+            {
+                var exe = System.Reflection.Assembly.GetEntryAssembly();
+                if (exe == null || string.IsNullOrEmpty(exe.Location)) return null;
+                return System.Drawing.Icon.ExtractAssociatedIcon(exe.Location);
+            }
+            catch { return null; }
+        }
+
         void SetupTray()
         {
             var menu = new Forms.ContextMenuStrip();
@@ -347,8 +390,7 @@ namespace Phoron.App
                 ContextMenuStrip = menu,
                 // Ikon exe dipakai apa adanya supaya tidak ada berkas .ico lepas
                 // yang harus ikut dikirim.
-                Icon = System.Drawing.Icon.ExtractAssociatedIcon(
-                    System.Reflection.Assembly.GetEntryAssembly().Location),
+                Icon = IkonAplikasi(),
             };
             _tray.DoubleClick += (s, e) => ShowFromTray();
         }

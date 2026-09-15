@@ -37,6 +37,7 @@ namespace Phoron.Tests
             {
                 UjiIni();
                 UjiPenulisanAtomik();
+                UjiLaporanGalat();
                 UjiPemindai();
                 UjiProfil();
                 UjiSitus();
@@ -174,6 +175,119 @@ namespace Phoron.Tests
                karantina != null && File.ReadAllText(karantina) == "isi yang mau diselamatkan");
             Ok("Karantina berkas yang tidak ada mengembalikan null",
                AtomicFile.Karantina(Path.Combine(dir, "hantu.ini"), "rusak") == null);
+        }
+
+        static void UjiLaporanGalat()
+        {
+            Bagian("Laporan galat");
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-crash-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+
+                var jalur = Crash.Tulis(new InvalidOperationException("contoh kegagalan"),
+                                        "sedang menguji");
+                Ok("Laporan galat tertulis", jalur != null && File.Exists(jalur), jalur ?? "(null)");
+
+                var isi = jalur != null ? File.ReadAllText(jalur) : "";
+                Ok("Laporan memuat pesan galatnya", isi.Contains("contoh kegagalan"));
+                Ok("Laporan memuat konteksnya", isi.Contains("sedang menguji"));
+                Ok("Laporan memuat versi Phoron", isi.Contains(AppInfo.Version));
+
+                // Yang paling menjelaskan biasanya galat yang paling DALAM, jadi
+                // seluruh rantainya harus ikut tercatat - bukan lapisan luarnya
+                // saja, yang sering cuma berbunyi "operasi gagal".
+                var berlapis = new Exception("lapisan luar",
+                    new IOException("lapisan dalam yang sebenarnya menjelaskan"));
+                var isiBerlapis = Crash.Susun(berlapis, "uji");
+                Ok("Galat berlapis tercatat sampai ke dalam",
+                   isiBerlapis.Contains("lapisan luar")
+                   && isiBerlapis.Contains("lapisan dalam yang sebenarnya menjelaskan"));
+
+                var kumpulan = new AggregateException(
+                    new Exception("kembar satu"), new Exception("kembar dua"));
+                var isiKumpulan = Crash.Susun(kumpulan, "uji");
+                Ok("Galat berkumpul tidak menyembunyikan salah satunya",
+                   isiKumpulan.Contains("kembar satu") && isiKumpulan.Contains("kembar dua"));
+
+                // Pelapor ini dipanggil DARI penangan galat terakhir. Pelapor yang
+                // ikut meledak adalah cara paling umum membuat lingkaran tak
+                // berujung, jadi ia harus tahan terhadap masukan yang aneh.
+                Ok("Exception null tidak membuat pelapor meledak",
+                   Crash.Tulis(null, "uji") != null);
+                Ok("Konteks null tidak membuat pelapor meledak",
+                   Crash.Tulis(new Exception("x"), null) != null);
+
+                // Bagian yang paling menolong saat menelusuri: apa yang sedang
+                // dikerjakan Phoron tepat sebelum semuanya berantakan.
+                var riwayat = new List<BarisLog>
+                {
+                    new BarisLog { Waktu = DateTime.Now, Teks = "Apache jalan di port 80." },
+                    new BarisLog { Waktu = DateTime.Now, Teks = "Konfigurasi Nginx ditolak:" },
+                };
+                var isiRiwayat = Crash.Susun(new Exception("x"), "uji", riwayat);
+                Ok("Riwayat Aktivitas ikut dilampirkan",
+                   isiRiwayat.Contains("Apache jalan di port 80.")
+                   && isiRiwayat.Contains("Konfigurasi Nginx ditolak:"));
+
+                for (int i = 0; i < Crash.LaporanMaks + 6; i++)
+                    Crash.Tulis(new Exception("ke-" + i), "banyak");
+                var jumlah = Directory.GetFiles(Paths.Logs, "crash-*.log").Length;
+                Ok("Laporan lama dibuang di atas batas",
+                   jumlah <= Crash.LaporanMaks, jumlah.ToString());
+
+                UjiPemasanganKait();
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Urutan pemasangan kait galat, diperiksa di SUMBERNYA.
+        ///
+        /// Harness ini tidak mereferensi WPF - dan sebaiknya tetap begitu - jadi
+        /// kait dispatcher tidak bisa dibuktikan dari dalam sini. Yang bisa
+        /// dijaga adalah hal yang paling gampang tergeser tanpa ketahuan:
+        /// urutannya. Kait yang dipasang sesudah Engine dibuat tidak berguna
+        /// untuk kegagalan yang paling mungkin terjadi saat start.
+        /// </summary>
+        static void UjiPemasanganKait()
+        {
+            var dirApp = CariFolderApp();
+            if (dirApp == null)
+            {
+                Ok("Folder sumber Phoron.App ditemukan", false,
+                   "tidak ketemu dari " + AppDomain.CurrentDomain.BaseDirectory);
+                return;
+            }
+
+            var program = File.ReadAllText(Path.Combine(dirApp, "Program.cs"));
+            var iKait = program.IndexOf("App.PasangPenangkapGalat()", StringComparison.Ordinal);
+            var iRakit = program.IndexOf("EmbeddedAssemblies.Install()", StringComparison.Ordinal);
+            var iEngine = program.IndexOf("new Phoron.Core.Engine()", StringComparison.Ordinal);
+
+            Ok("Kait galat dipasang di Program.Main", iKait >= 0);
+            Ok("Kait galat dipasang sebelum apa pun yang bisa gagal",
+               iKait >= 0 && iRakit > iKait && iEngine > iKait,
+               "kait=" + iKait + " rakit=" + iRakit + " engine=" + iEngine);
+            Ok("Engine dibuat di dalam try saat start", iEngine >= 0
+               && program.IndexOf("try { engine = new Phoron.Core.Engine(); }",
+                                  StringComparison.Ordinal) >= 0);
+
+            // Penginisialisasi medan jalan sebelum badan konstruktor mana pun,
+            // jadi tidak ada satu tempat pun yang bisa menangkapnya. Inilah yang
+            // membuat phoron.ini terkunci berujung pada kematian saat start.
+            var jendela = File.ReadAllText(Path.Combine(dirApp, "MainWindow.xaml.cs"));
+            Ok("Engine tidak lagi dibuat sebagai penginisialisasi medan",
+               !jendela.Contains("readonly Engine _engine = new Engine()"));
+            Ok("MainWindow menerima Engine dari luar",
+               jendela.Contains("public MainWindow(Engine engine)"));
         }
 
         static void UjiIni()
