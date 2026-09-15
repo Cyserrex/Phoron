@@ -97,6 +97,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Saran kombinasi versi
+                { "Sarankan otomatis",
+                  "Suggest automatically" },
                 // Deteksi pengelola lain
                 { "Deteksi otomatis",
                   "Auto-detect" },
@@ -335,6 +338,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Saran kombinasi versi
+                { "Sarankan otomatis",
+                  "Sarani otomatis" },
                 // Deteksi pengelola lain
                 { "Deteksi otomatis",
                   "Deteksi otomatis" },
@@ -545,6 +551,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Saran kombinasi versi
+                { "Sarankan otomatis",
+                  "Sarankan otomatis" },
                 // Deteksi pengelola lain
                 { "Deteksi otomatis",
                   "Deteksi otomatis" },

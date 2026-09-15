@@ -124,7 +124,7 @@ namespace Phoron.Core
             var made = new List<Profile>();
             var phps = packages.Where(p => p.Kind == BinKind.Php).OrderByDescending(p => p.Parsed).ToList();
             var apaches = packages.Where(p => p.Kind == BinKind.Apache).ToList();
-            var mysql = packages.FirstOrDefault(p => p.Kind == BinKind.MySql);
+            var mysql = PickMySql(packages.Where(p => p.Kind == BinKind.MySql));
             foreach (var php in phps)
             {
                 var apache = PickApache(php, apaches);
@@ -162,6 +162,18 @@ namespace Phoron.Core
         {
             if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return true;
             return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// MySQL untuk sebuah profil. Arsitektur TIDAK jadi syarat: mysqld
+        /// berjalan sebagai proses terpisah, tidak dimuat ke dalam PHP seperti
+        /// mod_php - jadi MySQL 32-bit dengan PHP 64-bit sama sekali tidak
+        /// masalah. Yang dipilih cukup versi tertinggi.
+        /// </summary>
+        public static BinPackage PickMySql(IEnumerable<BinPackage> mysqls)
+        {
+            return (mysqls ?? Enumerable.Empty<BinPackage>())
+                .OrderByDescending(m => m.Parsed).FirstOrDefault();
         }
 
         public static BinPackage PickApache(BinPackage php, IEnumerable<BinPackage> apaches)

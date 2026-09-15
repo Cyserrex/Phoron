@@ -211,15 +211,31 @@ namespace Phoron.App.Pages
 
             var php = _e.Find(BinKind.Php, p.PhpId);
             var apache = _e.Find(BinKind.Apache, p.ApacheId);
-            if (p.WebServer == "apache" && php != null && apache != null
-                && !string.IsNullOrEmpty(php.Compiler) && !string.IsNullOrEmpty(apache.Compiler)
-                && !string.Equals(php.Compiler, apache.Compiler, StringComparison.OrdinalIgnoreCase))
+            if (p.WebServer == "apache" && php != null && apache != null)
             {
-                // Bukan penghalang - ada kombinasi yang tetap jalan - tapi ini
-                // penyebab paling umum Apache mati seketika tanpa pesan.
-                masalah.Add("PHP dibangun dengan " + php.Compiler + " sedangkan Apache dengan "
-                    + apache.Compiler + ". Kombinasi beda toolset biasanya membuat Apache gagal start.");
+                // Arsitektur lebih dulu, dan nadanya lebih keras: mod_php DIMUAT
+                // KE DALAM httpd.exe, jadi beda arsitektur TIDAK PERNAH jalan -
+                // bukan "biasanya gagal". Lazim terjadi begitu XAMPP (x86) dan
+                // Laragon (x64) dipakai berdampingan, misalnya PHP 5 dari XAMPP
+                // dipasangkan dengan Apache milik Laragon.
+                if (!ProfileStore.ArsitekturSepadan(php.Arch, apache.Arch))
+                    masalah.Add("PHP " + php.Version + " berarsitektur " + php.Arch
+                        + " sedangkan Apache " + apache.Version + " berarsitektur " + apache.Arch
+                        + ". Kombinasi ini TIDAK AKAN pernah jalan - Apache memuat modul PHP ke dalam "
+                        + "dirinya sendiri, jadi keduanya harus sama. Tekan \"Sarankan otomatis\".");
+                else if (!string.IsNullOrEmpty(php.Compiler) && !string.IsNullOrEmpty(apache.Compiler)
+                    && !string.Equals(php.Compiler, apache.Compiler, StringComparison.OrdinalIgnoreCase))
+                    // Bukan penghalang - ada kombinasi yang tetap jalan - tapi ini
+                    // penyebab paling umum Apache mati seketika tanpa pesan.
+                    masalah.Add("PHP dibangun dengan " + php.Compiler + " sedangkan Apache dengan "
+                        + apache.Compiler + ". Kombinasi beda toolset biasanya membuat Apache gagal start.");
             }
+
+            // Runtime Visual C++ tidak ikut dalam arsip PHP maupun Apache. Kalau
+            // belum terpasang, Apache gagal start dengan pesan yang menunjuk
+            // berkas PHP - jadi disebut di sini, sebelum orang mencoba lalu
+            // menghabiskan waktu mencurigai versi PHP-nya.
+            foreach (var m in RuntimeVc.PeriksaSemua(php, apache)) masalah.Add(m);
             return masalah;
         }
 
@@ -229,6 +245,49 @@ namespace Phoron.App.Pages
             if (int.TryParse((teks ?? "").Trim(), out n) && n >= 1 && n <= 65535) return n;
             masalah.Add("Port " + nama + " tidak masuk akal, jadi tetap " + lama + ".");
             return lama;
+        }
+
+        /// <summary>
+        /// Mengisikan Apache dan MySQL yang cocok untuk PHP yang sedang dipilih.
+        ///
+        /// Pertanyaan yang dijawab tombol ini: "versi mana yang cocok dengan
+        /// mana". Jawabannya tidak sepele begitu ada lebih dari satu pengelola -
+        /// PHP 5 dari XAMPP (x86) berdampingan dengan Apache milik Laragon (x64),
+        /// dan pilihan yang salah membuat Apache mati seketika tanpa pesan.
+        /// </summary>
+        void BtnSaran_Click(object sender, RoutedEventArgs e)
+        {
+            if (_current == null) return;
+            var phpRow = CmbPhp.SelectedItem as Row;
+            var php = phpRow != null ? phpRow.Pkg : null;
+            if (php == null)
+            {
+                AppState.Warn("Pilih dulu versi PHP-nya; sisanya disesuaikan dengan itu.");
+                return;
+            }
+
+            var apache = ProfileStore.PickApache(php, _e.Of(BinKind.Apache));
+            var mysql = ProfileStore.PickMySql(_e.Of(BinKind.MySql));
+
+            var rincian = new List<string>();
+            if (apache != null)
+            {
+                PilihPkg(CmbApache, apache.Id);
+                rincian.Add("Apache " + apache.Version + " (" + apache.Arch
+                            + (apache.Compiler.Length > 0 ? " " + apache.Compiler : "") + ") dari " + apache.SourceRoot);
+            }
+            else rincian.Add("Tidak ada Apache yang cocok dengan PHP " + php.Arch + " di komputer ini.");
+
+            if (mysql != null)
+            {
+                PilihPkg(CmbMysql, mysql.Id);
+                rincian.Add("MySQL " + mysql.Version + " dari " + mysql.SourceRoot);
+            }
+
+            Simpan();
+            AppState.Info("Disesuaikan dengan PHP " + php.Version + " (" + php.Arch + ") dari "
+                          + php.SourceRoot + ":" + Environment.NewLine + Environment.NewLine
+                          + string.Join(Environment.NewLine, rincian.ToArray()));
         }
 
         void Kendali_Ubah(object sender, SelectionChangedEventArgs e) { Simpan(); }

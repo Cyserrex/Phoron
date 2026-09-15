@@ -120,7 +120,11 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
                         <ui:Button Content="{loc:T 'Switch ke profil ini'}" Appearance="Primary"
-                                   Click="BtnSwitch_Click"/>
+                                   Margin="0,0,8,0" Click="BtnSwitch_Click"/>
+                        <!-- Menjawab "versi mana cocok dengan mana" - pertanyaan
+                             yang jadi sulit begitu XAMPP dan Laragon dipakai
+                             berdampingan dengan arsitektur berbeda. -->
+                        <ui:Button Content="{loc:T 'Sarankan otomatis'}" Click="BtnSaran_Click"/>
                     </StackPanel>
 
                     <TextBlock x:Name="TxtStatusSimpan" Style="{StaticResource SubJudul}" FontSize="12"

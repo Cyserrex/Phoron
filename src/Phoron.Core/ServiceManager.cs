@@ -98,6 +98,40 @@ namespace Phoron.Core
             return await StartApacheAsync(profile, web, php, cfg);
         }
 
+        /// <summary>
+        /// Beberapa baris terakhir apache-error.log. Apache menulis sebab
+        /// kematiannya ke sana, dan menyuruh orang membukanya sendiri hanya
+        /// menunda jawaban yang sudah kita pegang.
+        /// </summary>
+        static string EkorLogApache(int baris = 6)
+        {
+            try
+            {
+                var f = Path.Combine(Paths.Logs, "apache-error.log");
+                if (!File.Exists(f)) return "";
+                var semua = File.ReadAllLines(f);
+                var ambil = new List<string>();
+                for (int i = Math.Max(0, semua.Length - baris); i < semua.Length; i++)
+                    if (semua[i].Trim().Length > 0) ambil.Add(semua[i]);
+                return string.Join(Environment.NewLine, ambil.ToArray());
+            }
+            catch { return ""; }
+        }
+
+        /// <summary>
+        /// Menambahkan sebab yang paling sering di balik kegagalan Apache, kalau
+        /// keluarannya memang cocok. Kalimat Windows "The specified module could
+        /// not be found" menunjuk berkas PHP, padahal yang hilang biasanya
+        /// Visual C++ Redistributable milik Microsoft.
+        /// </summary>
+        static string PetunjukGagal(BinPackage apache, BinPackage php, string keluaran)
+        {
+            var kurang = RuntimeVc.PeriksaSemua(php, apache);
+            if (kurang.Count == 0) return "";
+            return Environment.NewLine + Environment.NewLine + "Kemungkinan sebabnya: "
+                   + string.Join(Environment.NewLine, kurang.ToArray());
+        }
+
         async Task<bool> StartApacheAsync(Profile profile, BinPackage apache, BinPackage php,
                                           ConfigWriter.Result cfg)
         {
@@ -111,7 +145,8 @@ namespace Phoron.Core
             var test = await Task.Run(() => Shell.Run(httpd, args + " -t", apache.Path, 30000, EnvFor(php)));
             if (!test.Ok)
             {
-                Say("Konfigurasi Apache ditolak:\n" + test.All);
+                Say("Konfigurasi Apache ditolak:" + Environment.NewLine + test.All
+                    + PetunjukGagal(apache, php, test.All));
                 SetState(ServiceKind.Web, ServiceState.Gagal);
                 return false;
             }
@@ -131,7 +166,10 @@ namespace Phoron.Core
             await Task.Delay(1200);
             if (p.HasExited)
             {
-                Say("Apache berhenti seketika (kode " + p.ExitCode + "). Lihat logs\\apache-error.log.");
+                var ekor = EkorLogApache();
+                Say("Apache berhenti seketika (kode " + p.ExitCode + ")."
+                    + (ekor.Length > 0 ? Environment.NewLine + ekor : "")
+                    + PetunjukGagal(apache, php, ekor));
                 _web = null;
                 StopFastCgi();
                 SetState(ServiceKind.Web, ServiceState.Gagal);

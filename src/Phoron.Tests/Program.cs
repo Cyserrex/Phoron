@@ -57,6 +57,7 @@ namespace Phoron.Tests
                 UjiHostsTool();
                 UjiTataLetakBin();
                 UjiOracle();
+                UjiOracle();
             }
             catch (Exception ex)
             {
@@ -730,6 +731,65 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiRuntimeVc()
+        {
+            Bagian("Runtime Visual C++");
+            // Gejala yang diuji di sini: satu profil gagal sementara profil lain
+            // di komputer yang sama jalan mulus, karena tiap toolset butuh
+            // redistributable berbeda dan yang kurang tidak pernah disebut
+            // namanya oleh Windows.
+            var vc11 = new BinPackage
+            {
+                Kind = BinKind.Php, Id = "php-5.6.40-Win32-VC11-x64", Version = "5.6.40",
+                Compiler = "VC11", Arch = "x64", Path = Paths.Tmp,
+            };
+            var vs16 = new BinPackage
+            {
+                Kind = BinKind.Php, Id = "php-8.3.12-Win32-vs16-x64", Version = "8.3.12",
+                Compiler = "VS16", Arch = "x64", Path = Paths.Tmp,
+            };
+            var takKenal = new BinPackage
+            {
+                Kind = BinKind.MySql, Id = "mysql-8.0.30-winx64", Version = "8.0.30",
+                Compiler = "", Arch = "x64", Path = Paths.Tmp,
+            };
+
+            Ok("VC11 dipetakan ke msvcr110.dll",
+               RuntimeVc.Periksa(vc11).Dll == "msvcr110.dll", RuntimeVc.Periksa(vc11).Dll);
+            Ok("VS16 dipetakan ke vcruntime140.dll",
+               RuntimeVc.Periksa(vs16).Dll == "vcruntime140.dll", RuntimeVc.Periksa(vs16).Dll);
+            Ok("Paket tanpa toolset tidak dituntut runtime apa pun",
+               !RuntimeVc.Periksa(takKenal).Perlu);
+
+            // Mesin pengembang lazimnya punya semua redistributable. Yang penting
+            // dipastikan: kalau ADA, tidak boleh ada tuduhan palsu.
+            var h11 = RuntimeVc.Periksa(vc11);
+            var adaSungguhan = File.Exists(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "msvcr110.dll"));
+            Ok("Runtime yang ADA tidak dilaporkan kurang",
+               !adaSungguhan || h11.Ada, "ada=" + adaSungguhan + " lapor=" + h11.Ada);
+
+            // Yang bisa dipastikan di mesin mana pun: DLL karangan pasti tidak ada,
+            // dan pesannya harus menyebut nama paket yang dicari orang, bukan
+            // sekadar nama DLL-nya.
+            var palsu = new BinPackage
+            {
+                Kind = BinKind.Apache, Id = "httpd-2.4.38-win64-VC9", Version = "2.4.38",
+                Compiler = "VC9", Arch = "x64", Path = Paths.Tmp,
+            };
+            var hp = RuntimeVc.Periksa(palsu);
+            if (!File.Exists(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "msvcr90.dll")))
+            {
+                Ok("Runtime yang tidak ada dilaporkan kurang", !hp.Ada);
+                Ok("Pesannya menyebut nama paket Microsoft, bukan cuma nama DLL",
+                   hp.Pesan.IndexOf("Visual C++ 2008", StringComparison.OrdinalIgnoreCase) >= 0, hp.Pesan);
+            }
+
+            Ok("Redistributable yang sama tidak diadukan dua kali",
+               RuntimeVc.PeriksaSemua(vs16, vs16).Count <= 1);
         }
 
         static void UjiOracle()
