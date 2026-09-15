@@ -48,7 +48,18 @@ namespace Phoron.App.Pages
         /// </summary>
         void GambarLog()
         {
-            var dok = new FlowDocument { PagePadding = new Thickness(4, 2, 4, 2) };
+            // FlowDocument yang dibuat lewat kode TIDAK mewarisi font dari
+            // RichTextBox-nya, dan perataan bawaannya Justify - itu yang bikin
+            // hurufnya membesar dan barisnya melar merenggang. Ketiganya
+            // disetel tegas supaya panel ini tetap terlihat seperti keluaran
+            // terminal, persis seperti sebelum diwarnai.
+            var dok = new FlowDocument
+            {
+                PagePadding = new Thickness(4, 2, 4, 2),
+                FontFamily = TxtLog.FontFamily,
+                FontSize = TxtLog.FontSize,
+                TextAlignment = TextAlignment.Left,
+            };
             foreach (var baris in _lines)
             {
                 var par = new Paragraph { Margin = new Thickness(0) };

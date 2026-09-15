@@ -793,6 +793,31 @@ namespace Phoron.Core
             return b.ToString();
         }
 
+        /// <summary>
+        /// Ukuran ember hash nama server: pangkat dua terkecil yang memuat nama
+        /// terpanjang berikut ruang lebih untuk keperluan dalam nginx sendiri.
+        /// Dimulai dari 64, bukan 32, karena 32 adalah nilai baku yang justru
+        /// bikin gagal begitu ada satu nama panjang.
+        /// </summary>
+        public static int EmberHash(IEnumerable<string> namaSitus)
+        {
+            int terpanjang = 0;
+            foreach (var n in namaSitus ?? Enumerable.Empty<string>())
+                if (!string.IsNullOrEmpty(n) && n.Length > terpanjang) terpanjang = n.Length;
+
+            var ember = 64;
+            while (ember < terpanjang + 8 && ember < 1024) ember *= 2;
+            return ember;
+        }
+
+        /// <summary>Kapasitas tabel hash; tumbuh mengikuti banyaknya situs.</summary>
+        public static int MaksHash(int jumlahSitus)
+        {
+            var maks = 512;
+            while (maks < jumlahSitus * 8 && maks < 16384) maks *= 2;
+            return maks;
+        }
+
         static string WriteNginx(Profile profile, BinPackage nginx, BinPackage php,
                                  List<Site> sites, Result r)
         {
@@ -811,6 +836,15 @@ namespace Phoron.Core
             sb.AppendLine("pid \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx.pid")) + "\";");
             sb.AppendLine("events { worker_connections 1024; }");
             sb.AppendLine("http {");
+            // Baku nginx untuk ember hash nama server cuma 32 karakter, dan
+            // nama seperti "bandarmasih-mobile-pm-service.test" (34) sudah
+            // melewatinya - nginx lalu MENOLAK SELURUH konfigurasi dengan
+            // "could not build server_names_hash". Ukurannya dihitung dari
+            // nama terpanjang yang benar-benar ada, bukan ditebak.
+            var namaSitus = new List<string> { "localhost" };
+            foreach (var st in sites ?? new List<Site>()) namaSitus.Add(st.HostName ?? "");
+            sb.AppendLine("    server_names_hash_bucket_size " + EmberHash(namaSitus) + ";");
+            sb.AppendLine("    server_names_hash_max_size " + MaksHash(namaSitus.Count) + ";");
             sb.AppendLine("    include \"" + Paths.Fwd(Path.Combine(nginx.Path, "conf", "mime.types")) + "\";");
             sb.AppendLine("    default_type application/octet-stream;");
             sb.AppendLine("    sendfile on;");

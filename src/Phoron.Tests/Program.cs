@@ -671,6 +671,12 @@ namespace Phoron.Tests
 
             Directory.CreateDirectory(Path.Combine(Paths.Www, "situs-nginx"));
             File.WriteAllText(Path.Combine(Paths.Www, "situs-nginx", "index.php"), "<?php echo 1;");
+            // Nama panjang yang nyata: "bandarmasih-mobile-pm-service.test" 34
+            // karakter, sedangkan baku server_names_hash_bucket_size cuma 32.
+            // nginx menolak SELURUH konfigurasi, bukan cuma situs itu.
+            Directory.CreateDirectory(Path.Combine(Paths.Www, "bandarmasih-mobile-pm-service"));
+            File.WriteAllText(Path.Combine(Paths.Www, "bandarmasih-mobile-pm-service", "index.php"),
+                              "<?php echo 1;");
 
             var profil = new Profile
             {
@@ -689,6 +695,16 @@ namespace Phoron.Tests
             var isi = File.ReadAllText(hasil.NginxConf);
             Ok("fastcgi_params di-include dengan jalur penuh, bukan nama telanjang",
                !Regex.IsMatch(isi, @"include\s+fastcgi_params\s*;"), "masih ada nama telanjang");
+            Ok("Situs bernama panjang ikut terdaftar",
+               isi.IndexOf("bandarmasih-mobile-pm-service", StringComparison.OrdinalIgnoreCase) >= 0);
+            Ok("Ukuran ember hash cukup untuk nama terpanjang",
+               ConfigWriter.EmberHash(new[] { "bandarmasih-mobile-pm-service.test" }) >= 64,
+               ConfigWriter.EmberHash(new[] { "bandarmasih-mobile-pm-service.test" }).ToString());
+            Ok("Nama sangat panjang menaikkan embernya lagi",
+               ConfigWriter.EmberHash(new[] { new string('a', 120) }) >= 128,
+               ConfigWriter.EmberHash(new[] { new string('a', 120) }).ToString());
+            Ok("Banyak situs menaikkan kapasitas tabel",
+               ConfigWriter.MaksHash(500) > ConfigWriter.MaksHash(10));
 
             foreach (Match m in Regex.Matches(isi, "include\\s+\"([^\"]+)\""))
                 Ok("Berkas yang di-include ada: " + Path.GetFileName(m.Groups[1].Value),
