@@ -1261,7 +1261,59 @@ namespace Phoron.Tests
             Ok("Tidak ada loc:T berbentuk atribut yang memuat backslash",
                nakal.Count == 0, string.Join(" | ", nakal.ToArray()));
 
+            UjiCakupanTerjemahan(dirApp);
             UjiBanjarTidakBercampur(dirApp);
+        }
+
+        /// <summary>
+        /// Setiap KALIMAT di layar harus punya padanan di ketiga bahasa.
+        ///
+        /// Istilah teknis pendek - Port HTTP, vhost, Toolset, "php -m" - memang
+        /// sengaja dibiarkan apa adanya; menerjemahkannya justru membuat layar
+        /// lebih sulit dibaca, dan itu tertulis sebagai alasan di kepala Lang.cs.
+        /// Yang tidak boleh dibiarkan adalah kalimat utuh: satu paragraf
+        /// berbahasa Indonesia di tengah layar berbahasa Inggris terbaca sebagai
+        /// kerusakan, bukan sebagai pilihan. Batas 25 karakter memisahkan
+        /// keduanya - cukup panjang untuk melewatkan istilah, cukup pendek untuk
+        /// menangkap kalimat terpendek yang ada.
+        ///
+        /// Uji ini lahir dari kejadian sungguhan: kalimat di Pengaturan ditulis
+        /// ulang waktu kotak Token GitHub dibuang, kamusnya tidak ikut, dan
+        /// kalimat itu tampil berbahasa Indonesia di KETIGA bahasa tanpa satu pun
+        /// galat - tidak terlihat oleh kompilasi maupun oleh uji muat XAML.
+        /// </summary>
+        static void UjiCakupanTerjemahan(string dirApp)
+        {
+            const int ambang = 25;
+            var teks = new List<string>();
+            foreach (var f in Directory.GetFiles(dirApp, "*.xaml", SearchOption.AllDirectories))
+            {
+                var isi = File.ReadAllText(f);
+                foreach (Match m in Regex.Matches(isi, @"\{loc:T\s+'([^']*)'\}"))
+                    teks.Add(WebUtility.HtmlDecode(m.Groups[1].Value));
+                foreach (Match m in Regex.Matches(isi, "<loc:T\\s+Teks=\"([^\"]*)\""))
+                    teks.Add(WebUtility.HtmlDecode(m.Groups[1].Value));
+            }
+            var kalimat = teks.Where(t => t.Length >= ambang).Distinct().ToList();
+            // Kalau pengumpulannya sendiri rusak - regexnya tidak cocok lagi -
+            // daftar kalimatnya jadi kosong dan uji di bawah LULUS tanpa
+            // memeriksa apa pun. Jumlahnya ikut diperiksa supaya itu ketahuan.
+            Ok("Kalimat antarmuka terkumpul dari XAML", kalimat.Count >= 20, kalimat.Count.ToString());
+
+            foreach (var kode in new[] { Lang.Inggris, Lang.Jawa, Lang.Banjar })
+            {
+                Lang.Pakai(kode);
+                // Teks tanpa padanan dikembalikan apa adanya oleh Lang.T; sudah
+                // dipastikan tidak ada kalimat panjang yang terjemahannya
+                // kebetulan sama persis dengan aslinya, jadi tanda ini tidak
+                // menuduh yang benar.
+                var bocor = kalimat.Where(t => Lang.T(t) == t).ToList();
+                Ok("Tiap kalimat punya padanan " + Lang.NamaBahasa(kode),
+                   bocor.Count == 0,
+                   string.Join(" | ", bocor.Select(
+                       t => t.Substring(0, Math.Min(60, t.Length))).ToArray()));
+            }
+            Lang.Pakai(Lang.Indonesia);
         }
 
         static void UjiBanjarTidakBercampur(string dirApp)

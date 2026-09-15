@@ -8,7 +8,7 @@
 ; ============================================================================
 
 #define MyAppName "Phoron"
-#define MyAppVersion "1.22.1"
+#define MyAppVersion "1.22.2"
 #define MyAppExeName "Phoron.exe"
 #define MyAppPublisher "Phoron"
 
