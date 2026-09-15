@@ -57,7 +57,8 @@ namespace Phoron.Tests
                 UjiHostsTool();
                 UjiTataLetakBin();
                 UjiOracle();
-                UjiOracle();
+                UjiRuntimeVc();
+                UjiKonfigurasiNginx();
             }
             catch (Exception ex)
             {
@@ -606,6 +607,52 @@ namespace Phoron.Tests
                 var res = Shell.Run(v.MainExe, "-n -l \"" + file + "\"", v.Path, 30000);
                 Ok(v.Version + ": halaman sambutan lolos php -l", res.Ok, res.All.Trim());
             }
+        }
+
+        static void UjiKonfigurasiNginx()
+        {
+            Bagian("nginx.conf (diuji nginx.exe sungguhan)");
+            // Selama ini hanya httpd.conf yang diuji dengan binernya sendiri, dan
+            // nginx.conf lolos begitu saja - padahal ia meng-include
+            // "fastcgi_params" sebagai nama telanjang, yang membuat nginx menolak
+            // start dengan "CreateFile() ... failed (2)". Uji inilah yang
+            // seharusnya menangkapnya sejak awal.
+            var nginx = Nyata().FirstOrDefault(p => p.Kind == BinKind.Nginx);
+            if (nginx == null) { Console.WriteLine("     dilewati: tidak ada Nginx terpasang"); return; }
+            var php = Nyata().FirstOrDefault(p => p.Kind == BinKind.Php);
+
+            Directory.CreateDirectory(Path.Combine(Paths.Www, "situs-nginx"));
+            File.WriteAllText(Path.Combine(Paths.Www, "situs-nginx", "index.php"), "<?php echo 1;");
+
+            var profil = new Profile
+            {
+                Name = "Uji Nginx",
+                WebServer = "nginx",
+                NginxId = nginx.Id,
+                PhpId = php != null ? php.Id : "",
+                HttpPort = 8080,
+            };
+            var situs = SiteScanner.Scan(profil);
+            var hasil = ConfigWriter.Build(profil, php, null, null, nginx, situs);
+
+            Ok("nginx.conf terbentuk", hasil.NginxConf != null && File.Exists(hasil.NginxConf));
+            if (hasil.NginxConf == null) return;
+
+            var isi = File.ReadAllText(hasil.NginxConf);
+            Ok("fastcgi_params di-include dengan jalur penuh, bukan nama telanjang",
+               !Regex.IsMatch(isi, @"include\s+fastcgi_params\s*;"), "masih ada nama telanjang");
+
+            foreach (Match m in Regex.Matches(isi, "include\\s+\"([^\"]+)\""))
+                Ok("Berkas yang di-include ada: " + Path.GetFileName(m.Groups[1].Value),
+                   File.Exists(m.Groups[1].Value), m.Groups[1].Value);
+
+            // Hakim sesungguhnya: nginx sendiri. -t menguraikan seluruh berkas,
+            // termasuk setiap include, lalu menolak kalau ada yang tidak ada.
+            var res = Shell.Run(nginx.MainExe, "-t -c \"" + hasil.NginxConf + "\" -p \"" + nginx.Path + "\"",
+                                nginx.Path, 30000);
+            Ok("nginx.exe -t menerima konfigurasi",
+               res.All.IndexOf("test is successful", StringComparison.OrdinalIgnoreCase) >= 0,
+               res.All);
         }
 
         static void UjiKonfigurasiApache()

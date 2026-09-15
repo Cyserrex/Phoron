@@ -741,6 +741,58 @@ namespace Phoron.Core
 
         // ---------------------------------------------------------------- Nginx
 
+        /// <summary>
+        /// Jalur fastcgi_params yang PASTI ada.
+        ///
+        /// Ditulis sebagai nama telanjang, nginx mencarinya relatif ke folder
+        /// berkas konfigurasi - yaitu etc\nginx, tempat Phoron tidak pernah
+        /// menaruhnya - lalu menolak start seluruhnya dengan
+        /// "CreateFile() ... fastcgi_params failed (2)". mime.types di baris
+        /// atasnya sudah benar memakai jalur penuh; yang ini terlewat.
+        ///
+        /// Paket nginx membawa berkas itu di conf-nya sendiri, jadi itulah yang
+        /// dipakai. Kalau paketnya tidak membawa, Phoron menuliskan yang minimal
+        /// ke etc\nginx supaya profil Nginx tidak pernah lagi gagal karena satu
+        /// berkas pendukung yang hilang.
+        /// </summary>
+        static string PastikanFastcgiParams(BinPackage nginx, string dirEtc)
+        {
+            if (nginx != null)
+            {
+                var bawaan = Path.Combine(nginx.Path, "conf", "fastcgi_params");
+                if (File.Exists(bawaan)) return bawaan;
+            }
+            var milikKita = Path.Combine(dirEtc, "fastcgi_params");
+            WriteIfChanged(milikKita, FastcgiParamsBaku());
+            return milikKita;
+        }
+
+        /// <summary>Isi fastcgi_params baku nginx.</summary>
+        static string FastcgiParamsBaku()
+        {
+            var b = new StringBuilder();
+            b.AppendLine("# Dibuat otomatis oleh Phoron karena paket nginx tidak membawanya.");
+            b.AppendLine("fastcgi_param  QUERY_STRING       $query_string;");
+            b.AppendLine("fastcgi_param  REQUEST_METHOD     $request_method;");
+            b.AppendLine("fastcgi_param  CONTENT_TYPE       $content_type;");
+            b.AppendLine("fastcgi_param  CONTENT_LENGTH     $content_length;");
+            b.AppendLine("fastcgi_param  SCRIPT_NAME        $fastcgi_script_name;");
+            b.AppendLine("fastcgi_param  REQUEST_URI        $request_uri;");
+            b.AppendLine("fastcgi_param  DOCUMENT_URI       $document_uri;");
+            b.AppendLine("fastcgi_param  DOCUMENT_ROOT      $document_root;");
+            b.AppendLine("fastcgi_param  SERVER_PROTOCOL    $server_protocol;");
+            b.AppendLine("fastcgi_param  REQUEST_SCHEME     $scheme;");
+            b.AppendLine("fastcgi_param  GATEWAY_INTERFACE  CGI/1.1;");
+            b.AppendLine("fastcgi_param  SERVER_SOFTWARE    nginx/$nginx_version;");
+            b.AppendLine("fastcgi_param  REMOTE_ADDR        $remote_addr;");
+            b.AppendLine("fastcgi_param  REMOTE_PORT        $remote_port;");
+            b.AppendLine("fastcgi_param  SERVER_ADDR        $server_addr;");
+            b.AppendLine("fastcgi_param  SERVER_PORT        $server_port;");
+            b.AppendLine("fastcgi_param  SERVER_NAME        $server_name;");
+            b.AppendLine("fastcgi_param  REDIRECT_STATUS    200;");
+            return b.ToString();
+        }
+
         static string WriteNginx(Profile profile, BinPackage nginx, BinPackage php,
                                  List<Site> sites, Result r)
         {
@@ -751,6 +803,7 @@ namespace Phoron.Core
             var dir = Paths.EtcNginx;
             Directory.CreateDirectory(dir);
             var docRoot = Paths.Fwd(SiteScanner.DocumentRoot(profile));
+            var fcgiParams = Paths.Fwd(PastikanFastcgiParams(nginx, dir));
             var sb = new StringBuilder();
             sb.AppendLine("# Dibuat otomatis oleh Phoron.");
             sb.AppendLine("worker_processes  1;");
@@ -766,16 +819,16 @@ namespace Phoron.Core
             sb.AppendLine("    client_body_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-body")) + "\";");
             sb.AppendLine("    proxy_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-proxy")) + "\";");
             sb.AppendLine("    fastcgi_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-fcgi")) + "\";");
-            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort));
+            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams));
             foreach (var s in sites ?? new List<Site>())
-                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort));
+                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort, fcgiParams));
             sb.AppendLine("}");
             var path = Path.Combine(dir, "nginx.conf");
             WriteIfChanged(path, sb.ToString());
             return path;
         }
 
-        static string NginxServer(int port, string name, string root, int fcgiPort)
+        static string NginxServer(int port, string name, string root, int fcgiPort, string fcgiParams)
         {
             var sb = new StringBuilder();
             sb.AppendLine("    server {");
@@ -791,14 +844,14 @@ namespace Phoron.Core
             sb.AppendLine("            location ~ \\.php$ {");
             sb.AppendLine("                fastcgi_pass   127.0.0.1:" + fcgiPort + ";");
             sb.AppendLine("                fastcgi_param  SCRIPT_FILENAME $request_filename;");
-            sb.AppendLine("                include        fastcgi_params;");
+            sb.AppendLine("                include        \"" + fcgiParams + "\";");
             sb.AppendLine("            }");
             sb.AppendLine("        }");
             sb.AppendLine("        location ~ \\.php$ {");
             sb.AppendLine("            fastcgi_pass   127.0.0.1:" + fcgiPort + ";");
             sb.AppendLine("            fastcgi_index  index.php;");
             sb.AppendLine("            fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;");
-            sb.AppendLine("            include        fastcgi_params;");
+            sb.AppendLine("            include        \"" + fcgiParams + "\";");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
             return sb.ToString();
