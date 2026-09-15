@@ -36,6 +36,7 @@ namespace Phoron.Tests
             try
             {
                 UjiIni();
+                UjiPenulisanAtomik();
                 UjiPemindai();
                 UjiProfil();
                 UjiSitus();
@@ -106,6 +107,73 @@ namespace Phoron.Tests
         }
 
         // ---------------------------------------------------------------- Uji
+
+        static void UjiPenulisanAtomik()
+        {
+            Bagian("Penulisan atomik");
+            var dir = Path.Combine(Paths.Tmp, "atomik");
+            Directory.CreateDirectory(dir);
+            var p = Path.Combine(dir, "coba.txt");
+
+            // Tujuan yang BELUM ada adalah jebakan File.Replace: ia melempar
+            // FileNotFoundException kalau berkas tujuannya tidak ada. Cabang ini
+            // terpakai terus - tiap profil baru, tiap vhost, dan phoron.ini pada
+            // jalan pertama.
+            AtomicFile.WriteAllText(p, "pertama");
+            Ok("Tulis atomik membuat berkas yang belum ada",
+               File.Exists(p) && File.ReadAllText(p) == "pertama");
+
+            AtomicFile.WriteAllText(p, "kedua");
+            Ok("Tulis kedua menimpa isi lama", File.ReadAllText(p) == "kedua");
+
+            var sisa = Directory.GetFiles(dir, "*.ptmp*");
+            Ok("Berkas sementara tidak tertinggal", sisa.Length == 0,
+               string.Join(", ", sisa.Select(Path.GetFileName).ToArray()));
+
+            // Berkas hosts Windows ber-atribut ReadOnly. Cara lama menolak
+            // berkas seperti itu - dibuktikan di bawah, bukan diandaikan.
+            var pRo = Path.Combine(dir, "readonly.txt");
+            AtomicFile.WriteAllText(pRo, "awal");
+            File.SetAttributes(pRo, FileAttributes.ReadOnly);
+            var caraLamaMenolak = false;
+            try { File.WriteAllText(pRo, "lewat cara lama"); }
+            catch (UnauthorizedAccessException) { caraLamaMenolak = true; }
+            Ok("File.WriteAllText memang menolak berkas ReadOnly", caraLamaMenolak);
+
+            AtomicFile.WriteAllText(pRo, "sesudah");
+            Ok("Tulis atomik tetap berhasil pada berkas ReadOnly",
+               File.ReadAllText(pRo) == "sesudah");
+            Ok("Atribut ReadOnly dikembalikan seperti semula",
+               (File.GetAttributes(pRo) & FileAttributes.ReadOnly) != 0,
+               File.GetAttributes(pRo).ToString());
+            File.SetAttributes(pRo, FileAttributes.Normal);
+
+            // Isi besar: memastikan penukarannya bukan cuma bekerja untuk berkas
+            // mungil yang muat dalam satu blok.
+            var besar = new string('x', 500 * 1024);
+            AtomicFile.WriteAllText(p, besar);
+            Ok("Isi besar tertulis utuh",
+               new FileInfo(p).Length == besar.Length && File.ReadAllText(p) == besar,
+               new FileInfo(p).Length.ToString());
+
+            var baris = new[] { "satu", "dua", "tiga" };
+            var pBaris = Path.Combine(dir, "baris.txt");
+            AtomicFile.WriteAllLines(pBaris, baris);
+            Ok("WriteAllLines menghasilkan baris yang sama dengan cara lama",
+               File.ReadAllLines(pBaris).SequenceEqual(baris));
+
+            // Karantina: berkas cacat DIPINDAH, bukan dihapus - isinya harus
+            // masih bisa dilihat pengguna sesudahnya.
+            var pRusak = Path.Combine(dir, "rusak.ini");
+            File.WriteAllText(pRusak, "isi yang mau diselamatkan");
+            var karantina = AtomicFile.Karantina(pRusak, "rusak");
+            Ok("Karantina memindahkan berkasnya",
+               karantina != null && !File.Exists(pRusak) && File.Exists(karantina));
+            Ok("Isi berkas yang dikarantina tidak hilang",
+               karantina != null && File.ReadAllText(karantina) == "isi yang mau diselamatkan");
+            Ok("Karantina berkas yang tidak ada mengembalikan null",
+               AtomicFile.Karantina(Path.Combine(dir, "hantu.ini"), "rusak") == null);
+        }
 
         static void UjiIni()
         {
