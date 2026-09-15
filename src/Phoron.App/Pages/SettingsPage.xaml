@@ -118,6 +118,31 @@
                     <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
                                Text="{loc:T 'Pengecekan dilewati kalau baru dilakukan dalam 6 jam terakhir - API GitHub tanpa token dibatasi 60 permintaan per jam.'}"/>
                     <TextBlock x:Name="TxtPembaruan" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                    <!-- Token menaikkan jatah 60 -> 5.000 permintaan per jam.
+                         Batas 60 itu berlaku per ALAMAT IP, bukan per aplikasi,
+                         jadi di jaringan kantor jatahnya habis oleh alat lain
+                         sebelum Phoron sempat memakainya. -->
+                    <TextBlock Text="{loc:T 'Token GitHub (opsional)'}" Style="{StaticResource Label}"/>
+                    <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
+                               TextWrapping="Wrap"
+                               Text="{loc:T 'Menaikkan jatah dari 60 jadi 5.000 permintaan per jam. Token TIDAK perlu diberi izin apa pun - Phoron hanya membaca daftar rilis yang memang publik. Disimpan tersandi di phoron.ini, hanya bisa dibuka oleh akun Windows ini di komputer ini.'}"/>
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <!-- PasswordBox, bukan TextBox: token tidak boleh terbaca
+                             orang yang kebetulan melihat layar. -->
+                        <PasswordBox x:Name="TxtToken" Grid.Column="0" Margin="0,0,8,0"
+                                     PasswordChanged="Token_Ubah" Padding="6,4,6,4"/>
+                        <ui:Button x:Name="BtnUjiToken" Grid.Column="1"
+                                   Content="{loc:T 'Uji token'}" Click="BtnUjiToken_Click"/>
+                    </Grid>
+                    <TextBlock x:Name="TxtToken2" TextWrapping="Wrap" Margin="0,0,0,6"
+                               Style="{StaticResource SubJudul}" FontSize="12"/>
+                    <ui:Button Content="{loc:T 'Cara membuat token'}" Margin="0,0,0,12"
+                               HorizontalAlignment="Left" Click="BtnCaraToken_Click"/>
                     <WrapPanel>
                         <ui:Button x:Name="BtnCek" Content="{loc:T 'Cek pembaruan sekarang'}"
                                    Margin="0,0,8,0" Click="BtnCek_Click"/>

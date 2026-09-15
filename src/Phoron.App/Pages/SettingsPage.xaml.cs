@@ -46,6 +46,8 @@ namespace Phoron.App.Pages
                 if ((it.Tag ?? "").ToString() == s.Bahasa) CmbBahasa.SelectedItem = it;
             if (CmbBahasa.SelectedItem == null) CmbBahasa.SelectedIndex = 0;
             SwCekPembaruan.IsChecked = s.CekPembaruan;
+            TxtToken.Password = s.GithubToken ?? "";
+            SegarkanKeteranganToken();
             foreach (ComboBoxItem item in CmbTerminal.Items)
                 if ((item.Tag ?? "").ToString() == s.Terminal) CmbTerminal.SelectedItem = item;
             if (CmbTerminal.SelectedItem == null) CmbTerminal.SelectedIndex = 0;
@@ -175,6 +177,60 @@ namespace Phoron.App.Pages
                 // sakelar disentuh justru mengganggu.
                 _e.Apply();
             }
+        }
+
+        /// <summary>
+        /// Token disimpan seketika seperti setelan lain, tapi TIDAK lewat
+        /// SimpanSeketika: fungsi itu membaca ulang seluruh kendali, dan
+        /// PasswordBox tidak punya nilai yang bisa dibaca balik dengan aman.
+        /// </summary>
+        void Token_Ubah(object sender, RoutedEventArgs e)
+        {
+            if (_mengisi) return;
+            _e.Settings.GithubToken = (TxtToken.Password ?? "").Trim();
+            _e.Settings.Save();
+            SegarkanKeteranganToken();
+        }
+
+        void SegarkanKeteranganToken()
+        {
+            var t = (_e.Settings.GithubToken ?? "").Trim();
+            TxtToken2.Text = t.Length == 0
+                ? "Belum diisi - Phoron memakai jatah anonim 60 permintaan per jam."
+                : "Tersimpan tersandi: " + Rahasia.Samar(t) + ". Tekan \"Uji token\" untuk memastikan GitHub menerimanya.";
+        }
+
+        async void BtnUjiToken_Click(object sender, RoutedEventArgs e)
+        {
+            BtnUjiToken.IsEnabled = false;
+            TxtToken2.Text = "Menanyakan sisa jatah ke GitHub...";
+            try
+            {
+                // Yang diuji isi kotaknya, bukan yang tersimpan: orang menekan
+                // tombol ini tepat setelah menempel token, sebelum yakin.
+                var h = await Updater.UjiTokenAsync((TxtToken.Password ?? "").Trim());
+                TxtToken2.Text = h.Pesan;
+            }
+            finally { BtnUjiToken.IsEnabled = true; }
+        }
+
+        void BtnCaraToken_Click(object sender, RoutedEventArgs e)
+        {
+            var pesan =
+                "1. Buka github.com, masuk ke akun Anda." + Environment.NewLine +
+                "2. Settings -> Developer settings -> Personal access tokens" + Environment.NewLine +
+                "   -> Tokens (classic) -> Generate new token (classic)." + Environment.NewLine +
+                "3. Beri nama bebas, misalnya \"Phoron\"." + Environment.NewLine +
+                "4. JANGAN centang satu pun kotak izin. Phoron cuma membaca daftar" + Environment.NewLine +
+                "   rilis yang memang publik, jadi token tanpa izin sudah cukup -" + Environment.NewLine +
+                "   dan token tanpa izin tidak bisa dipakai berbuat apa-apa kalau bocor." + Environment.NewLine +
+                "5. Generate token, salin nilainya (hanya ditampilkan sekali)." + Environment.NewLine +
+                "6. Tempel ke kotak Token GitHub di Pengaturan, lalu tekan \"Uji token\"." +
+                Environment.NewLine + Environment.NewLine +
+                "Buka halaman pembuatan token sekarang?";
+
+            if (AppState.Ask(pesan, "Cara membuat token GitHub"))
+                Shell.Open("https://github.com/settings/tokens/new?description=Phoron");
         }
 
         void SegarkanKeteranganPembaruan()
