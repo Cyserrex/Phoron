@@ -23,8 +23,11 @@ namespace Phoron.App.Pages
 
         void IsiDaftarBerkas()
         {
+            // Saringannya "*.log*", bukan "*.log": berkas hasil putaran
+            // bernama phoron.log.1 dan seterusnya, dan justru di situlah
+            // kejadian beberapa sesi lalu tersimpan.
             var berkas = Directory.Exists(Paths.Logs)
-                ? Directory.GetFiles(Paths.Logs, "*.log").OrderBy(f => f).ToList()
+                ? Directory.GetFiles(Paths.Logs, "*.log*").OrderBy(f => f).ToList()
                 : new System.Collections.Generic.List<string>();
             CmbBerkas.ItemsSource = berkas.Select(Path.GetFileName).ToList();
             if (CmbBerkas.Items.Count > 0) CmbBerkas.SelectedIndex = 0;

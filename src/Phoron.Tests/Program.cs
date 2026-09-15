@@ -64,6 +64,7 @@ namespace Phoron.Tests
                 UjiKonfigurasiNginx();
                 UjiLogWarna();
                 UjiRiwayatLog();
+                UjiPutaranLog();
                 UjiUmpanAtom();
             }
             catch (Exception ex)
@@ -288,6 +289,91 @@ namespace Phoron.Tests
                !jendela.Contains("readonly Engine _engine = new Engine()"));
             Ok("MainWindow menerima Engine dari luar",
                jendela.Contains("public MainWindow(Engine engine)"));
+        }
+
+        static void UjiPutaranLog()
+        {
+            Bagian("Putaran berkas log");
+            var dir = Path.Combine(Paths.Tmp, "putaran");
+            Directory.CreateDirectory(dir);
+            var p = Path.Combine(dir, "phoron.log");
+            foreach (var f in Directory.GetFiles(dir)) File.Delete(f);
+
+            // Satu baris panjang supaya batasnya cepat terlampaui tanpa menulis
+            // ratusan ribu kali.
+            var gemuk = new string('x', 64 * 1024);
+            var perluBaris = (int)(LogFile.BatasBytes / gemuk.Length) + 2;
+            for (int i = 0; i < perluBaris; i++) LogFile.Tambah(p, gemuk);
+
+            Ok("Log berputar setelah melewati batas", File.Exists(p + ".1"));
+            Ok("Berkas aktif menyusut sesudah berputar",
+               new FileInfo(p).Length < LogFile.BatasBytes,
+               new FileInfo(p).Length.ToString());
+
+            // Baris yang tergeser harus PINDAH, bukan hilang.
+            LogFile.Tambah(p, "penanda sebelum putaran");
+            LogFile.Putar(p);
+            LogFile.Tambah(p, "penanda sesudah putaran");
+            Ok("Baris terbaru ada di berkas aktif",
+               File.ReadAllText(p).Contains("penanda sesudah putaran"));
+            Ok("Baris lama pindah ke .1, bukan hilang",
+               File.ReadAllText(p + ".1").Contains("penanda sebelum putaran"));
+
+            // Tiap putaran didahului penulisan, seperti di kenyataan: Putar
+            // hanya dipanggil dari Tambah, jadi log yang diam tidak pernah
+            // berputar. Memutar berkali-kali tanpa menulis justru menghabiskan
+            // seluruh generasi - benar, tapi bukan keadaan yang pernah terjadi.
+            for (int i = 0; i < 6; i++)
+            {
+                LogFile.Tambah(p, "isi generasi " + i);
+                LogFile.Putar(p);
+            }
+            var lama = Directory.GetFiles(dir, "phoron.log.*").Length;
+            Ok("Hanya tiga berkas lama disimpan", lama == LogFile.SimpanLama, lama.ToString());
+            Ok("Generasi terbaru ada di .1",
+               File.ReadAllText(p + ".1").Contains("isi generasi 5"));
+            Ok("Generasi terlama sudah dibuang",
+               !File.ReadAllText(p + ".3").Contains("isi generasi 0"));
+
+            // ---------------- inilah yang membuktikan kerusakannya ----------------
+            // Engine.Say dipanggil dari utas layar DAN dari utas kolam - pengawas
+            // Exited dan pembaca keluaran httpd/mysqld semuanya berujung ke sana.
+            // Dengan File.AppendAllText telanjang, dua penulis berbarengan membuat
+            // salah satunya melempar IOException, yang lalu ditelan try/catch
+            // kosong: barisnya lenyap tanpa bekas.
+            var pRamai = Path.Combine(dir, "ramai.log");
+            try { File.Delete(pRamai); } catch { }
+            const int utas = 8, perUtas = 200;
+            var daftarUtas = new List<System.Threading.Thread>();
+            for (int u = 0; u < utas; u++)
+            {
+                var nomor = u;
+                var t = new System.Threading.Thread(() =>
+                {
+                    for (int i = 0; i < perUtas; i++)
+                        LogFile.Tambah(pRamai, "utas " + nomor + " baris " + i);
+                });
+                daftarUtas.Add(t);
+            }
+            foreach (var t in daftarUtas) t.Start();
+            foreach (var t in daftarUtas) t.Join();
+
+            var baris = File.ReadAllLines(pRamai).Where(x => x.Length > 0).ToList();
+            Ok("Penulisan dari banyak utas tidak menghilangkan baris",
+               baris.Count == utas * perUtas,
+               baris.Count + " dari " + (utas * perUtas));
+            Ok("Tidak ada baris yang tercampur setengah-setengah",
+               baris.All(x => x.StartsWith("utas ") && x.Contains(" baris ")),
+               baris.FirstOrDefault(x => !x.StartsWith("utas ")) ?? "");
+
+            // Halaman Log membaca berkas yang sedang dipegang Apache/MySQL, jadi
+            // penulisnya tidak boleh mengunci eksklusif.
+            using (new FileStream(pRamai, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                LogFile.Tambah(pRamai, "ditulis sambil dibaca");
+            }
+            Ok("Berkas yang sedang dibaca tetap bisa ditulisi",
+               File.ReadAllText(pRamai).Contains("ditulis sambil dibaca"));
         }
 
         static void UjiIni()

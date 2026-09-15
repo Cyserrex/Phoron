@@ -169,12 +169,13 @@ namespace Phoron.Core
 
             var h = Log;
             if (h != null) h(text);
-            try
-            {
-                File.AppendAllText(Path.Combine(Paths.Logs, "phoron.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + text + Environment.NewLine);
-            }
-            catch { }
+
+            // Penulisannya diserahkan ke LogFile: ia berputar sebelum berkasnya
+            // membesar tanpa batas, dan mengunci supaya baris tidak lenyap saat
+            // utas layar dan utas layanan menulis berbarengan. Dulu di sini
+            // File.AppendAllText telanjang di dalam try/catch kosong.
+            LogFile.Tambah(Path.Combine(Paths.Logs, "phoron.log"),
+                DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + text);
         }
 
         // ------------------------------------------------------------- Pemuatan
