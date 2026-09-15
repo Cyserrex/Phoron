@@ -135,8 +135,38 @@ namespace Phoron.Core
             return hasil;
         }
 
+        /// <summary>Sebanyak ini baris riwayat disimpan untuk ditampilkan di layar.</summary>
+        const int RiwayatMaks = 200;
+
+        readonly Queue<BarisLog> _riwayat = new Queue<BarisLog>();
+
+        /// <summary>
+        /// Salinan riwayat log terakhir.
+        ///
+        /// Riwayatnya dipegang di sini, bukan di halaman Beranda, karena halaman
+        /// itu DIBUAT ULANG setiap kali navigasi berpindah - dan antrian yang
+        /// tinggal di dalamnya ikut hilang bersamanya. Gejalanya: panel Aktivitas
+        /// mendadak kosong sepulang dari tab lain, seolah tidak pernah terjadi
+        /// apa-apa. Engine hidup selama aplikasi hidup, jadi di sinilah tempatnya.
+        ///
+        /// Dikembalikan sebagai salinan: Say() bisa dipanggil dari utas layanan,
+        /// sementara yang membacanya utas layar.
+        /// </summary>
+        public List<BarisLog> Riwayat()
+        {
+            lock (_riwayat) return new List<BarisLog>(_riwayat);
+        }
+
         public void Say(string text)
         {
+            // Dicatat SEBELUM pendengarnya dipanggil, supaya penggambar layar
+            // yang membaca Riwayat() sudah melihat baris ini di dalamnya.
+            lock (_riwayat)
+            {
+                _riwayat.Enqueue(new BarisLog { Waktu = DateTime.Now, Teks = text ?? "" });
+                while (_riwayat.Count > RiwayatMaks) _riwayat.Dequeue();
+            }
+
             var h = Log;
             if (h != null) h(text);
             try

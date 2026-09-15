@@ -14,7 +14,6 @@ namespace Phoron.App.Pages
     public partial class DashboardPage : UserControl
     {
         readonly Engine _e = AppState.Engine;
-        readonly Queue<string> _lines = new Queue<string>();
         bool _loading;
 
         public DashboardPage()
@@ -22,21 +21,18 @@ namespace Phoron.App.Pages
             InitializeComponent();
             _e.Log += OnLog;
             Unloaded += (s, ev) => _e.Log -= OnLog;
+            // Riwayat yang sudah ada digambar seketika. Halaman ini dibuat ulang
+            // tiap kali navigasi berpindah, jadi tanpa ini panel Aktivitas selalu
+            // tampak kosong sepulang dari tab lain.
+            GambarLog();
             LoadProfiles();
             RefreshState();
         }
 
-        void OnLog(string text)
-        {
-            Dispatcher.Invoke(() =>
-            {
-                // Hanya 200 baris terakhir yang disimpan; kotak ini untuk melihat
-                // sekilas, riwayat lengkapnya ada di halaman Log.
-                _lines.Enqueue(DateTime.Now.ToString("HH:mm:ss") + "  " + text);
-                while (_lines.Count > 200) _lines.Dequeue();
-                GambarLog();
-            });
-        }
+        // Barisnya sudah dicatat Engine sebelum pendengar ini dipanggil; di
+        // sini tinggal menggambar ulang. Kotak ini untuk melihat sekilas -
+        // riwayat lengkapnya ada di halaman Log.
+        void OnLog(string text) { Dispatcher.Invoke(GambarLog); }
 
         /// <summary>
         /// Menggambar ulang seluruh panel Aktivitas dengan warna per baris.
@@ -60,16 +56,17 @@ namespace Phoron.App.Pages
                 FontSize = TxtLog.FontSize,
                 TextAlignment = TextAlignment.Left,
             };
-            foreach (var baris in _lines)
+            foreach (var baris in _e.Riwayat())
             {
                 var par = new Paragraph { Margin = new Thickness(0) };
 
                 // Jam dipisah dan diredupkan: ia berulang di setiap baris, jadi
                 // menuntut perhatian yang sama dengan isinya justru mengaburkan
-                // mana yang penting.
-                var pisah = baris.IndexOf("  ", StringComparison.Ordinal);
-                var jam = pisah > 0 ? baris.Substring(0, pisah + 2) : "";
-                var isi = pisah > 0 ? baris.Substring(pisah + 2) : baris;
+                // mana yang penting. Waktunya diambil dari saat baris itu DICATAT,
+                // bukan saat digambar - kalau tidak, seluruh riwayat akan tampak
+                // terjadi bersamaan setiap kali halaman ini dibuka.
+                var jam = baris.Waktu.ToString("HH:mm:ss") + "  ";
+                var isi = baris.Teks;
 
                 if (jam.Length > 0)
                     // Abu-abu nada tengah, bukan Opacity: Run memang tidak punya

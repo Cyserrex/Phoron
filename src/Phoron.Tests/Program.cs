@@ -60,6 +60,7 @@ namespace Phoron.Tests
                 UjiRuntimeVc();
                 UjiKonfigurasiNginx();
                 UjiLogWarna();
+                UjiRiwayatLog();
                 UjiUmpanAtom();
             }
             catch (Exception ex)
@@ -660,6 +661,65 @@ namespace Phoron.Tests
             // Perbandingan versi tetap dipakai jalur ini.
             Ok("Versi umpan dibandingkan dengan yang terpasang",
                Updater.LebihBaru("1.20.1", "1.20.0") && !Updater.LebihBaru("1.20.0", "1.20.0"));
+        }
+
+        static void UjiRiwayatLog()
+        {
+            Bagian("Riwayat Aktivitas");
+            // Gejala yang diuji: panel Aktivitas mendadak kosong sepulang dari
+            // tab lain. Sebabnya halaman Beranda dibuat ulang tiap navigasi,
+            // sementara antriannya dulu tinggal DI DALAM halaman itu.
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-riwayat-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+                var e = new Engine();
+
+                Ok("Riwayat mula-mula kosong", e.Riwayat().Count == 0);
+
+                e.Say("baris pertama");
+                e.Say("baris kedua");
+                var r = e.Riwayat();
+                Ok("Baris tercatat berurutan",
+                   r.Count == 2 && r[0].Teks == "baris pertama" && r[1].Teks == "baris kedua",
+                   string.Join(" | ", r.Select(x => x.Teks).ToArray()));
+                Ok("Waktunya ikut tercatat", r[0].Waktu > DateTime.Now.AddMinutes(-1));
+
+                // Inilah inti perbaikannya: pembaca baru - halaman yang baru
+                // dibuat - harus melihat seluruh riwayat, bukan layar kosong.
+                var salinan = e.Riwayat();
+                Ok("Pembaca baru melihat riwayat yang sudah ada", salinan.Count == 2);
+
+                // Salinan, bukan antrian aslinya: mengubahnya tidak boleh
+                // merusak riwayat yang dipegang Engine.
+                salinan.Clear();
+                Ok("Yang dikembalikan salinan, bukan antrian aslinya", e.Riwayat().Count == 2);
+
+                // Batas 200 harus membuang yang TERTUA, bukan berhenti mencatat.
+                for (int i = 0; i < 260; i++) e.Say("baris " + i);
+                var penuh = e.Riwayat();
+                Ok("Riwayat dibatasi 200 baris", penuh.Count == 200, penuh.Count.ToString());
+                Ok("Yang dibuang adalah yang tertua",
+                   penuh[penuh.Count - 1].Teks == "baris 259", penuh[penuh.Count - 1].Teks);
+                Ok("Baris paling awal sudah tidak ada",
+                   !penuh.Any(x => x.Teks == "baris pertama"));
+
+                // Say juga menulis ke berkas; keduanya tidak boleh saling ganggu.
+                Ok("phoron.log tetap ditulis",
+                   File.Exists(Path.Combine(Paths.Logs, "phoron.log")));
+
+                e.Say(null);
+                Ok("Teks null tidak membuat pencatat meledak",
+                   e.Riwayat()[e.Riwayat().Count - 1].Teks == "");
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
         }
 
         static void UjiLogWarna()

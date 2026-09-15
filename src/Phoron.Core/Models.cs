@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.22.0";
+        public const string Version = "1.22.1";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
@@ -25,6 +25,13 @@ namespace Phoron.Core
                 return "Hak cipta © " + tahun + " " + Pemilik;
             }
         }
+    }
+
+    /// <summary>Satu baris riwayat log berikut waktunya.</summary>
+    public class BarisLog
+    {
+        public DateTime Waktu;
+        public string Teks = "";
     }
 
     public enum BinKind { Php, Apache, Nginx, MySql, Node }
