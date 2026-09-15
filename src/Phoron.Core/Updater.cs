@@ -219,8 +219,79 @@ namespace Phoron.Core
             }
         }
 
+        /// <summary>
+        /// Umpan Atom rilis. Dilayani github.com, BUKAN api.github.com - dan
+        /// karena itu tidak tunduk pada batas 60 permintaan per jam. Sudah
+        /// dibuktikan: jawabannya tidak memuat satu pun header X-RateLimit.
+        /// </summary>
+        const string UmpanAtom = "https://github.com/" + Repo + "/releases.atom";
+
+        /// <summary>
+        /// Membaca versi terbaru dari umpan Atom.
+        ///
+        /// Umpan ini tidak menyebutkan berkas aset, jadi alamat installernya
+        /// disusun dari pola penamaan yang dipakai CI: satu-satunya hal yang
+        /// harus tetap - dan kalau suatu saat berubah, jalur API di bawah masih
+        /// jadi cadangannya.
+        /// </summary>
+        public static HasilCek UraiAtom(string xml)
+        {
+            var h = new HasilCek();
+            if (string.IsNullOrWhiteSpace(xml)) { h.Galat = "Jawaban kosong dari GitHub."; return h; }
+
+            // Entri PERTAMA adalah rilis terbaru; GitHub mengurutkannya begitu.
+            var tag = Regex.Match(xml, "/releases/tag/([^\"<]+)");
+            if (!tag.Success) { h.Galat = "Nomor versi tidak ditemukan di umpan rilis."; return h; }
+
+            var namaTag = tag.Groups[1].Value.Trim();
+            h.Versi = Bersihkan(namaTag);
+            h.UrlHalaman = "https://github.com/" + Repo + "/releases/tag/" + namaTag;
+            h.UrlInstaller = "https://github.com/" + Repo + "/releases/download/"
+                             + namaTag + "/Phoron-" + h.Versi + "-Setup.exe";
+
+            // Catatan rilis di umpan berupa HTML ter-escape. Yang dibutuhkan
+            // cuma ringkasannya, jadi tag-nya dibuang seadanya - ini keterangan
+            // untuk dibaca manusia, bukan data yang diolah lebih lanjut.
+            var isi = Regex.Match(xml, "<content type=\"html\">(.*?)</content>", RegexOptions.Singleline);
+            if (isi.Success)
+            {
+                var t = isi.Groups[1].Value
+                    .Replace("&lt;", "<").Replace("&gt;", ">")
+                    .Replace("&quot;", "\"").Replace("&amp;", "&");
+                t = Regex.Replace(t, "<[^>]+>", " ");
+                h.Catatan = Regex.Replace(t, "\\s+", " ").Trim();
+            }
+            return h;
+        }
+
+        /// <summary>
+        /// Mengecek rilis terbaru lewat umpan Atom - tanpa menyentuh API sama
+        /// sekali, jadi batas 60 permintaan per jam tidak berlaku dan token
+        /// tidak dibutuhkan siapa pun.
+        /// </summary>
+        static async Task<HasilCek> CekLewatAtomAsync()
+        {
+            var req = Siapkan(UmpanAtom);
+            req.Accept = "application/atom+xml";
+            req.Timeout = 20000;
+            using (var resp = await req.GetResponseAsync())
+            using (var r = new StreamReader(resp.GetResponseStream()))
+                return UraiAtom(await r.ReadToEndAsync());
+        }
+
         public static async Task<HasilCek> CekAsync()
         {
+            // Umpan Atom lebih dulu: ia TIDAK tunduk pada batas 60 permintaan
+            // per jam milik API, jadi pengecekan rutin tidak pernah kehabisan
+            // jatah dan tidak seorang pun perlu menyiapkan token. API dipakai
+            // hanya kalau umpan itu gagal - misalnya diblokir jaringan kantor.
+            try
+            {
+                var lewatAtom = await CekLewatAtomAsync();
+                if (lewatAtom.Galat == null && lewatAtom.Versi.Length > 0) return lewatAtom;
+            }
+            catch { /* jatuh ke API di bawah */ }
+
             try
             {
                 var req = Siapkan(ApiTerbaru);

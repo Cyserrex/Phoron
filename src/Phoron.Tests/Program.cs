@@ -61,6 +61,7 @@ namespace Phoron.Tests
                 UjiKonfigurasiNginx();
                 UjiLogWarna();
                 UjiRahasia();
+                UjiUmpanAtom();
             }
             catch (Exception ex)
             {
@@ -609,6 +610,57 @@ namespace Phoron.Tests
                 var res = Shell.Run(v.MainExe, "-n -l \"" + file + "\"", v.Path, 30000);
                 Ok(v.Version + ": halaman sambutan lolos php -l", res.Ok, res.All.Trim());
             }
+        }
+
+        static void UjiUmpanAtom()
+        {
+            Bagian("Umpan Atom rilis");
+            // Umpan ini dilayani github.com, bukan api.github.com, jadi TIDAK
+            // tunduk pada batas 60 permintaan per jam - itulah sebabnya ia jadi
+            // jalur utama dan token GitHub tidak dibutuhkan siapa pun.
+            var contoh =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                "<feed xmlns=\"http://www.w3.org/2005/Atom\">\n" +
+                "  <title>Release notes from Phoron</title>\n" +
+                "  <entry>\n" +
+                "    <id>tag:github.com,2008:Repository/1365049606/v1.20.0</id>\n" +
+                "    <link rel=\"alternate\" type=\"text/html\" " +
+                "href=\"https://github.com/Cyserrex/Phoron/releases/tag/v1.20.0\"/>\n" +
+                "    <title>Phoron 1.20.0</title>\n" +
+                "    <content type=\"html\">&lt;p&gt;&lt;strong&gt;Full Changelog&lt;/strong&gt;: v1.19.0...v1.20.0&lt;/p&gt;</content>\n" +
+                "  </entry>\n" +
+                "  <entry>\n" +
+                "    <link rel=\"alternate\" type=\"text/html\" " +
+                "href=\"https://github.com/Cyserrex/Phoron/releases/tag/v1.19.0\"/>\n" +
+                "    <title>Phoron 1.19.0</title>\n" +
+                "  </entry>\n" +
+                "</feed>";
+
+            var h = Updater.UraiAtom(contoh);
+            Ok("Tidak ada galat pada umpan yang sah", h.Galat == null, h.Galat);
+            Ok("Versi diambil dari entri PERTAMA, bukan sembarang entri",
+               h.Versi == "1.20.0", h.Versi);
+            Ok("Awalan v dibuang dari nomor versi", !h.Versi.StartsWith("v"), h.Versi);
+            Ok("Halaman rilis menunjuk tag yang benar",
+               h.UrlHalaman.EndsWith("/releases/tag/v1.20.0"), h.UrlHalaman);
+            // Umpan Atom tidak menyebut berkas aset, jadi alamatnya disusun dari
+            // pola penamaan CI. Kalau pola itu berubah, uji ini yang berbunyi.
+            Ok("Alamat installer disusun sesuai pola CI",
+               h.UrlInstaller == "https://github.com/Cyserrex/Phoron/releases/download/"
+                                 + "v1.20.0/Phoron-1.20.0-Setup.exe", h.UrlInstaller);
+            Ok("Alamat installer memakai github.com, BUKAN api.github.com",
+               h.UrlInstaller.IndexOf("api.github.com", StringComparison.OrdinalIgnoreCase) < 0);
+            Ok("Catatan rilis dibersihkan dari tag HTML",
+               h.Catatan.IndexOf('<') < 0 && h.Catatan.IndexOf("Full Changelog", StringComparison.Ordinal) >= 0,
+               h.Catatan);
+
+            Ok("Umpan kosong dilaporkan sebagai galat", Updater.UraiAtom("").Galat != null);
+            Ok("Teks sampah dilaporkan sebagai galat, bukan versi karangan",
+               Updater.UraiAtom("bukan xml sama sekali").Galat != null);
+
+            // Perbandingan versi tetap dipakai jalur ini.
+            Ok("Versi umpan dibandingkan dengan yang terpasang",
+               Updater.LebihBaru("1.20.1", "1.20.0") && !Updater.LebihBaru("1.20.0", "1.20.0"));
         }
 
         static void UjiRahasia()
