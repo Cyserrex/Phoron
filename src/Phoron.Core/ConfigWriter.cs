@@ -502,6 +502,24 @@ namespace Phoron.Core
             //
             // Yang dilewati TIDAK dihapus dari profil: dibawa kembali ke
             // komputer asalnya, daftarnya harus utuh seperti semula.
+            // oci8 dan pdo_oci butuh Oracle Instant Client, yang TIDAK ikut dalam
+            // paket PHP. Menulisnya ke php.ini saat client-nya tidak ada atau
+            // salah arsitektur membuat SETIAP permintaan halaman diawali
+            // peringatan Windows yang tidak menyebut Oracle sama sekali - dan
+            // ekstensinya toh tetap tidak termuat. Jadi dilewati saja, dengan
+            // penjelasan yang menyebut apa yang sebenarnya kurang.
+            var oracle = Oracle.Periksa(php);
+            if (!oracle.Layak)
+            {
+                var kena = daftarExt.Where(Oracle.AdalahEkstensiOracle).ToList();
+                if (kena.Count > 0)
+                {
+                    daftarExt = daftarExt.Where(x => !Oracle.AdalahEkstensiOracle(x)).ToList();
+                    r.Warnings.Add(string.Join(", ", kena) + " tidak ditulis ke php.ini. "
+                                   + oracle.Pesan);
+                }
+            }
+
             var adaDll = new HashSet<string>(AvailableExtensions(php), StringComparer.OrdinalIgnoreCase);
             if (adaDll.Count > 0)
             {

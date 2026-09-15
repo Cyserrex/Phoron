@@ -56,6 +56,7 @@ namespace Phoron.Tests
                 UjiBahasa();
                 UjiHostsTool();
                 UjiTataLetakBin();
+                UjiOracle();
             }
             catch (Exception ex)
             {
@@ -729,6 +730,70 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiOracle()
+        {
+            Bagian("Oracle Instant Client");
+            // PE sungguhan berarsitektur pasti, tersedia di setiap Windows 64-bit:
+            // System32 berisi x64, SysWOW64 berisi x86. Memakai berkas palsu tidak
+            // membuktikan apa pun - pembaca header PE akan mengembalikan "" dan
+            // "" selalu dianggap sepadan.
+            var x64 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                                   "System32", "kernel32.dll");
+            var x86 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                                   "SysWOW64", "kernel32.dll");
+            if (!File.Exists(x64) || !File.Exists(x86))
+            { Console.WriteLine("     dilewati: bukan Windows 64-bit"); return; }
+
+            Ok("Pembaca PE membedakan x64 dan x86",
+               BinProbe.Arsitektur(x64) == "x64" && BinProbe.Arsitektur(x86) == "x86",
+               BinProbe.Arsitektur(x64) + " / " + BinProbe.Arsitektur(x86));
+
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-oracle-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                var d86 = Path.Combine(akar, "client86");
+                var d64 = Path.Combine(akar, "client64");
+                Directory.CreateDirectory(d86);
+                Directory.CreateDirectory(d64);
+                File.Copy(x86, Path.Combine(d86, "oci.dll"));
+                File.Copy(x64, Path.Combine(d64, "oci.dll"));
+
+                var phpX64 = new BinPackage
+                {
+                    Kind = BinKind.Php, Id = "php-uji", Version = "5.6.40",
+                    Arch = "x64", Path = akar, MainExe = x64,
+                };
+
+                var hanya86 = Oracle.Periksa(phpX64, d86);
+                Ok("Client x86 saja dengan PHP x64 dinyatakan TIDAK layak",
+                   !hanya86.Layak && hanya86.Ada, hanya86.Pesan);
+                Ok("Pesannya menyebut arsitektur yang harus dipasang",
+                   hanya86.Pesan.IndexOf("x64", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                // Inti uji ini: Windows MELEWATI client yang tidak sepadan dan
+                // meneruskan pencarian - dibuktikan dengan php.exe sungguhan.
+                // Berhenti di yang pertama akan menuduh keadaan yang sehat.
+                var duaduanya = Oracle.Periksa(phpX64, d86 + ";" + d64);
+                Ok("x86 di depan tapi x64 ada di belakang tetap dinyatakan layak",
+                   duaduanya.Layak, duaduanya.Pesan);
+                Ok("Yang dilaporkan adalah client yang sepadan, bukan yang pertama",
+                   duaduanya.JalurDll != null
+                   && duaduanya.JalurDll.IndexOf("client64", StringComparison.OrdinalIgnoreCase) >= 0,
+                   duaduanya.JalurDll);
+
+                var kosong = Oracle.Periksa(phpX64, Path.Combine(akar, "tidak-ada"));
+                Ok("Tanpa client mana pun dinyatakan tidak layak", !kosong.Layak && !kosong.Ada);
+                Ok("Pesannya menyuruh memasang, bukan menyalahkan DLL ekstensi",
+                   kosong.Pesan.IndexOf("Instant Client", StringComparison.OrdinalIgnoreCase) >= 0);
+
+                Ok("Nama ekstensi Oracle dikenali",
+                   Oracle.AdalahEkstensiOracle("oci8_11g") && Oracle.AdalahEkstensiOracle("pdo_oci")
+                   && !Oracle.AdalahEkstensiOracle("mysqli"));
+            }
+            finally { try { Directory.Delete(akar, true); } catch { } }
         }
 
         static void UjiTataLetakBin()

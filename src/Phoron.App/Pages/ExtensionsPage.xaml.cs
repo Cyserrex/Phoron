@@ -247,32 +247,48 @@ namespace Phoron.App.Pages
 
 
         /// <summary>
-        /// Menerjemahkan dua galat pemuatan DLL yang paling membingungkan.
-        /// Keduanya kalimat Windows apa adanya, dan tak satu pun menyebut apa
-        /// yang sebenarnya salah - orang lalu menyangka ekstensinya rusak atau
-        /// Phoron gagal menulis php.ini, padahal berkasnya sudah benar.
+        /// Menerjemahkan dua galat pemuatan DLL yang paling membingungkan, dan
+        /// menyertakan hasil pemeriksaan Oracle Instant Client di komputer ini.
+        ///
+        /// Kedua kalimat itu murni kalimat Windows, dan tak satu pun menyebut
+        /// apa yang sebenarnya kurang - orang lalu menyangka ekstensinya rusak
+        /// atau Phoron gagal menulis php.ini, padahal berkasnya sudah benar.
         /// </summary>
-        static string Petunjuk(string keluaran)
+        string Petunjuk(string keluaran)
         {
             var t = keluaran ?? "";
+            bool arsitektur = t.IndexOf("not a valid Win32 application", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool hilang = t.IndexOf("specified module could not be found", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!arsitektur && !hilang) return "";
+
             var sb = new System.Text.StringBuilder();
+            sb.Append(Environment.NewLine + Environment.NewLine + "--- Penjelasan ---" + Environment.NewLine);
+            if (arsitektur)
+                sb.Append("\"is not a valid Win32 application\" berarti BEDA ARSITEKTUR, dan yang salah "
+                    + "arsitektur biasanya bukan DLL ekstensinya, melainkan pustaka yang dipanggilnya."
+                    + Environment.NewLine);
+            if (hilang)
+                sb.Append("\"The specified module could not be found\" berarti DLL ekstensinya ADA, tapi "
+                    + "pustaka yang dibutuhkannya tidak ketemu sama sekali." + Environment.NewLine);
 
-            if (t.IndexOf("not a valid Win32 application", StringComparison.OrdinalIgnoreCase) >= 0)
-                sb.Append("\n\n--- Penjelasan ---\n"
-                    + "\"is not a valid Win32 application\" hampir selalu berarti BEDA ARSITEKTUR, "
-                    + "dan yang salah arsitektur biasanya bukan DLL ekstensinya, melainkan pustaka "
-                    + "yang dipanggilnya. Contoh paling sering: php_oci8_*.dll 64-bit memanggil "
-                    + "oci.dll milik Oracle Instant Client, lalu Windows menemukan client 32-bit "
-                    + "lebih dulu di PATH. Periksa urutan PATH: folder Instant Client 64-bit harus "
-                    + "berada SEBELUM yang 32-bit, atau yang 32-bit dibuang. Phoron tidak bisa "
-                    + "memperbaikinya dari sini - PATH itu milik Windows, bukan milik profil.");
+            // Kasus tersering sejauh ini: oci8. Karena itu keadaan NYATA komputer
+            // ini ikut dilaporkan, bukan cuma teori umum - dugaan yang terdengar
+            // masuk akal tapi tidak diperiksa justru mengirim orang ke arah salah.
+            if (t.IndexOf("oci", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var o = Oracle.Periksa(_e.Php);
+                sb.Append(Environment.NewLine + "Oracle Instant Client di komputer ini: ");
+                sb.Append(o.Ada
+                    ? o.JalurDll + " (" + (o.Arsitektur.Length > 0 ? o.Arsitektur : "arsitektur tak terbaca") + ")"
+                    : "TIDAK DITEMUKAN di PATH");
+                sb.Append(o.Pesan.Length > 0
+                    ? Environment.NewLine + Environment.NewLine + o.Pesan
+                    : Environment.NewLine + "Arsitekturnya sepadan dengan PHP, jadi sebab galatnya ada di tempat lain.");
+            }
 
-            if (t.IndexOf("specified module could not be found", StringComparison.OrdinalIgnoreCase) >= 0)
-                sb.Append("\n\n--- Penjelasan ---\n"
-                    + "\"The specified module could not be found\" berarti DLL ekstensinya ADA, "
-                    + "tapi pustaka yang dibutuhkannya tidak ketemu sama sekali - misalnya Oracle "
-                    + "Instant Client belum terpasang, atau foldernya belum masuk PATH.");
-
+            sb.Append(Environment.NewLine + Environment.NewLine
+                + "Phoron tidak bisa memperbaiki ini dari sini: Instant Client dan PATH itu "
+                + "milik Windows, bukan milik profil.");
             return sb.ToString();
         }
 
