@@ -42,26 +42,54 @@ namespace Phoron.Core
                 .ToList();
         }
 
+        /// <summary>
+        /// Sedalam apa penelusuran turun dari folder bin. Cukup untuk tata letak
+        /// terdalam yang lazim, yaitu WAMP: &lt;root&gt;\bin\php\php8.1.0.
+        /// </summary>
+        const int KedalamanMaks = 3;
+
+        /// <summary>
+        /// Folder yang tidak mungkin berisi paket, tapi bisa sangat besar. Tanpa
+        /// daftar ini, menambahkan folder bin yang salah sedikit saja - misalnya
+        /// akar sebuah instalasi - membuat pemindaian merayapi htdocs dan
+        /// node_modules milik pengguna.
+        /// </summary>
+        static readonly HashSet<string> Lewati = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ext", "conf", "logs", "log", "data", "tmp", "temp", "cache", "backup",
+            "www", "htdocs", "public_html", "cgi-bin", "node_modules", ".git", ".svn",
+            "include", "includes", "lib", "libs", "share", "man", "doc", "docs",
+            "icons", "error", "modules", "sbin", "sessions", "uploads", "vendor",
+        };
+
         static IEnumerable<BinPackage> ScanRoot(string root)
         {
-            // Dua bentuk tata letak didukung: <root>\php\php-8.3.12-... (gaya Laragon)
-            // dan <root>\php-8.3.12-... (folder versi langsung di root).
-            foreach (var dir in SafeDirs(root))
+            // Tata letak yang harus tertangani sekaligus:
+            //   <root>\php-8.3.12-...            folder versi langsung di akar
+            //   <root>\php\php-8.3.12-...        gaya Laragon
+            //   <root>\php                       gaya XAMPP (tanpa folder versi)
+            //   <root>\bin\php\php8.1.0          gaya WAMP
+            // Daripada menambah pola satu per satu tiap kali ketemu pengelola
+            // baru, folder ditelusuri sampai kedalaman terbatas dan yang
+            // menentukan adalah ADA TIDAKNYA exe - lihat Identify.
+            return Telusuri(root, root, 0);
+        }
+
+        static IEnumerable<BinPackage> Telusuri(string dir, string root, int dalam)
+        {
+            foreach (var sub in SafeDirs(dir))
             {
-                var pkg = Identify(dir, root);
+                if (Lewati.Contains(Path.GetFileName(sub))) continue;
+
+                var pkg = Identify(sub, root);
+                // Sebuah paket tidak ditelusuri lebih dalam: isinya berkas
+                // miliknya sendiri, dan "bin" di dalam Apache bukan folder bin
+                // dalam arti Phoron.
                 if (pkg != null) { yield return pkg; continue; }
 
-                var name = Path.GetFileName(dir).ToLowerInvariant();
-                if (name == "php" || name == "apache" || name == "nginx"
-                    || name == "mysql" || name == "mariadb"
-                    || name == "nodejs" || name == "node")
-                {
-                    foreach (var sub in SafeDirs(dir))
-                    {
-                        var p = Identify(sub, root);
-                        if (p != null) yield return p;
-                    }
-                }
+                if (dalam < KedalamanMaks)
+                    foreach (var p in Telusuri(sub, root, dalam + 1))
+                        yield return p;
             }
         }
 
@@ -136,6 +164,12 @@ namespace Phoron.Core
             pkg.Arch = (lower.Contains("x64") || lower.Contains("win64") || lower.Contains("winx64"))
                 ? "x64"
                 : (lower.Contains("x86") || lower.Contains("win32") ? "x86" : "");
+
+            // Tata letak seperti XAMPP menamai foldernya cuma "php" / "apache" /
+            // "mysql", jadi namanya tidak menyebut apa-apa. Barulah di situ
+            // binernya sendiri ditanya - lihat BinProbe untuk alasannya.
+            if (pkg.Arch.Length == 0) pkg.Arch = BinProbe.Arsitektur(exe);
+            if (pkg.Version.Length == 0) pkg.Version = BinProbe.Versi(kind, exe);
             return pkg;
         }
 

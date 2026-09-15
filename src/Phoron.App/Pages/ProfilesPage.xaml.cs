@@ -121,11 +121,25 @@ namespace Phoron.App.Pages
             TxtPortHttp.Text = p.HttpPort.ToString();
             TxtPortHttps.Text = p.HttpsPort.ToString();
             TxtPortMysql.Text = p.MySqlPort.ToString();
-            TxtDocRoot.Text = string.Join(Environment.NewLine, p.ProjectRoots);
+            TxtRingkasRoot.Text = RingkasRoot(p);
             TxtSuffix.Text = p.SiteSuffix ?? "test";
             TxtCatatan.Text = p.Notes ?? "";
             _loading = false;
             AturTampilanWeb();
+        }
+
+        /// <summary>
+        /// Ringkasan folder proyek untuk halaman Profil. Menyebut jumlah DAN
+        /// tempat menyuntingnya - ringkasan yang tidak memberi tahu ke mana
+        /// harus pergi hanya memindahkan kebingungan, bukan menghilangkannya.
+        /// </summary>
+        static string RingkasRoot(Profile p)
+        {
+            var n = p.ProjectRoots.Count;
+            var isi = n == 0
+                ? "Belum diisi - memakai folder www bawaan Phoron."
+                : string.Join(", ", p.ProjectRoots.ToArray());
+            return isi + "  (diatur di halaman Situs)";
         }
 
         static void Pilih(ComboBox box, string tag)
@@ -188,10 +202,6 @@ namespace Phoron.App.Pages
             p.ApacheId = IdDari(CmbApache);
             p.NginxId = IdDari(CmbNginx);
             p.MySqlId = IdDari(CmbMysql);
-            p.ProjectRoots = (TxtDocRoot.Text ?? "")
-                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim().TrimEnd('\\')).Where(x => x.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             p.SiteSuffix = string.IsNullOrWhiteSpace(TxtSuffix.Text) ? "test" : TxtSuffix.Text.Trim();
             p.Notes = TxtCatatan.Text;
 
@@ -344,28 +354,5 @@ namespace Phoron.App.Pages
             IsiDaftar(_e.Active);
         }
 
-        void BtnPilihFolder_Click(object sender, RoutedEventArgs e)
-        {
-            using (var dlg = new Forms.FolderBrowserDialog())
-            {
-                dlg.Description = "Pilih folder proyek untuk ditambahkan ke profil ini";
-                dlg.SelectedPath = Paths.Www;
-                if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
-                // Ditambahkan sebagai baris baru, bukan menimpa: tombol ini ada
-                // justru untuk menyusun daftar berisi beberapa folder.
-                var ada = (TxtDocRoot.Text ?? "").TrimEnd();
-                if (ada.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                       .Any(x => string.Equals(x.Trim().TrimEnd('\\'),
-                                               dlg.SelectedPath.TrimEnd('\\'),
-                                               StringComparison.OrdinalIgnoreCase)))
-                {
-                    AppState.Info("Folder itu sudah ada di daftar.");
-                    return;
-                }
-                TxtDocRoot.Text = ada.Length == 0
-                    ? dlg.SelectedPath
-                    : ada + Environment.NewLine + dlg.SelectedPath;
-            }
-        }
     }
 }

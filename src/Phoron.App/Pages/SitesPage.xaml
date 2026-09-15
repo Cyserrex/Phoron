@@ -17,9 +17,28 @@
                        Text="{loc:T 'Tiap subfolder di www otomatis dapat alamat sendiri.'}"/>
         </StackPanel>
 
+        <!-- Pindah ke sini dari halaman Profil: folder proyek adalah SEBAB dari
+             daftar situs di bawah, jadi menyuntingnya di tempat lain membuat
+             orang bolak-balik hanya untuk melihat akibat perubahannya. -->
         <Border Grid.Row="1" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 CornerRadius="8" Padding="12" Margin="0,0,0,10">
-            <Grid>
+            <StackPanel>
+                <TextBlock x:Name="LblFolderProyek" Style="{StaticResource Label}" Margin="0,0,0,2"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
+                           Text="{loc:T 'Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan.'}"/>
+                <ui:TextBox x:Name="TxtDocRoot" AcceptsReturn="True" Height="70"
+                            TextWrapping="NoWrap" VerticalContentAlignment="Top"
+                            VerticalScrollBarVisibility="Auto" LostFocus="TxtDocRoot_Lepas"/>
+                <WrapPanel Margin="0,6,0,0">
+                    <ui:Button Content="{loc:T 'Tambah folder...'}" Margin="0,0,8,0"
+                               Click="BtnPilihFolder_Click"/>
+                    <TextBlock x:Name="TxtStatusRoot" VerticalAlignment="Center"
+                               Style="{StaticResource SubJudul}" FontSize="12"/>
+                </WrapPanel>
+
+                <Separator Margin="0,12,0,10" Opacity="0.4"/>
+
+                <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
@@ -32,7 +51,8 @@
                 <ComboBox x:Name="CmbRootBaru" Grid.Column="1" Margin="0,0,8,0" MinWidth="180"
                           Visibility="Collapsed"/>
                 <ui:Button Grid.Column="2" Content="{loc:T 'Buat situs'}" Appearance="Primary" Click="BtnBuat_Click"/>
-            </Grid>
+                </Grid>
+            </StackPanel>
         </Border>
 
         <ListView x:Name="Daftar" Grid.Row="2" Margin="0,0,0,10"

@@ -82,14 +82,15 @@
                         </StackPanel>
                     </Grid>
 
+                    <!-- Penyuntingnya pindah ke halaman Situs: di sana sebabnya
+                         (folder mana) duduk bersebelahan dengan akibatnya (situs
+                         apa yang muncul). Ringkasan ini tetap ada supaya halaman
+                         Profil tidak berbohong soal isi profil. -->
                     <TextBlock Text="{loc:T 'Folder proyek'}" Style="{StaticResource Label}"/>
-                    <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
-                               Text="{loc:T 'Satu folder per baris; boleh lebih dari satu. Yang paling atas jadi akar utama (dilayani http://localhost). Kosongkan untuk memakai www bawaan.'}"/>
-                    <ui:TextBox x:Name="TxtDocRoot" LostFocus="Teks_Lepas" AcceptsReturn="True" Height="80"
-                                TextWrapping="NoWrap" VerticalContentAlignment="Top"
-                                VerticalScrollBarVisibility="Auto"/>
-                    <ui:Button Content="{loc:T 'Tambah folder...'}" Margin="0,6,0,0"
-                               HorizontalAlignment="Left" Click="BtnPilihFolder_Click"/>
+                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            CornerRadius="8" Padding="12" Margin="0,0,0,4">
+                        <TextBlock x:Name="TxtRingkasRoot" TextWrapping="Wrap"/>
+                    </Border>
 
                     <TextBlock Text="{loc:T 'Akhiran nama situs'}" Style="{StaticResource Label}"/>
                     <ui:TextBox x:Name="TxtSuffix" LostFocus="Teks_Lepas" PlaceholderText="test"/>

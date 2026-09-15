@@ -30,6 +30,19 @@
         </ListView>
 
         <StackPanel Grid.Row="2">
+            <!-- Pindah ke sini dari Pengaturan: daftar folder bin adalah SEBAB
+                 dari isi tabel di atas, jadi tempatnya bersebelahan dengan
+                 akibatnya, bukan di halaman setelan yang isinya hal lain. -->
+            <TextBlock Text="{loc:T 'Folder bin yang dipindai'}" Style="{StaticResource Label}"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,6"
+                       Text="{loc:T 'Satu folder per baris. Folder bin milik Laragon, XAMPP, atau WAMP boleh ikut - Phoron tidak pernah menulis ke dalamnya.'}"/>
+            <!-- Disimpan saat kehilangan fokus, bukan tiap ketukan: mengubah
+                 daftar folder bin memicu pemindaian ulang seluruh versi, dan
+                 melakukannya per huruf yang diketik akan membuat kotak ini macet. -->
+            <ui:TextBox x:Name="TxtRoots" AcceptsReturn="True" Height="80" Margin="0,0,0,10"
+                        TextWrapping="NoWrap" VerticalContentAlignment="Top"
+                        VerticalScrollBarVisibility="Auto" LostFocus="TxtRoots_Lepas"/>
+
             <WrapPanel Margin="0,0,0,10">
                 <ui:Button Content="{loc:T 'Pindai ulang'}" Margin="0,0,8,0" Click="BtnPindai_Click"/>
                 <ui:Button Content="{loc:T 'Tambah folder bin'}" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>

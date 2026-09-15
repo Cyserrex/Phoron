@@ -46,7 +46,6 @@ namespace Phoron.App.Pages
                 if ((it.Tag ?? "").ToString() == s.Bahasa) CmbBahasa.SelectedItem = it;
             if (CmbBahasa.SelectedItem == null) CmbBahasa.SelectedIndex = 0;
             SwCekPembaruan.IsChecked = s.CekPembaruan;
-            TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             foreach (ComboBoxItem item in CmbTerminal.Items)
                 if ((item.Tag ?? "").ToString() == s.Terminal) CmbTerminal.SelectedItem = item;
             if (CmbTerminal.SelectedItem == null) CmbTerminal.SelectedIndex = 0;
@@ -135,8 +134,6 @@ namespace Phoron.App.Pages
 
         void CmbTerminal_Ubah(object sender, SelectionChangedEventArgs e) { SimpanSeketika(); }
 
-        void TxtRoots_Lepas(object sender, RoutedEventArgs e) { SimpanSeketika(true); }
-
         void SimpanSeketika(bool pindaiUlang = false)
         {
             if (_mengisi) return;
@@ -158,10 +155,6 @@ namespace Phoron.App.Pages
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
             s.Terminal = item != null ? (item.Tag ?? "cmd").ToString() : "cmd";
-            s.BinRoots = (TxtRoots.Text ?? "")
-                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
-            if (s.BinRoots.Count == 0) s.BinRoots = Settings.DefaultBinRoots();
             s.Save();
 
             // Pemindaian ulang dan penulisan konfigurasi hanya dijalankan kalau
@@ -173,7 +166,6 @@ namespace Phoron.App.Pages
             {
                 _e.Reload();
                 AppState.RaiseChanged();
-                TxtRoots.Text = string.Join(Environment.NewLine, s.BinRoots);
             }
             if (rootsBerubah || s.AutoVhost != vhostLama || s.ManageHosts != hostsLama
                 || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama

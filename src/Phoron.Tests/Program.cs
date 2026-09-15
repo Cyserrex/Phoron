@@ -55,6 +55,7 @@ namespace Phoron.Tests
                 UjiLabelVersi();
                 UjiBahasa();
                 UjiHostsTool();
+                UjiTataLetakBin();
             }
             catch (Exception ex)
             {
@@ -715,6 +716,82 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiTataLetakBin()
+        {
+            Bagian("Tata letak folder bin");
+            // Tiap pengelola menata foldernya sendiri-sendiri. Yang menentukan
+            // sebuah folder itu paket atau bukan adalah ADA TIDAKNYA exe, bukan
+            // namanya - jadi tata letak baru tidak perlu ditambahkan satu per satu.
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-binlayout-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Action<string> buat = jalur =>
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(jalur));
+                    File.WriteAllText(jalur, "");
+                };
+
+                // Gaya Laragon: <akar>\php\<folder berversi>
+                buat(Path.Combine(akar, @"laragon\php\php-8.3.12-Win32-vs16-x64\php.exe"));
+                // Folder versi langsung di akar
+                buat(Path.Combine(akar, @"lepas\php-7.4.22-Win32-VC15-x64\php.exe"));
+                // Gaya XAMPP: folder tanpa nomor versi sama sekali
+                buat(Path.Combine(akar, @"xampp\php\php.exe"));
+                buat(Path.Combine(akar, @"xampp\apache\bin\httpd.exe"));
+                buat(Path.Combine(akar, @"xampp\mysql\bin\mysqld.exe"));
+                // Gaya WAMP: satu tingkat lebih dalam, di bawah "bin"
+                buat(Path.Combine(akar, @"wamp64\bin\php\php8.1.0\php.exe"));
+                buat(Path.Combine(akar, @"wamp64\bin\apache\apache2.4.51\bin\httpd.exe"));
+                // Jebakan: folder proyek pengguna tidak boleh ikut dirayapi.
+                buat(Path.Combine(akar, @"wamp64\www\proyek-saya\php.exe"));
+
+                Func<string, List<BinPackage>> pindai =
+                    r => BinScanner.ScanAll(new[] { Path.Combine(akar, r) });
+
+                var laragon = pindai("laragon");
+                Ok("Gaya Laragon terbaca",
+                   laragon.Any(x => x.Kind == BinKind.Php && x.Version == "8.3.12"),
+                   laragon.Count + " paket");
+
+                var lepas = pindai("lepas");
+                Ok("Folder versi langsung di akar terbaca",
+                   lepas.Any(x => x.Kind == BinKind.Php && x.Version == "7.4.22"),
+                   lepas.Count + " paket");
+
+                var xampp = pindai("xampp");
+                Ok("Gaya XAMPP: PHP terbaca walau folder tak berversi",
+                   xampp.Any(x => x.Kind == BinKind.Php), xampp.Count + " paket");
+                Ok("Gaya XAMPP: Apache terbaca",
+                   xampp.Any(x => x.Kind == BinKind.Apache), xampp.Count + " paket");
+                Ok("Gaya XAMPP: MySQL terbaca",
+                   xampp.Any(x => x.Kind == BinKind.MySql), xampp.Count + " paket");
+
+                var wamp = pindai("wamp64");
+                Ok("Gaya WAMP: PHP di bawah bin terbaca",
+                   wamp.Any(x => x.Kind == BinKind.Php && x.Version == "8.1.0"),
+                   string.Join(", ", wamp.Select(x => x.Kind + ":" + x.Id).ToArray()));
+                Ok("Gaya WAMP: Apache di bawah bin terbaca",
+                   wamp.Any(x => x.Kind == BinKind.Apache && x.Version == "2.4.51"),
+                   string.Join(", ", wamp.Select(x => x.Kind + ":" + x.Id).ToArray()));
+                Ok("Folder www pengguna TIDAK ikut dirayapi",
+                   !wamp.Any(x => x.Path.IndexOf("proyek-saya", StringComparison.OrdinalIgnoreCase) >= 0),
+                   string.Join(", ", wamp.Select(x => x.Path).ToArray()));
+
+                // Penjaga arsitektur: header PE dibaca dari exe sungguhan, karena
+                // salah arsitektur membuat Apache mati tanpa pesan apa pun.
+                var php = Nyata().FirstOrDefault(x => x.Kind == BinKind.Php);
+                if (php != null)
+                    Ok("Arsitektur terbaca dari header PE exe sungguhan",
+                       BinProbe.Arsitektur(php.MainExe) == "x64"
+                       || BinProbe.Arsitektur(php.MainExe) == "x86",
+                       BinProbe.Arsitektur(php.MainExe));
+                Ok("Berkas bukan PE tidak membuat penyelidik meledak",
+                   BinProbe.Arsitektur(Path.Combine(akar, @"xampp\php\php.exe")) == "");
+            }
+            finally { try { Directory.Delete(akar, true); } catch { } }
         }
 
         static void UjiHostsTool()

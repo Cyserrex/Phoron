@@ -25,11 +25,43 @@ namespace Phoron.App.Pages
             public BinPackage Pkg;
         }
 
+        /// <summary>Menahan penangan saat kotak diisi program, bukan oleh pengguna.</summary>
+        bool _mengisi;
+
         public VersionsPage()
         {
             InitializeComponent();
+            IsiRoots();
             IsiDaftar();
             IsiPaket();
+        }
+
+        void IsiRoots()
+        {
+            _mengisi = true;
+            TxtRoots.Text = string.Join(Environment.NewLine, _e.Settings.BinRoots);
+            _mengisi = false;
+        }
+
+        void TxtRoots_Lepas(object sender, RoutedEventArgs e)
+        {
+            if (_mengisi) return;
+            var s = _e.Settings;
+            var sebelum = string.Join(";", s.BinRoots);
+            s.BinRoots = (TxtRoots.Text ?? "")
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            // Daftar kosong berarti "kembali ke bawaan", bukan "jangan pindai apa
+            // pun" - tanpa ini Phoron kehilangan seluruh versinya begitu kotaknya
+            // tak sengaja dikosongkan.
+            if (s.BinRoots.Count == 0) s.BinRoots = Settings.DefaultBinRoots();
+            s.Save();
+
+            if (string.Join(";", s.BinRoots) == sebelum) return;
+            _e.Reload();
+            AppState.RaiseChanged();
+            IsiRoots();
+            IsiDaftar();
         }
 
         void IsiDaftar()
@@ -66,6 +98,7 @@ namespace Phoron.App.Pages
                 _e.Settings.Save();
                 _e.Reload();
                 AppState.RaiseChanged();
+                IsiRoots();
                 IsiDaftar();
             }
         }
@@ -136,6 +169,7 @@ namespace Phoron.App.Pages
                 _e.Say("Paket " + pkg.Name + " dipasang ke folder bin Phoron.");
                 _e.Reload();
                 AppState.RaiseChanged();
+                IsiRoots();
                 IsiDaftar();
             }
             finally
