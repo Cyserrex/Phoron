@@ -57,10 +57,50 @@ namespace Phoron.Core
         public string Terminal = "cmd";     // cmd | powershell | wt
         public string Editor = "";          // kosong = notepad
 
-        public static Settings Load()
+        /// <summary>Dari mana setelan ini berasal - menentukan apakah aman ditimpa.</summary>
+        public enum Sumber { Baru, Terbaca, Rusak, TidakTerbaca }
+
+        public class HasilMuat
+        {
+            public Settings Setelan;
+            public Sumber Asal;
+            public List<string> Keluhan = new List<string>();
+        }
+
+        /// <summary>Asal setelan ini; dibaca Save() sebelum menimpa berkasnya.</summary>
+        public Sumber AsalMuat = Sumber.Baru;
+
+        public static Settings Load() { return Muat().Setelan; }
+
+        /// <summary>
+        /// Muat setelan sambil melaporkan keadaan berkasnya.
+        ///
+        /// Membedakan "berkasnya tidak ada" dari "berkasnya ada tapi cacat"
+        /// adalah inti persoalannya. Keduanya dulu menghasilkan Settings yang
+        /// tampak sah dengan seluruh nilai bawaan, dan penyimpanan berikutnya -
+        /// yang terjadi sendiri saat mengecek pembaruan atau berganti profil -
+        /// menuliskan bawaan itu kembali ke berkas. Sisa setelan yang sebenarnya
+        /// masih selamat ikut terhapus, tanpa pernah ditawarkan kepada siapa pun.
+        /// </summary>
+        public static HasilMuat Muat()
+        {
+            var hasil = new HasilMuat();
+            var baca = Ini.Baca(Paths.SettingsFile);
+            hasil.Keluhan.AddRange(baca.Keluhan);
+            hasil.Asal = !baca.Ada ? Sumber.Baru
+                       : baca.GagalBaca ? Sumber.TidakTerbaca
+                       : baca.Rusak ? Sumber.Rusak
+                       : Sumber.Terbaca;
+
+            var s = MuatDari(baca.Isi);
+            s.AsalMuat = hasil.Asal;
+            hasil.Setelan = s;
+            return hasil;
+        }
+
+        static Settings MuatDari(Ini ini)
         {
             var s = new Settings();
-            var ini = Ini.Load(Paths.SettingsFile);
             var roots = ini.Get("umum", "bin_roots", "");
             s.BinRoots = roots.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
                               .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
@@ -100,8 +140,42 @@ namespace Phoron.Core
             return list;
         }
 
+        /// <summary>
+        /// Save() adalah baca-ubah-tulis, dan dipanggil dari beberapa tempat -
+        /// pengecekan pembaruan yang berjalan sendiri, pergantian profil,
+        /// halaman Pengaturan. Tanpa kunci, dua di antaranya yang berpapasan
+        /// membuat salah satu suntingan hilang.
+        /// </summary>
+        static readonly object _kunciSimpan = new object();
+
+        /// <summary>Terisi bila berkas yang cacat terpaksa dikarantina saat menyimpan.</summary>
+        public static string KeluhanTerakhir = "";
+
         public void Save()
         {
+            lock (_kunciSimpan) { SimpanInti(); }
+        }
+
+        void SimpanInti()
+        {
+            // Berkas yang cacat tidak ditimpa begitu saja: disingkirkan dulu,
+            // supaya sisa setelan di dalamnya masih bisa dilihat orang.
+            //
+            // Menolak menulis sama sekali justru lebih buruk - CekTerakhir tidak
+            // akan pernah tersimpan, jadi Phoron menanyai GitHub tiap kali start
+            // selamanya sambil mengomel tentang berkas yang tidak bisa dilewati
+            // siapa pun.
+            if (AsalMuat == Sumber.Rusak || AsalMuat == Sumber.TidakTerbaca)
+            {
+                var salinan = AtomicFile.Karantina(Paths.SettingsFile, "rusak");
+                KeluhanTerakhir = salinan != null
+                    ? "phoron.ini tidak terbaca utuh; salinannya disimpan sebagai "
+                      + Path.GetFileName(salinan) + " sebelum ditulis ulang."
+                    : "phoron.ini tidak terbaca utuh dan tidak bisa dikarantina; "
+                      + "setelan ditulis ulang dari awal.";
+                AsalMuat = Sumber.Baru;   // sekali saja, bukan tiap penyimpanan
+            }
+
             var ini = Ini.Load(Paths.SettingsFile);
             ini.Set("umum", "bin_roots", string.Join(";", BinRoots));
             ini.Set("umum", "profil_aktif", ActiveProfile ?? "");

@@ -901,10 +901,12 @@ namespace Phoron.Core
         public static bool WriteIfChanged(string path, string content)
         {
             content = content.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
-            if (File.Exists(path) && File.ReadAllText(path) == content) return false;
-            var dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            File.WriteAllText(path, content, new UTF8Encoding(false));
+            // Pembacaan pembanding boleh gagal - berkasnya bisa sedang dipegang
+            // httpd. Anggap saja berubah, lalu tulis; lebih baik menulis sekali
+            // tanpa perlu daripada menggagalkan seluruh Apply().
+            try { if (File.Exists(path) && File.ReadAllText(path) == content) return false; }
+            catch { }
+            AtomicFile.WriteAllText(path, content, new UTF8Encoding(false));
             return true;
         }
     }

@@ -28,9 +28,20 @@ namespace Phoron.Core
 
         public event Action<string> Log;
 
+        /// <summary>
+        /// Keluhan saat memuat setelan dan profil: berkas cacat, profil yang
+        /// tidak terbaca. Ikut ditampilkan di panel Perhatian pada Beranda,
+        /// sebab kalau tidak, satu-satunya tandanya adalah setelan yang
+        /// diam-diam kembali ke bawaan.
+        /// </summary>
+        public readonly List<string> MasalahMuat = new List<string>();
+
         public Engine()
         {
-            Settings = Settings.Load();
+            var hasil = Core.Settings.Muat();
+            Settings = hasil.Setelan;
+            foreach (var k in hasil.Keluhan)
+                MasalahMuat.Add("phoron.ini: " + k);
             // Ditulis sejak jalan pertama, bukan menunggu pengguna menyimpan
             // sesuatu: berkas ini juga jadi penanda akar instalasi, dan tanpanya
             // exe yang dipindah ke subfolder akan menebak akar yang salah.
@@ -185,7 +196,8 @@ namespace Phoron.Core
         {
             Packages = BinScanner.ScanAll(Settings.BinRoots);
             NodeAppsList = NodeAppStore.LoadAll();
-            Profiles = ProfileStore.LoadAll();
+            MasalahMuat.RemoveAll(x => x.StartsWith("Profil "));
+            Profiles = ProfileStore.LoadAll(MasalahMuat);
             if (Profiles.Count == 0 && Packages.Any(p => p.Kind == BinKind.Php))
             {
                 Say("Belum ada profil - membuatkan satu profil per versi PHP yang ditemukan.");
@@ -346,6 +358,9 @@ namespace Phoron.Core
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.
+            LastBuild.Warnings.AddRange(MasalahMuat);
+            if (!string.IsNullOrEmpty(Core.Settings.KeluhanTerakhir))
+                LastBuild.Warnings.Add(Core.Settings.KeluhanTerakhir);
             LastBuild.Warnings.AddRange(SiteWarnings);
             LastBuild.Warnings.AddRange(awal);
             LastBuild.Warnings.AddRange(PaketKembar());

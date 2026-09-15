@@ -8,12 +8,35 @@ namespace Phoron.Core
     /// <summary>Baca/tulis profil di folder profiles\ (satu berkas .ini per profil).</summary>
     public static class ProfileStore
     {
-        public static List<Profile> LoadAll()
+        public static List<Profile> LoadAll() { return LoadAll(null); }
+
+        /// <summary>
+        /// Profil yang rusak tetap dilewati - satu berkas cacat bukan alasan
+        /// menggagalkan seluruh start - tapi tidak lagi DIAM. Dulu keluhannya
+        /// ditelan catch kosong, jadi kalau yang rusak justru profil aktif,
+        /// Phoron jatuh ke profil bawaan dan orang menjalankan versi yang sama
+        /// sekali berbeda dari yang dikiranya.
+        /// </summary>
+        public static List<Profile> LoadAll(List<string> keluhan)
         {
             var list = new List<Profile>();
             foreach (var f in Directory.GetFiles(Paths.Profiles, "*.ini").OrderBy(x => x))
             {
-                try { list.Add(Load(f)); } catch { /* profil rusak dilewati, bukan alasan gagal start */ }
+                try { list.Add(Load(f)); }
+                catch (Exception ex)
+                {
+                    if (keluhan != null)
+                        keluhan.Add("Profil " + Path.GetFileName(f) + " tidak terbaca ("
+                                    + ex.Message + "), jadi dilewati.");
+                    continue;
+                }
+
+                // Terbaca, tapi isinya cacat: dikarantina sebelum sesuatu
+                // menimpanya dengan nilai bawaan.
+                var periksa = Ini.Baca(f);
+                if (periksa.Rusak && keluhan != null)
+                    keluhan.Add("Profil " + Path.GetFileName(f) + " ada yang tidak terbaca: "
+                                + string.Join("; ", periksa.Keluhan.ToArray()));
             }
             return list;
         }

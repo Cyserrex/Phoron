@@ -37,6 +37,8 @@ namespace Phoron.Tests
             {
                 UjiIni();
                 UjiPenulisanAtomik();
+                UjiIniRusak();
+                UjiSetelanRusak();
                 UjiLaporanGalat();
                 UjiPemindai();
                 UjiProfil();
@@ -374,6 +376,131 @@ namespace Phoron.Tests
             }
             Ok("Berkas yang sedang dibaca tetap bisa ditulisi",
                File.ReadAllText(pRamai).Contains("ditulis sambil dibaca"));
+        }
+
+        static void UjiIniRusak()
+        {
+            Bagian("INI yang cacat dilaporkan");
+            var dir = Path.Combine(Paths.Tmp, "ini-rusak");
+            Directory.CreateDirectory(dir);
+
+            var bersih = Path.Combine(dir, "bersih.ini");
+            File.WriteAllText(bersih, "[umum]" + Environment.NewLine + "nama=Phoron" + Environment.NewLine);
+            var hBersih = Ini.Baca(bersih);
+            Ok("Berkas bersih tidak dituduh rusak", !hBersih.Rusak && hBersih.Ada);
+            Ok("Berkas bersih tetap terbaca isinya", hBersih.Isi.Get("umum", "nama") == "Phoron");
+
+            // Bedanya "tidak ada" dengan "ada tapi cacat" adalah inti persoalan
+            // di sini: yang pertama wajar, yang kedua tidak boleh ditimpa.
+            var hilang = Ini.Baca(Path.Combine(dir, "tidak-ada.ini"));
+            Ok("Berkas yang tidak ada bukan berkas rusak", !hilang.Ada && !hilang.Rusak);
+            Ok("Ini.Load lama tetap mengembalikan kosong untuk berkas hilang",
+               !Ini.Load(Path.Combine(dir, "tidak-ada.ini")).Sections.Any());
+
+            var tanpaSama = Path.Combine(dir, "tanpa-sama.ini");
+            File.WriteAllText(tanpaSama, "[umum]" + Environment.NewLine + "nama=Phoron"
+                              + Environment.NewLine + "baris sampah tanpa apa pun" + Environment.NewLine);
+            var h1 = Ini.Baca(tanpaSama);
+            Ok("Baris tanpa tanda sama dengan dilaporkan", h1.Rusak, string.Join("; ", h1.Keluhan));
+            Ok("Baris lain tetap terbaca walau ada yang cacat",
+               h1.Isi.Get("umum", "nama") == "Phoron");
+
+            var seksiTerbuka = Path.Combine(dir, "seksi.ini");
+            File.WriteAllText(seksiTerbuka, "[umum" + Environment.NewLine + "nama=Phoron" + Environment.NewLine);
+            Ok("Seksi tanpa kurung tutup dilaporkan", Ini.Baca(seksiTerbuka).Rusak);
+
+            // Tanda khas berkas yang terpotong saat listrik mati.
+            var terpotong = Path.Combine(dir, "terpotong.ini");
+            File.WriteAllText(terpotong, "[umum]" + Environment.NewLine + "bahasa=bjn"
+                              + Environment.NewLine + "nama=Pho" + new string('\0', 200));
+            var h2 = Ini.Baca(terpotong);
+            Ok("Byte NUL dikenali sebagai berkas terpotong",
+               h2.Rusak && h2.Keluhan.Any(k => k.Contains("NUL")),
+               string.Join("; ", h2.Keluhan));
+            // Melaporkan saja tidak cukup: NUL terbaca sebagai bagian dari NILAI,
+            // dan tanpa dibersihkan ia ikut tertulis ke berkas hasil penyelamatan
+            // - yang lalu terbaca cacat lagi, selamanya.
+            Ok("Byte NUL tidak ikut jadi bagian nilai",
+               h2.Isi.Get("umum", "nama") == "Pho",
+               "[" + h2.Isi.Get("umum", "nama") + "]");
+            Ok("Nilai sebelum bagian yang terpotong tetap utuh",
+               h2.Isi.Get("umum", "bahasa") == "bjn");
+        }
+
+        static void UjiSetelanRusak()
+        {
+            Bagian("Setelan yang cacat dikarantina");
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-setelan-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+                Settings.KeluhanTerakhir = "";
+
+                // phoron.ini yang terpotong, tapi bahasa=bjn MASIH terbaca di
+                // dalamnya. Inilah yang dulu hilang selamanya: Load menghasilkan
+                // Settings yang tampak sah, lalu Save() berikutnya - yang terjadi
+                // sendiri saat mengecek pembaruan - menuliskan bawaan kembali ke
+                // berkas, menimpa baris yang sebenarnya masih selamat.
+                var berkas = Paths.SettingsFile;
+                File.WriteAllText(berkas,
+                    "[umum]" + Environment.NewLine +
+                    "bahasa=bjn" + Environment.NewLine +
+                    "terminal=powershell" + Environment.NewLine +
+                    "tema=gel" + new string('\0', 120));
+
+                var hasil = Settings.Muat();
+                Ok("Setelan cacat dikenali sebagai cacat",
+                   hasil.Asal == Settings.Sumber.Rusak, hasil.Asal.ToString());
+                Ok("Nilai yang masih terbaca tetap terpakai",
+                   hasil.Setelan.Bahasa == "bjn" && hasil.Setelan.Terminal == "powershell",
+                   hasil.Setelan.Bahasa + " / " + hasil.Setelan.Terminal);
+
+                hasil.Setelan.Save();
+
+                var karantina = Directory.GetFiles(akar, "phoron.ini.rusak-*");
+                Ok("Berkas cacat dikarantina sebelum ditimpa", karantina.Length == 1,
+                   karantina.Length.ToString());
+                Ok("Isi lama masih bisa dibaca dari karantina",
+                   karantina.Length == 1 && File.ReadAllText(karantina[0]).Contains("bahasa=bjn"));
+                Ok("Keluhannya disiapkan untuk ditampilkan",
+                   Settings.KeluhanTerakhir.Contains("phoron.ini"), Settings.KeluhanTerakhir);
+                Ok("Setelan baru tetap tertulis", File.Exists(berkas)
+                   && File.ReadAllText(berkas).Contains("bahasa=bjn"));
+
+                // Karantina sekali saja, bukan tiap kali menyimpan.
+                hasil.Setelan.Save();
+                Ok("Penyimpanan berikutnya tidak mengarantina lagi",
+                   Directory.GetFiles(akar, "phoron.ini.rusak-*").Length == 1);
+
+                // Berkas yang sehat tidak boleh ikut dikarantina.
+                Settings.KeluhanTerakhir = "";
+                var sehat = Settings.Muat();
+                Ok("Berkas yang sehat dibaca sebagai sehat",
+                   sehat.Asal == Settings.Sumber.Terbaca, sehat.Asal.ToString());
+                sehat.Setelan.Save();
+                Ok("Berkas yang sehat tidak dikarantina",
+                   Directory.GetFiles(akar, "phoron.ini.rusak-*").Length == 1);
+
+                // Profil yang rusak: dilewati, tapi dilaporkan dan tidak dihapus.
+                Directory.CreateDirectory(Paths.Profiles);
+                var pRusak = Path.Combine(Paths.Profiles, "rusak.ini");
+                File.WriteAllText(pRusak, "[profil]" + Environment.NewLine
+                                  + "nama=Rusak" + Environment.NewLine + "baris sampah");
+                var keluhan = new List<string>();
+                ProfileStore.LoadAll(keluhan);
+                Ok("Profil cacat dilaporkan, bukan dilewati diam-diam",
+                   keluhan.Count >= 1, string.Join(" | ", keluhan.ToArray()));
+                Ok("Profil cacat tidak ikut hilang dari disk", File.Exists(pRusak));
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                Settings.KeluhanTerakhir = "";
+                try { Directory.Delete(akar, true); } catch { }
+            }
         }
 
         static void UjiIni()
