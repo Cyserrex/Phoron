@@ -36,22 +36,26 @@
                                Style="{StaticResource SubJudul}" FontSize="12"/>
                 </WrapPanel>
 
-                <Separator Margin="0,12,0,10" Opacity="0.4"/>
+                <!-- Tempat ini dulu diisi kotak "nama-proyek-baru" berikut
+                     tombolnya, dan keterangan seperti nama situs yang bentrok
+                     dimunculkan sebagai kotak dialog - yang harus ditutup lebih
+                     dulu setiap kali halaman ini dibuka. Sekarang terbalik:
+                     keterangannya menetap di sini, dan pembuatan situs pindah ke
+                     tombol di baris bawah. Yang jarang disentuh tidak layak
+                     menempati ruang terbaik, dan yang perlu diketahui tidak layak
+                     menghalangi jalan. -->
+                <Border x:Name="PanelInfo" Visibility="Collapsed" Margin="0,12,0,0"
+                        Background="#33E0A020" CornerRadius="8" Padding="12">
+                    <StackPanel>
+                        <TextBlock x:Name="LblInfo" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBlock x:Name="TxtInfoSitus" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
 
-                <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <ui:TextBox x:Name="TxtSitusBaru" Grid.Column="0" Margin="0,0,8,0"
-                            PlaceholderText="nama-proyek-baru"/>
-                <!-- Pemilih folder hanya muncul kalau profil punya lebih dari satu;
-                     dengan satu folder, pertanyaannya tidak ada gunanya. -->
-                <ComboBox x:Name="CmbRootBaru" Grid.Column="1" Margin="0,0,8,0" MinWidth="180"
-                          Visibility="Collapsed"/>
-                <ui:Button Grid.Column="2" Content="{loc:T 'Buat situs'}" Appearance="Primary" Click="BtnBuat_Click"/>
-                </Grid>
+                <!-- Pemilih folder dipakai saat membuat situs; tetap ada tapi
+                     tidak perlu terlihat, karena hanya berarti bila profil punya
+                     lebih dari satu folder proyek. -->
+                <ComboBox x:Name="CmbRootBaru" Visibility="Collapsed"/>
             </StackPanel>
         </Border>
 
@@ -70,6 +74,7 @@
         </ListView>
 
         <WrapPanel Grid.Row="3">
+            <ui:Button Content="{loc:T 'Buat situs'}" Appearance="Primary" Margin="0,0,8,0" Click="BtnBuat_Click"/>
             <ui:Button Content="{loc:T 'Buka di browser'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
             <ui:Button Content="{loc:T 'Buka folder'}" Margin="0,0,8,0" Click="BtnFolder_Click"/>
             <ui:Button Content="{loc:T 'Terminal di sini'}" Margin="0,0,8,0" Click="BtnTerminal_Click"/>

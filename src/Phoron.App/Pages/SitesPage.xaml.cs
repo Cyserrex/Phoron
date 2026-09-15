@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -70,7 +71,22 @@ namespace Phoron.App.Pages
                 Situs = s,
             }).ToList();
 
-            AppState.ShowWarnings(_e.SiteWarnings);
+            TampilkanInfo();
+        }
+
+        /// <summary>
+        /// Keterangan tentang daftar situs, ditempel di halaman - bukan
+        /// dimunculkan sebagai kotak dialog yang menghalangi.
+        /// </summary>
+        void TampilkanInfo()
+        {
+            var pesan = new List<string>(_e.SiteWarnings ?? new List<string>());
+            PanelInfo.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (pesan.Count == 0) return;
+            LblInfo.Text = pesan.Count == 1
+                ? "1 catatan tentang daftar situs"
+                : pesan.Count + " catatan tentang daftar situs";
+            TxtInfoSitus.Text = string.Join(Environment.NewLine + Environment.NewLine, pesan.ToArray());
         }
 
         Site Terpilih()
@@ -170,15 +186,19 @@ namespace Phoron.App.Pages
             {
                 if (Program.RestartAsAdmin("Berkas hosts hanya bisa disunting dengan hak Administrator.")) return;
             }
-            AppState.ShowWarnings(warnings);
+            TampilkanInfo();
         }
 
         void BtnHosts_Click(object sender, RoutedEventArgs e) { Shell.Open(Paths.HostsFile); }
 
         void BtnBuat_Click(object sender, RoutedEventArgs e)
         {
-            var nama = (TxtSitusBaru.Text ?? "").Trim();
-            if (nama.Length == 0) { AppState.Warn("Isi dulu nama proyeknya."); return; }
+            var nama = InputDialog.Tanya(Window.GetWindow(this), "Buat situs",
+                "Nama folder proyek baru. Phoron membuat foldernya berikut index.php "
+                + "contoh, lalu mendaftarkan alamatnya.",
+                "Akan dibuat di " + (CmbRootBaru.SelectedItem as string
+                                     ?? SiteScanner.DocumentRoot(_e.Active)));
+            if (nama == null) return;
             if (nama.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
             { AppState.Warn("Nama folder mengandung karakter yang tidak boleh dipakai."); return; }
 
@@ -195,7 +215,6 @@ namespace Phoron.App.Pages
                     + "echo '<h1>" + nama + "</h1>';\n"
                     + "echo '<p>PHP ' . PHP_VERSION . ' lewat ' . php_sapi_name() . '</p>';\n",
                     new UTF8Encoding(false));
-                TxtSitusBaru.Text = "";
                 _e.Apply();
                 Isi();
                 _e.Say("Situs " + host + " dibuat.");

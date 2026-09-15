@@ -40,11 +40,5 @@ namespace Phoron.App
                    == MessageBoxResult.Yes;
         }
 
-        public static void ShowWarnings(IEnumerable<string> warnings)
-        {
-            var list = new List<string>(warnings ?? new string[0]);
-            if (list.Count == 0) return;
-            Warn(string.Join(Environment.NewLine + Environment.NewLine, list), "Perhatian");
-        }
     }
 }

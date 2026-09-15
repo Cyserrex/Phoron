@@ -314,7 +314,6 @@ namespace Phoron.App.Pages
                 _belumDaftar = null;
                 RefreshState();
                 if (main != null) main.RefreshStatus();
-                AppState.ShowWarnings(warnings);
             }
             finally { BtnSwitch.IsEnabled = BtnSwitchRun.IsEnabled = true; }
         }

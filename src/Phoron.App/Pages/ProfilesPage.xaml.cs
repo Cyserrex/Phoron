@@ -343,7 +343,10 @@ namespace Phoron.App.Pages
         async void BtnRestart_Click(object sender, RoutedEventArgs e)
         {
             Simpan();
-            AppState.ShowWarnings(_e.Apply());
+            // Peringatannya sudah masuk Aktivitas lewat Engine.Apply, berwarna
+            // dan tinggal di sana. Kotak dialog di atasnya cuma menggandakan
+            // hal yang sama sambil menghalangi jalan.
+            _e.Apply();
             var main = Window.GetWindow(this) as MainWindow;
             await _e.StopWebAsync();
             await _e.StartWebAsync();
@@ -362,7 +365,6 @@ namespace Phoron.App.Pages
             AppState.RaiseChanged();
             var main = Window.GetWindow(this) as MainWindow;
             if (main != null) main.RefreshStatus();
-            AppState.ShowWarnings(warnings);
             _perluRestart = false;
             SegarkanBilah();
             AppState.Info("Sekarang memakai profil \"" + target.Name + "\".");
