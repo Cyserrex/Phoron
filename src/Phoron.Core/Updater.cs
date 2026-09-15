@@ -55,10 +55,15 @@ namespace Phoron.Core
     /// <summary>
     /// Mengecek rilis terbaru Phoron di GitHub.
     ///
-    /// Memakai API rilis, bukan mengikis halaman HTML: tata letak halaman
-    /// berubah sewaktu-waktu tanpa pemberitahuan, sedangkan bentuk JSON-nya
-    /// stabil. Penguraiannya tetap seadanya - Core tidak menarik satu pun
-    /// dependensi, dan yang dibutuhkan hanya tiga medan.
+    /// Sumber utamanya umpan Atom rilis, yang dilayani github.com dan TIDAK
+    /// tunduk pada batas 60 permintaan per jam milik api.github.com. Karena itu
+    /// pengecekan rutin tidak pernah kehabisan jatah, dan tidak seorang pun
+    /// perlu menyiapkan token - kotak token yang sempat ada di Pengaturan
+    /// dibuang lagi begitu jalur ini terbukti.
+    ///
+    /// API dipakai hanya sebagai cadangan bila umpan itu gagal. Keduanya diurai
+    /// seadanya dengan regex: Core tidak menarik satu pun dependensi, dan yang
+    /// dibutuhkan cuma beberapa medan.
     /// </summary>
     public static class Updater
     {
@@ -145,9 +150,6 @@ namespace Phoron.Core
             var req = (HttpWebRequest)WebRequest.Create(url);
             // GitHub menolak permintaan tanpa User-Agent dengan 403.
             req.UserAgent = "Phoron/" + AppInfo.Version;
-            var token = (Settings.Load().GithubToken ?? "").Trim();
-            if (token.Length > 0)
-                req.Headers["Authorization"] = "Bearer " + token;
             return req;
         }
 
@@ -160,63 +162,6 @@ namespace Phoron.Core
             // memastikan.
             var sisa = resp.Headers["X-RateLimit-Remaining"];
             return sisa == null || sisa == "0";
-        }
-
-        /// <summary>Hasil pemeriksaan token, untuk ditampilkan di Pengaturan.</summary>
-        public class HasilToken
-        {
-            public bool Sah;
-            public string Pesan = "";
-        }
-
-        /// <summary>
-        /// Menanyakan sisa jatah ke GitHub memakai token yang diberikan.
-        /// Endpoint /rate_limit sengaja dipilih: ia TIDAK ikut mengurangi jatah,
-        /// jadi menguji token berkali-kali tidak merugikan.
-        /// </summary>
-        public static async Task<HasilToken> UjiTokenAsync(string token)
-        {
-            var h = new HasilToken();
-            try
-            {
-                var req = (HttpWebRequest)WebRequest.Create("https://api.github.com/rate_limit");
-                req.UserAgent = "Phoron/" + AppInfo.Version;
-                req.Accept = "application/vnd.github+json";
-                req.Timeout = 20000;
-                token = (token ?? "").Trim();
-                if (token.Length > 0) req.Headers["Authorization"] = "Bearer " + token;
-
-                using (var resp = (HttpWebResponse)await req.GetResponseAsync())
-                using (var r = new StreamReader(resp.GetResponseStream()))
-                {
-                    await r.ReadToEndAsync();
-                    var batas = resp.Headers["X-RateLimit-Limit"] ?? "?";
-                    var sisa = resp.Headers["X-RateLimit-Remaining"] ?? "?";
-                    h.Sah = token.Length > 0 && batas != "60";
-                    h.Pesan = token.Length == 0
-                        ? "Tanpa token: jatah " + batas + " permintaan per jam, sisa " + sisa + "."
-                        : h.Sah
-                            ? "Token dipakai. Jatah naik jadi " + batas + " permintaan per jam, sisa "
-                              + sisa + "."
-                            : "Token TIDAK dipakai GitHub - jatahnya masih " + batas + " per jam, "
-                              + "artinya tokennya tidak dikenali. Periksa apakah tersalin utuh dan belum kedaluwarsa.";
-                    return h;
-                }
-            }
-            catch (WebException ex)
-            {
-                var resp = ex.Response as HttpWebResponse;
-                h.Pesan = resp != null && (int)resp.StatusCode == 401
-                    ? "GitHub menolak token ini (401). Kemungkinan salah salin, sudah dicabut, "
-                      + "atau sudah kedaluwarsa."
-                    : "Tidak bisa menghubungi GitHub: " + ex.Message;
-                return h;
-            }
-            catch (Exception ex)
-            {
-                h.Pesan = "Gagal menguji token: " + ex.Message;
-                return h;
-            }
         }
 
         /// <summary>
@@ -308,9 +253,9 @@ namespace Phoron.Core
                 h.Galat = resp != null && (int)resp.StatusCode == 404
                     ? "Belum ada rilis di GitHub."
                     : JatahHabis(resp)
-                        ? "Jatah permintaan GitHub habis. Tanpa token, satu alamat IP cuma "
-                          + "dapat 60 permintaan per jam - dan jatah itu dibagi dengan aplikasi "
-                          + "lain di jaringan yang sama. Isi token di Pengaturan untuk naik ke 5.000."
+                        ? "Jatah permintaan API GitHub habis. Ini hanya terjadi kalau umpan "
+                          + "rilis tidak bisa dihubungi sehingga Phoron jatuh ke API. Coba lagi "
+                          + "beberapa saat lagi, atau periksa apakah jaringan memblokir github.com."
                         : "Tidak bisa menghubungi GitHub: " + ex.Message;
                 return h;
             }

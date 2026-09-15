@@ -98,14 +98,6 @@ namespace Phoron.Core
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 // Token GitHub
-                { "Token GitHub (opsional)",
-                  "GitHub token (optional)" },
-                { "Uji token",
-                  "Test token" },
-                { "Cara membuat token",
-                  "How to create a token" },
-                { "Menaikkan jatah dari 60 jadi 5.000 permintaan per jam. Token TIDAK perlu diberi izin apa pun - Phoron hanya membaca daftar rilis yang memang publik. Disimpan tersandi di phoron.ini, hanya bisa dibuka oleh akun Windows ini di komputer ini.",
-                  "Raises the quota from 60 to 5,000 requests per hour. The token needs NO permissions at all - Phoron only reads the release list, which is public anyway. Stored encrypted in phoron.ini, readable only by this Windows account on this computer." },
                 // Saran kombinasi versi
                 { "Sarankan otomatis",
                   "Suggest automatically" },
@@ -348,14 +340,6 @@ namespace Phoron.Core
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 // Token GitHub
-                { "Token GitHub (opsional)",
-                  "Token GitHub (opsional)" },
-                { "Uji token",
-                  "Coba token" },
-                { "Cara membuat token",
-                  "Cara nggawe token" },
-                { "Menaikkan jatah dari 60 jadi 5.000 permintaan per jam. Token TIDAK perlu diberi izin apa pun - Phoron hanya membaca daftar rilis yang memang publik. Disimpan tersandi di phoron.ini, hanya bisa dibuka oleh akun Windows ini di komputer ini.",
-                  "Munggahake jatah saka 60 dadi 5.000 panjaluk saben jam. Token ORA perlu diwenehi idin apa wae - Phoron mung maca daftar rilis sing pancen umum. Disimpen kasandi ing phoron.ini, mung bisa dibukak dening akun Windows iki ing komputer iki." },
                 // Saran kombinasi versi
                 { "Sarankan otomatis",
                   "Sarani otomatis" },
@@ -570,14 +554,6 @@ namespace Phoron.Core
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 // Token GitHub
-                { "Token GitHub (opsional)",
-                  "Token GitHub (opsional)" },
-                { "Uji token",
-                  "Uji token" },
-                { "Cara membuat token",
-                  "Cara maulah token" },
-                { "Menaikkan jatah dari 60 jadi 5.000 permintaan per jam. Token TIDAK perlu diberi izin apa pun - Phoron hanya membaca daftar rilis yang memang publik. Disimpan tersandi di phoron.ini, hanya bisa dibuka oleh akun Windows ini di komputer ini.",
-                  "Manaikakan jatah matan 60 jadi 5.000 pamintaan sajam. Token KADA usah dibari izin apa pun - Phoron hanya mambaca daptar rilis nang mamang umum. Disimpan tasandi di phoron.ini, hanya kawa dibuka ulih akun Windows ngini di komputer ngini." },
                 // Saran kombinasi versi
                 { "Sarankan otomatis",
                   "Sarankan otomatis" },

@@ -123,11 +123,7 @@ namespace Phoron.Core
             if (!paksa)
             {
                 if (!Settings.CekPembaruan) return null;
-                // Jeda ini ada semata karena jatah anonim cuma 60 per jam.
-                // Dengan token jatahnya 5.000, jadi menahan pengecekan selama
-                // enam jam tidak lagi ada gunanya - satu jam sudah lebih dari cukup.
-                var jeda = string.IsNullOrEmpty((Settings.GithubToken ?? "").Trim()) ? 6 : 1;
-                if ((DateTime.UtcNow - Settings.CekTerakhir).TotalHours < jeda) return Pembaruan;
+                if ((DateTime.UtcNow - Settings.CekTerakhir).TotalHours < 6) return Pembaruan;
             }
             var hasil = await Updater.CekAsync();
             Settings.CekTerakhir = DateTime.UtcNow;

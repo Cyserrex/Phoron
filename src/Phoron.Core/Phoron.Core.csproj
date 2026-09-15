@@ -6,7 +6,7 @@
     <RootNamespace>Phoron.Core</RootNamespace>
     <AssemblyName>Phoron.Core</AssemblyName>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>1.21.0</Version>
+    <Version>1.22.0</Version>
   </PropertyGroup>
 
   <!--
@@ -15,9 +15,6 @@
     exe akhirnya tetap satu berkas tanpa perlu menanam DLL pihak ketiga.
   -->
   <ItemGroup>
-    <!-- ProtectedData (DPAPI) untuk menyandikan token GitHub. Bagian dari
-         .NET Framework, jadi tetap nol dependensi pihak ketiga. -->
-    <Reference Include="System.Security" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>

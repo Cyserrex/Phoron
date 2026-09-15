@@ -60,7 +60,6 @@ namespace Phoron.Tests
                 UjiRuntimeVc();
                 UjiKonfigurasiNginx();
                 UjiLogWarna();
-                UjiRahasia();
                 UjiUmpanAtom();
             }
             catch (Exception ex)
@@ -661,58 +660,6 @@ namespace Phoron.Tests
             // Perbandingan versi tetap dipakai jalur ini.
             Ok("Versi umpan dibandingkan dengan yang terpasang",
                Updater.LebihBaru("1.20.1", "1.20.0") && !Updater.LebihBaru("1.20.0", "1.20.0"));
-        }
-
-        static void UjiRahasia()
-        {
-            Bagian("Token tersandi");
-            // Token GitHub tidak boleh tersimpan apa adanya: phoron.ini berkas
-            // teks biasa yang dibuka orang dan ikut dalam backup.
-            var token = "ghp_ContohTokenPalsu1234567890abcdefGH";
-
-            var sandi = Rahasia.Sandi(token);
-            Ok("Hasil sandi tidak memuat tokennya", sandi.IndexOf(token, StringComparison.Ordinal) < 0);
-            Ok("Hasil sandi tidak kosong", sandi.Length > 0);
-            Ok("Bisa dibuka kembali utuh", Rahasia.Buka(sandi) == token, Rahasia.Buka(sandi));
-            Ok("Kosong tetap kosong", Rahasia.Sandi("") == "" && Rahasia.Buka("") == "");
-            Ok("Teks sampah tidak membuat pembukanya meledak",
-               Rahasia.Buka("bukan-base64-sama-sekali") == "");
-            Ok("Base64 sah tapi bukan milik kita juga aman",
-               Rahasia.Buka(Convert.ToBase64String(new byte[] { 1, 2, 3, 4 })) == "");
-
-            var samar = Rahasia.Samar(token);
-            Ok("Bentuk samar tidak memuat token utuh", samar.IndexOf(token, StringComparison.Ordinal) < 0);
-            Ok("Bentuk samar menyisakan ujungnya untuk dikenali",
-               samar.StartsWith("ghp_") && samar.EndsWith(token.Substring(token.Length - 4)), samar);
-            Ok("Token pendek disamarkan seluruhnya",
-               Rahasia.Samar("pendek") == "******", Rahasia.Samar("pendek"));
-
-            // Setelan bolak-balik lewat berkas: inilah jalur yang sebenarnya
-            // dipakai, dan di sinilah token bisa terlanjur bocor ke teks polos.
-            var akarLama = Paths.Root;
-            var akar = Path.Combine(Path.GetTempPath(),
-                                    "phoron-token-" + Guid.NewGuid().ToString("N").Substring(0, 8));
-            try
-            {
-                Directory.CreateDirectory(akar);
-                Paths.Root = akar;
-                var s1 = Settings.Load();
-                s1.GithubToken = token;
-                s1.Save();
-
-                var isiIni = File.ReadAllText(Paths.SettingsFile);
-                Ok("phoron.ini TIDAK memuat token apa adanya",
-                   isiIni.IndexOf(token, StringComparison.Ordinal) < 0);
-                Ok("phoron.ini memuat barisnya", isiIni.IndexOf("token_github", StringComparison.Ordinal) >= 0);
-
-                var s2 = Settings.Load();
-                Ok("Token terbaca kembali saat dimuat ulang", s2.GithubToken == token, s2.GithubToken);
-            }
-            finally
-            {
-                Paths.Root = akarLama;
-                try { Directory.Delete(akar, true); } catch { }
-            }
         }
 
         static void UjiLogWarna()

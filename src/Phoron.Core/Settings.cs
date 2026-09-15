@@ -48,14 +48,7 @@ namespace Phoron.Core
         /// <summary>Cek rilis baru di GitHub saat aplikasi dibuka. Baku menyala.</summary>
         public bool CekPembaruan = true;
 
-        /// <summary>
-        /// Token GitHub, disimpan TERSANDI di phoron.ini. Kosong berarti
-        /// permintaan anonim, yang dibatasi 60 per jam untuk seluruh alamat
-        /// IP - di kantor dengan banyak orang, jatah itu bisa habis oleh
-        /// aplikasi lain sebelum Phoron sempat memakainya.
-        /// </summary>
-        public string GithubToken = "";
-        /// <summary>
+       /// <summary>
         /// Kapan terakhir kali GitHub ditanya. API tanpa token dibatasi 60
         /// permintaan per jam per alamat IP; menanyakannya tiap kali jendela
         /// dibuka akan menghabiskan jatah itu tanpa guna.
@@ -84,7 +77,6 @@ namespace Phoron.Core
             s.Bahasa = ini.Get("umum", "bahasa", Lang.Indonesia);
             if (!Lang.Sah(s.Bahasa)) s.Bahasa = Lang.Indonesia;
             s.CekPembaruan = ini.GetBool("umum", "cek_pembaruan", true);
-            s.GithubToken = Rahasia.Buka(ini.Get("umum", "token_github"));
             DateTime kapan;
             s.CekTerakhir = DateTime.TryParse(ini.Get("umum", "cek_terakhir", ""),
                 System.Globalization.CultureInfo.InvariantCulture,
@@ -123,7 +115,11 @@ namespace Phoron.Core
             ini.Set("umum", "tema", Tema ?? "sistem");
             ini.Set("umum", "bahasa", Bahasa ?? Lang.Indonesia);
             ini.Set("umum", "cek_pembaruan", CekPembaruan ? "1" : "0");
-            ini.Set("umum", "token_github", Rahasia.Sandi(GithubToken));
+            // Pernah ada di sini sampai 1.20.x. Dibuang AKTIF, bukan sekadar
+            // berhenti ditulis: Save() memuat ulang berkas yang ada lalu
+            // menimpanya, jadi tanpa baris ini token lama tetap tertinggal di
+            // phoron.ini milik orang yang pernah mengisinya.
+            ini.Remove("umum", "token_github");
             ini.Set("umum", "cek_terakhir", CekTerakhir == DateTime.MinValue
                 ? "" : CekTerakhir.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
             ini.Set("umum", "terminal", Terminal ?? "cmd");
