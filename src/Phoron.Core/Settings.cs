@@ -88,13 +88,14 @@ namespace Phoron.Core
 
         public static List<string> DefaultBinRoots()
         {
+            // Folder bin Phoron sendiri selalu pertama - itulah yang menang
+            // saat ada nama folder kembar di beberapa tempat.
             var list = new List<string> { Paths.Bin };
-            // Laragon dicari di lokasi bakunya; kalau ada, versinya ikut terpakai.
-            foreach (var drive in new[] { "C", "D", "E" })
-            {
-                var p = drive + @":\laragon\bin";
-                if (Directory.Exists(p)) list.Add(p);
-            }
+            // Pengelola lain yang benar-benar terpasang di komputer INI ikut
+            // dipakai, jadi Phoron langsung punya daftar versi tanpa disuruh.
+            // Dulu hanya Laragon yang dicari; XAMPP dan WAMP terlewat walau
+            // pemindainya sudah mengenali tata letak keduanya.
+            list.AddRange(Deteksi.FolderBinTerpasang());
             return list;
         }
 

@@ -107,6 +107,12 @@ namespace Phoron.App.Pages
                           + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
                 perluAdmin = true;   // memasang ke Trusted Root butuh Administrator
             }
+            // Versi yang dicatat profil tapi tidak ada di komputer ini. Phoron
+            // sudah memakai penggantinya, dan itu HARUS terlihat - diam-diam
+            // menjalankan versi lain dari yang tertulis di profil adalah cara
+            // tercepat membuat orang tidak percaya pada tampilan versinya.
+            foreach (var p in _e.Penyesuaian()) pesan.Add(p);
+
             var baru = _e.Pembaruan;
             if (baru != null && baru.Galat == null && baru.LebihBaru)
                 pesan.Add("Phoron " + baru.Versi + " sudah rilis; yang terpasang "

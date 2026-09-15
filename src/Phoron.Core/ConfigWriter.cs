@@ -93,6 +93,17 @@ namespace Phoron.Core
                 // Include milik pengelola lain (mis. Laragon) dibuang: jalur mutlak
                 // ke luar folder Apache pasti bukan milik kita.
                 if (Regex.IsMatch(t, "^Include(Optional)?\\s+\"?[A-Za-z]:", RegexOptions.IgnoreCase)) continue;
+                // DocumentRoot bawaan template dinonaktifkan. Phoron menuliskan
+                // miliknya sendiri di blok penutup, jadi baris ini toh tidak
+                // menentukan apa-apa - tapi Apache MEMERIKSA keberadaan foldernya
+                // saat mengurai dan menolak start kalau tidak ada. XAMPP menaruh
+                // htdocs di C:/xampp/htdocs, di LUAR folder apache-nya, sehingga
+                // "${SRVROOT}/htdocs" bawaan menunjuk folder yang tidak pernah ada.
+                if (t.StartsWith("DocumentRoot", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine("# " + line + "   # dinonaktifkan Phoron - lihat blok di bawah");
+                    continue;
+                }
                 sb.AppendLine(line);
             }
             if (!listenReplaced) sb.AppendLine("Listen " + profile.HttpPort);
@@ -480,6 +491,27 @@ namespace Phoron.Core
                 {
                     daftarExt = dariDasar;
                     r.AdoptedExtensions = dariDasar;
+                }
+            }
+
+            // Daftar ekstensi di profil adalah keadaan komputer tempat profil
+            // dibuat. Di komputer lain, build PHP-nya bisa tidak membawa DLL
+            // yang sama - dan menulis baris extension untuk DLL yang tidak ada
+            // membuat SETIAP permintaan halaman diawali "PHP Startup: Unable to
+            // load dynamic library", termasuk di php -m dan di browser.
+            //
+            // Yang dilewati TIDAK dihapus dari profil: dibawa kembali ke
+            // komputer asalnya, daftarnya harus utuh seperti semula.
+            var adaDll = new HashSet<string>(AvailableExtensions(php), StringComparer.OrdinalIgnoreCase);
+            if (adaDll.Count > 0)
+            {
+                var lewat = daftarExt.Where(x => !adaDll.Contains(x)).ToList();
+                if (lewat.Count > 0)
+                {
+                    daftarExt = daftarExt.Where(adaDll.Contains).ToList();
+                    r.Warnings.Add("Ekstensi ini tidak ada DLL-nya di " + php.Id
+                        + ", jadi tidak ditulis ke php.ini: " + string.Join(", ", lewat)
+                        + ". Daftar di profil dibiarkan utuh.");
                 }
             }
 

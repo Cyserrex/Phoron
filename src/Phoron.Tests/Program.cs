@@ -154,7 +154,15 @@ namespace Phoron.Tests
             if (apache.Count > 0)
             {
                 Ok("Apache punya httpd.exe", apache.All(a => File.Exists(a.MainExe)));
-                Ok("Apache punya toolset terurai", apache.All(a => a.Compiler.Length > 0));
+                // Bukan "semua Apache punya toolset": XAMPP menamai foldernya
+                // cuma "apache", jadi toolsetnya memang tidak tertulis di mana
+                // pun. Yang diuji adalah PENGURAINYA - folder yang menyebut
+                // toolset harus terbaca.
+                var bertoolset = apache.Where(a => a.Id.IndexOf("-vc", StringComparison.OrdinalIgnoreCase) >= 0
+                                               || a.Id.IndexOf("-vs", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                Ok("Toolset terurai dari nama folder yang menyebutnya",
+                    bertoolset.All(a => a.Compiler.Length > 0),
+                    string.Join(", ", bertoolset.Where(a => a.Compiler.Length == 0).Select(a => a.Id).ToArray()));
             }
 
             // Pasangan toolset adalah alasan utama Apache gagal start; ini inti
@@ -611,10 +619,15 @@ namespace Phoron.Tests
 
             foreach (var apache in apaches)
             {
-                // Tiap Apache dipasangkan dengan PHP bertoolset sama - itulah
-                // kombinasi yang akan dipilihkan Phoron untuk pengguna.
-                var php = phps.FirstOrDefault(p => string.Equals(p.Compiler, apache.Compiler,
-                                                                 StringComparison.OrdinalIgnoreCase));
+                // Tiap Apache dipasangkan dengan PHP yang ARSITEKTURNYA sepadan
+                // dan toolsetnya sama - aturan yang sama persis dipakai
+                // ProfileStore.PickApache untuk pengguna. Mencocokkan toolset
+                // saja pernah memasangkan PHP x86 milik XAMPP dengan Apache x64,
+                // dan httpd menolaknya dengan "%1 is not a valid Win32
+                // application" yang tidak menyebut sebabnya.
+                var php = phps.FirstOrDefault(p => ProfileStore.ArsitekturSepadan(p.Arch, apache.Arch)
+                                               && string.Equals(p.Compiler, apache.Compiler,
+                                                                StringComparison.OrdinalIgnoreCase));
                 var profil = new Profile
                 {
                     Name = "Uji " + apache.Id,

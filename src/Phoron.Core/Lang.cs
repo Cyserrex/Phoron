@@ -97,6 +97,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Deteksi pengelola lain
+                { "Deteksi otomatis",
+                  "Auto-detect" },
                 // Folder bin pindah ke halaman Versi
                 { "Satu folder per baris. Folder bin milik Laragon, XAMPP, atau WAMP boleh ikut - Phoron tidak pernah menulis ke dalamnya.",
                   "One folder per line. Laragon's, XAMPP's or WAMP's bin folders may be included - Phoron never writes into them." },
@@ -332,6 +335,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Deteksi pengelola lain
+                { "Deteksi otomatis",
+                  "Deteksi otomatis" },
                 // Folder bin pindah ke halaman Versi
                 { "Satu folder per baris. Folder bin milik Laragon, XAMPP, atau WAMP boleh ikut - Phoron tidak pernah menulis ke dalamnya.",
                   "Siji folder saben baris. Folder bin duweke Laragon, XAMPP, utawa WAMP oleh melu - Phoron ora tau nulis ing njerone." },
@@ -539,6 +545,9 @@ namespace Phoron.Core
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
+                // Deteksi pengelola lain
+                { "Deteksi otomatis",
+                  "Deteksi otomatis" },
                 // Folder bin pindah ke halaman Versi
                 { "Satu folder per baris. Folder bin milik Laragon, XAMPP, atau WAMP boleh ikut - Phoron tidak pernah menulis ke dalamnya.",
                   "Sabuah folder sabaris. Folder bin punya Laragon, XAMPP, atawa WAMP kawa umpat - Phoron kada suah manulis ka dalamnya." },

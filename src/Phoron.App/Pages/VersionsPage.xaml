@@ -46,6 +46,7 @@
             <WrapPanel Margin="0,0,0,10">
                 <ui:Button Content="{loc:T 'Pindai ulang'}" Margin="0,0,8,0" Click="BtnPindai_Click"/>
                 <ui:Button Content="{loc:T 'Tambah folder bin'}" Margin="0,0,8,0" Click="BtnTambahRoot_Click"/>
+                <ui:Button Content="{loc:T 'Deteksi otomatis'}" Margin="0,0,8,0" Click="BtnDeteksi_Click"/>
                 <ui:Button Content="{loc:T 'Buka folder versi'}" Margin="0,0,8,0" Click="BtnBuka_Click"/>
                 <ui:Button Click="BtnKatalog_Click">
                     <ui:Button.Content>

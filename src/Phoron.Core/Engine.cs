@@ -201,10 +201,68 @@ namespace Phoron.Core
 
         public IEnumerable<BinPackage> Of(BinKind kind) { return Packages.Where(p => p.Kind == kind); }
 
-        public BinPackage Php { get { return Active == null ? null : Find(BinKind.Php, Active.PhpId); } }
-        public BinPackage Apache { get { return Active == null ? null : Find(BinKind.Apache, Active.ApacheId); } }
-        public BinPackage Nginx { get { return Active == null ? null : Find(BinKind.Nginx, Active.NginxId); } }
-        public BinPackage MySql { get { return Active == null ? null : Find(BinKind.MySql, Active.MySqlId); } }
+        /// <summary>
+        /// Paket yang dipakai untuk sebuah entri profil, DENGAN penyesuaian
+        /// kalau yang tercatat tidak ada di komputer ini.
+        ///
+        /// Berkas profil menyimpan NAMA folder, dan nama itu adalah keadaan
+        /// komputer tempat profil dibuat. Dibawa ke komputer lain, namanya kerap
+        /// tidak cocok - versi PHP-nya beda, atau Laragon-nya tidak terpasang.
+        /// Dulu hasilnya null, dan php.ini ditulis tanpa PHP sama sekali:
+        /// Apache menyala, tapi berkas .php diunduh mentah alih-alih dijalankan,
+        /// tanpa satu pun pesan yang menyebutkan sebabnya.
+        ///
+        /// Berkas profilnya TIDAK diubah. Kalau diubah, membawa profil kembali
+        /// ke komputer asal akan menemukannya sudah tertimpa.
+        /// </summary>
+        public BinPackage Pakai(BinKind jenis, string id)
+        {
+            var tepat = Find(jenis, id);
+            if (tepat != null) return tepat;
+
+            var tersedia = Of(jenis).ToList();
+            if (tersedia.Count == 0) return null;
+
+            // Apache dipilih lewat pencocokan toolset, bukan sekadar versi
+            // tertinggi: Apache VS16 dengan PHP VC11 mati seketika tanpa pesan.
+            if (jenis == BinKind.Apache)
+                return ProfileStore.PickApache(Pakai(BinKind.Php, Active != null ? Active.PhpId : null),
+                                               tersedia);
+            return tersedia.OrderByDescending(x => x.Parsed).FirstOrDefault();
+        }
+
+        public BinPackage Php { get { return Active == null ? null : Pakai(BinKind.Php, Active.PhpId); } }
+        public BinPackage Apache { get { return Active == null ? null : Pakai(BinKind.Apache, Active.ApacheId); } }
+        public BinPackage Nginx { get { return Active == null ? null : Pakai(BinKind.Nginx, Active.NginxId); } }
+        public BinPackage MySql { get { return Active == null ? null : Pakai(BinKind.MySql, Active.MySqlId); } }
+
+        /// <summary>
+        /// Penyesuaian yang sedang berlaku, untuk dilaporkan ke layar. Diam-diam
+        /// memakai versi lain lebih buruk daripada gagal terang-terangan.
+        /// </summary>
+        public List<string> Penyesuaian()
+        {
+            var pesan = new List<string>();
+            if (Active == null) return pesan;
+
+            Action<BinKind, string, string> periksa = (jenis, id, sebutan) =>
+            {
+                if (string.IsNullOrEmpty(id)) return;
+                if (Find(jenis, id) != null) return;
+                var ganti = Pakai(jenis, id);
+                pesan.Add(ganti == null
+                    ? sebutan + " \"" + id + "\" yang dicatat profil tidak ada di komputer ini, "
+                      + "dan tidak ada gantinya. Pasang versinya di halaman Versi, atau pilih yang lain di Profil."
+                    : sebutan + " \"" + id + "\" tidak ada di komputer ini; Phoron memakai \""
+                      + ganti.Id + "\". Simpan di halaman Profil kalau ingin penggantian ini tetap.");
+            };
+
+            periksa(BinKind.Php, Active.PhpId, "Versi PHP");
+            if (Active.WebServer == "nginx") periksa(BinKind.Nginx, Active.NginxId, "Versi Nginx");
+            else periksa(BinKind.Apache, Active.ApacheId, "Versi Apache");
+            periksa(BinKind.MySql, Active.MySqlId, "Versi MySQL");
+            return pesan;
+        }
         public BinPackage WebPackage
         {
             get { return Active != null && Active.WebServer == "nginx" ? Nginx : Apache; }
@@ -260,6 +318,7 @@ namespace Phoron.Core
             LastBuild.Warnings.AddRange(SiteWarnings);
             LastBuild.Warnings.AddRange(awal);
             LastBuild.Warnings.AddRange(PaketKembar());
+            LastBuild.Warnings.AddRange(Penyesuaian());
 
             // Daftar ekstensi yang diambil alih dari php.ini dasar disimpan ke
             // profil, bukan dibiarkan tersirat: begitu tersimpan, daftarnya

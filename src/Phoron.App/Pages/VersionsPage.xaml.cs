@@ -103,6 +103,40 @@ namespace Phoron.App.Pages
             }
         }
 
+        /// <summary>
+        /// Menawarkan folder bin pengelola lain yang terpasang di komputer INI.
+        /// DefaultBinRoots hanya berlaku saat pertama kali jalan; pengguna yang
+        /// phoron.ini-nya sudah ada - atau membawanya dari komputer lain - tidak
+        /// akan pernah mendapat XAMPP dan WAMP-nya tanpa jalan sadar seperti ini.
+        /// </summary>
+        void BtnDeteksi_Click(object sender, RoutedEventArgs e)
+        {
+            var baru = Deteksi.BelumTerdaftar(_e.Settings.BinRoots);
+            if (baru.Count == 0)
+            {
+                var ada = Deteksi.FolderBinTerpasang();
+                AppState.Info(ada.Count == 0
+                    ? "Tidak ada Laragon, XAMPP, atau WAMP yang terpasang di tempat bakunya. "
+                      + "Kalau punya, tambahkan foldernya sendiri lewat \"Tambah folder bin\"."
+                    : "Semua yang terdeteksi sudah terdaftar: " + string.Join(", ", ada));
+                return;
+            }
+            if (!AppState.Ask("Ditemukan folder bin ini di komputer Anda:" + Environment.NewLine
+                              + Environment.NewLine + string.Join(Environment.NewLine, baru)
+                              + Environment.NewLine + Environment.NewLine
+                              + "Tambahkan ke daftar yang dipindai? Phoron tidak pernah menulis "
+                              + "ke dalam folder itu.")) return;
+
+            _e.Settings.BinRoots.AddRange(baru);
+            _e.Settings.Save();
+            _e.Reload();
+            AppState.RaiseChanged();
+            IsiRoots();
+            IsiDaftar();
+            AppState.Info(baru.Count + " folder ditambahkan. Sekarang ada "
+                          + _e.Packages.Count + " paket terdeteksi.");
+        }
+
         void BtnBuka_Click(object sender, RoutedEventArgs e)
         {
             var b = Daftar.SelectedItem as Baris;

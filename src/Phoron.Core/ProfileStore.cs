@@ -153,14 +153,34 @@ namespace Phoron.Core
         /// tidak akan dimuat oleh httpd VS16, dan gagalnya berupa crash saat start,
         /// bukan pesan yang jelas. Karena itu kecocokan toolset didahulukan.
         /// </summary>
+        /// <summary>
+        /// Arsitektur yang TIDAK diketahui dianggap sepadan. Menolaknya akan
+        /// membuang paket yang sebenarnya cocok, hanya karena namanya tidak
+        /// menyebut arsitektur dan binernya belum sempat ditanya.
+        /// </summary>
+        public static bool ArsitekturSepadan(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return true;
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+
         public static BinPackage PickApache(BinPackage php, IEnumerable<BinPackage> apaches)
         {
             var list = (apaches ?? Enumerable.Empty<BinPackage>()).ToList();
             if (php == null || list.Count == 0) return list.OrderByDescending(a => a.Parsed).FirstOrDefault();
-            var same = list.Where(a => !string.IsNullOrEmpty(a.Compiler)
+
+            // Arsitektur adalah syarat MUTLAK, toolset cuma preferensi: beda
+            // toolset kerap tetap jalan, beda arsitektur TIDAK PERNAH - Apache
+            // x64 mustahil memuat modul PHP x86, dan gagalnya berbunyi
+            // "%1 is not a valid Win32 application" yang tidak menyebut sebabnya.
+            // Terlihat begitu XAMPP (x86) berdampingan dengan Laragon (x64).
+            var seArsitektur = list.Where(a => ArsitekturSepadan(a.Arch, php.Arch)).ToList();
+            var kandidat = seArsitektur.Count > 0 ? seArsitektur : list;
+
+            var seToolset = kandidat.Where(a => !string.IsNullOrEmpty(a.Compiler)
                                     && string.Equals(a.Compiler, php.Compiler, StringComparison.OrdinalIgnoreCase))
                            .OrderByDescending(a => a.Parsed).FirstOrDefault();
-            return same ?? list.OrderByDescending(a => a.Parsed).FirstOrDefault();
+            return seToolset ?? kandidat.OrderByDescending(a => a.Parsed).FirstOrDefault();
         }
     }
 }
