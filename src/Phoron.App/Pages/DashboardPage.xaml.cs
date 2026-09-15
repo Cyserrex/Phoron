@@ -87,12 +87,17 @@ namespace Phoron.App.Pages
                 // yang memegang port itu justru kita sendiri.
                 foreach (var u in PortCheck.Conflicts(_e.Active, false)) pesan.Add(u.Describe());
             }
+            // Sebagian pesan di panel ini bisa ditindak tanpa hak apa pun, sebagian
+            // lagi memang mentok tanpa Administrator. Hanya yang kedua yang boleh
+            // memunculkan tombol naik hak akses.
+            bool perluAdmin = false;
             if (!SslTool.Exists)
                 pesan.Add("HTTPS belum aktif: sertifikat belum ada, jadi port "
                           + (_e.Active != null ? _e.Active.HttpsPort.ToString() : "443")
                           + " tidak dibuka. Pakai http:// (bukan https://), atau tekan "
                           + "\"Buat sertifikat SSL\" di bawah.");
             else if (!SslTool.IsTrusted)
+            {
                 // Sertifikat yang ada tapi belum tepercaya adalah keadaan paling
                 // menjebak: https menjawab, lalu browser menuduh situsnya palsu.
                 // Pada host ber-HSTS (mis. localhost yang pernah dipasangi header
@@ -100,6 +105,8 @@ namespace Phoron.App.Pages
                 pesan.Add("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser "
                           + "akan memperingatkan - dan pada host ber-HSTS tidak ada tombol "
                           + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
+                perluAdmin = true;   // memasang ke Trusted Root butuh Administrator
+            }
             var baru = _e.Pembaruan;
             if (baru != null && baru.Galat == null && baru.LebihBaru)
                 pesan.Add("Phoron " + baru.Versi + " sudah rilis; yang terpasang "
@@ -109,22 +116,25 @@ namespace Phoron.App.Pages
             // dan kalimatnya harus mengatakan begitu - lalu menunjukkan bahwa
             // cukup sekali izin, tidak selamanya.
             var belumDaftar = BelumDaftar();
-            if (_e.Settings.ManageHosts && !HostsFile.IsAdmin())
+            if (_e.Settings.ManageHosts && !HostsFile.IsAdmin() && belumDaftar.Count > 0)
             {
-                if (belumDaftar.Count > 0)
-                    pesan.Add("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
-                              + "untuk aplikasi yang menyala sendiri saat boot. Akibatnya "
-                              + belumDaftar.Count + " nama situs .test belum terdaftar di berkas hosts. "
-                              + "Alamat http://localhost/proyek/ tetap jalan normal. "
-                              + "Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.");
-                else
-                    pesan.Add("Phoron jalan tanpa hak Administrator, jadi berkas hosts tidak bisa disunting. "
-                              + "Nama situs yang sudah terdaftar tetap bisa dibuka; yang baru tidak.");
+                pesan.Add("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
+                          + "untuk aplikasi yang menyala sendiri saat boot. Akibatnya "
+                          + belumDaftar.Count + " nama situs .test belum terdaftar di berkas hosts. "
+                          + "Alamat http://localhost/proyek/ tetap jalan normal. "
+                          + "Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.");
+                perluAdmin = true;
             }
+            // Tidak ada cabang "else" di sini dengan sengaja. Kalau seluruh nama
+            // sudah terdaftar, jalan tanpa Administrator TIDAK merugikan apa pun:
+            // entri hosts menetap, .test tetap kebuka, localhost tidak pernah
+            // terpengaruh. Memasang panel kuning untuk keadaan yang tidak bisa -
+            // dan tidak perlu - ditindak cuma melatih orang mengabaikan panelnya.
 
             TxtPeringatan.Text = string.Join(Environment.NewLine, pesan);
             PanelPeringatan.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            BtnAdmin.Visibility = HostsFile.IsAdmin() ? Visibility.Collapsed : Visibility.Visible;
+            BtnAdmin.Visibility = perluAdmin && !HostsFile.IsAdmin()
+                ? Visibility.Visible : Visibility.Collapsed;
             BtnDaftarHosts.Visibility = belumDaftar.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnPembaruan.Visibility = baru != null && baru.Galat == null && baru.LebihBaru
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -234,6 +244,9 @@ namespace Phoron.App.Pages
                     await _e.StartAllAsync();
                 }
 
+                // Profil lain bisa menunjuk folder proyek yang lain pula, jadi
+                // daftar nama yang belum terdaftar ikut berubah.
+                _belumDaftar = null;
                 RefreshState();
                 if (main != null) main.RefreshStatus();
                 AppState.ShowWarnings(warnings);

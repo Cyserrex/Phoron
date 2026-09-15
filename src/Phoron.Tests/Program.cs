@@ -54,6 +54,7 @@ namespace Phoron.Tests
                 UjiAutostart();
                 UjiLabelVersi();
                 UjiBahasa();
+                UjiHostsTool();
             }
             catch (Exception ex)
             {
@@ -714,6 +715,60 @@ namespace Phoron.Tests
             var label = pkg.Label;
             Ok("Label memakai titik tengah yang benar", label == "8.3.12 · VS16 · x64 · TS", label);
             Ok("Label tidak mengandung sisa mojibake", !label.Contains("Â"), label);
+        }
+
+        static void UjiHostsTool()
+        {
+            Bagian("HostsTool");
+            // Yang dijaga di sini: nama dikumpulkan dari SELURUH profil, bukan
+            // cuma yang aktif. Kalau cuma yang aktif, berganti profil berarti
+            // minta hak Administrator lagi - persis yang ingin dihindari.
+            //
+            // BelumTerdaftar() sengaja TIDAK diuji: ia membaca berkas hosts
+            // mesin yang sedang dipakai, jadi hasilnya bergantung keadaan mesin.
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-hoststool-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+
+                var satu = Path.Combine(akar, "proyek-satu");
+                var dua = Path.Combine(akar, "proyek-dua");
+                Directory.CreateDirectory(Path.Combine(satu, "alfa"));
+                Directory.CreateDirectory(Path.Combine(satu, "beta"));
+                Directory.CreateDirectory(Path.Combine(dua, "gama"));
+
+                var pA = new Profile { Name = "A", SiteSuffix = "test" };
+                pA.ProjectRoots.Add(satu);
+                ProfileStore.Save(pA);
+
+                var pB = new Profile { Name = "B", SiteSuffix = "dev" };
+                pB.ProjectRoots.Add(dua);
+                ProfileStore.Save(pB);
+
+                // Profil ketiga menunjuk folder yang sama dengan A: namanya
+                // harus menyatu, bukan berlipat.
+                var pC = new Profile { Name = "C", SiteSuffix = "test" };
+                pC.ProjectRoots.Add(satu);
+                ProfileStore.Save(pC);
+
+                var nama = HostsTool.SemuaNamaSitus();
+                var gabung = string.Join(", ", nama.ToArray());
+
+                Ok("Nama dari profil pertama ikut", nama.Contains("alfa.test"), gabung);
+                Ok("Nama dari profil KEDUA ikut juga", nama.Contains("gama.dev"), gabung);
+                Ok("Akhiran tiap profil dihormati", nama.Contains("beta.test"), gabung);
+                Ok("Nama yang sama tidak berlipat", nama.Count == 3, gabung);
+                Ok("Terurut", nama.SequenceEqual(nama.OrderBy(n => n, StringComparer.OrdinalIgnoreCase)), gabung);
+                Ok("localhost tidak ikut", !nama.Contains("localhost"), gabung);
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
         }
 
         static void UjiBahasa()
