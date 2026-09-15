@@ -15,11 +15,71 @@ namespace Phoron.Core
     /// </summary>
     public class ServiceManager
     {
+        /// <summary>
+        /// Menjaga tiga rujukan proses di bawah, itu saja. TIDAK pernah dipegang
+        /// saat melakukan I/O, saat menunggu await, atau saat mengangkat
+        /// peristiwa.
+        ///
+        /// Aturan terakhir bukan soal kerapian. MainWindow menyambungkan
+        /// StateChanged lewat Dispatcher yang memblokir, jadi kunci yang masih
+        /// dipegang saat peristiwa diangkat dari utas kolam - sementara utas
+        /// layar menunggu kunci yang sama di StopAll - adalah kebuntuan yang
+        /// sempurna.
+        ///
+        /// Dulu medan ini ada tapi hanya dipakai di SATU dari tiga belas tempat
+        /// yang menyentuh ketiga rujukan itu.
+        /// </summary>
         readonly object _lock = new object();
         Process _web, _db, _fcgi;
 
-        public ServiceState WebState { get; private set; }
-        public ServiceState DbState { get; private set; }
+        // volatile: ditulis dari kelanjutan async di utas kolam, dibaca dari utas
+        // layar setiap kali RefreshStatus jalan.
+        volatile ServiceState _webState;
+        volatile ServiceState _dbState;
+
+        public ServiceState WebState { get { return _webState; } }
+        public ServiceState DbState { get { return _dbState; } }
+
+        // ------------------------------------------------- Rujukan proses
+        // Satu-satunya tempat _web/_db/_fcgi boleh disentuh. Sebagian publik
+        // supaya perlombaannya bisa diuji sungguhan, bukan diandaikan.
+
+        public void PasangWeb(Process p) { lock (_lock) _web = p; }
+        void PasangDb(Process p) { lock (_lock) _db = p; }
+        void PasangFcgi(Process p) { lock (_lock) _fcgi = p; }
+
+        Process AmbilWeb() { lock (_lock) return _web; }
+        Process AmbilDb() { lock (_lock) return _db; }
+
+        public Process AmbilLepasWeb() { lock (_lock) { var p = _web; _web = null; return p; } }
+        Process AmbilLepasDb() { lock (_lock) { var p = _db; _db = null; return p; } }
+        Process AmbilLepasFcgi() { lock (_lock) { var p = _fcgi; _fcgi = null; return p; } }
+
+        /// <summary>
+        /// Uji-lalu-kosongkan dalam SATU langkah. Inilah inti perbaikannya.
+        ///
+        /// Dulu ProsesMati - yang jalan di utas kolam lewat Process.Exited -
+        /// membandingkan rujukannya lalu mengosongkannya sebagai dua langkah
+        /// terpisah, sementara StopWebAsync di utas layar melakukan hal yang
+        /// sama. Keduanya bisa melihat rujukan yang sama lalu sama-sama
+        /// bertindak: penghentian yang DISENGAJA pengguna ikut dilaporkan
+        /// sebagai "Apache berhenti sendiri", dan statusnya berubah jadi Gagal
+        /// sesudah StopWebAsync menyetelnya ke Berhenti.
+        /// </summary>
+        public bool LepasWebJika(Process p)
+        {
+            lock (_lock) { if (!ReferenceEquals(_web, p)) return false; _web = null; return true; }
+        }
+
+        public bool LepasDbJika(Process p)
+        {
+            lock (_lock) { if (!ReferenceEquals(_db, p)) return false; _db = null; return true; }
+        }
+
+        public bool LepasFcgiJika(Process p)
+        {
+            lock (_lock) { if (!ReferenceEquals(_fcgi, p)) return false; _fcgi = null; return true; }
+        }
 
         /// <summary>
         /// Teruskan SELURUH keluaran layanan, bukan hanya barisnya yang
@@ -44,12 +104,12 @@ namespace Phoron.Core
         public event Action<ServiceKind, ServiceState> StateChanged;
         public event Action<string> Log;
 
-        public int WebPid { get { var p = _web; return p != null && !p.HasExited ? p.Id : 0; } }
-        public int DbPid { get { var p = _db; return p != null && !p.HasExited ? p.Id : 0; } }
+        public int WebPid { get { var p = AmbilWeb(); return p != null && !p.HasExited ? p.Id : 0; } }
+        public int DbPid { get { var p = AmbilDb(); return p != null && !p.HasExited ? p.Id : 0; } }
 
         void SetState(ServiceKind kind, ServiceState state)
         {
-            if (kind == ServiceKind.Web) WebState = state; else DbState = state;
+            if (kind == ServiceKind.Web) _webState = state; else _dbState = state;
             var h = StateChanged;
             if (h != null) h(kind, state);
         }
@@ -159,7 +219,7 @@ namespace Phoron.Core
 
             var p = Spawn(httpd, args, apache.Path, EnvFor(php), "apache");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
-            _web = p;
+            PasangWeb(p);
 
             // httpd yang sehat tidak keluar. Kalau ia sudah mati dalam dua detik,
             // yang gagal adalah bind port atau modul, bukan konfigurasinya.
@@ -170,7 +230,7 @@ namespace Phoron.Core
                 Say("Apache berhenti seketika (kode " + p.ExitCode + ")."
                     + (ekor.Length > 0 ? Environment.NewLine + ekor : "")
                     + PetunjukGagal(apache, php, ekor));
-                _web = null;
+                LepasWebJika(p);
                 StopFastCgi();
                 SetState(ServiceKind.Web, ServiceState.Gagal);
                 return false;
@@ -200,9 +260,23 @@ namespace Phoron.Core
             }
             var p = Spawn(exe, args, nginx.Path, EnvFor(php), "nginx");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
-            _web = p;
+            PasangWeb(p);
+
+            // Penjaga yang sama seperti Apache, yang dulu TIDAK ada di sini:
+            // nginx yang mati seketika - port terpakai, jalur log tidak bisa
+            // dibuat - tetap dilaporkan "jalan", dan orang mencari-cari sebab
+            // halamannya tidak terbuka padahal Phoron bilang semuanya beres.
             await Task.Delay(1000);
-            Say("Nginx " + nginx.Version + " jalan.");
+            if (p.HasExited)
+            {
+                Say("Nginx berhenti seketika (kode " + p.ExitCode + "). "
+                    + "Lihat logs\\nginx-error.log.");
+                LepasWebJika(p);
+                StopFastCgi();
+                SetState(ServiceKind.Web, ServiceState.Gagal);
+                return false;
+            }
+            Say("Nginx " + nginx.Version + " jalan (PID " + p.Id + ").");
             SetState(ServiceKind.Web, ServiceState.Jalan);
             return true;
         }
@@ -214,8 +288,7 @@ namespace Phoron.Core
             // rujukan itu untuk membedakan "dimatikan pengguna" dari "mati
             // sendiri", dan kalau urutannya terbalik penghentian yang disengaja
             // ikut dilaporkan sebagai kegagalan.
-            Process proc;
-            lock (_lock) { proc = _web; _web = null; }
+            var proc = AmbilLepasWeb();
             await Task.Run(() =>
             {
                 if (proc == null) return;
@@ -240,12 +313,12 @@ namespace Phoron.Core
             env["PHP_FCGI_MAX_REQUESTS"] = "0";
             var p = Spawn(exe, "-b 127.0.0.1:" + port, php.Path, env, "php-cgi");
             if (p == null) return false;
-            _fcgi = p;
+            PasangFcgi(p);
             await Task.Delay(600);
             if (p.HasExited)
             {
                 Say("php-cgi berhenti seketika - port " + port + " mungkin dipakai proses lain.");
-                _fcgi = null;
+                LepasFcgiJika(p);
                 return false;
             }
             Say("php-cgi (FastCGI) jalan di 127.0.0.1:" + port + ".");
@@ -254,8 +327,7 @@ namespace Phoron.Core
 
         void StopFastCgi()
         {
-            var proc = _fcgi;
-            _fcgi = null;   // dilepas dulu, lihat catatan di StopWebAsync
+            var proc = AmbilLepasFcgi();   // dilepas dulu, lihat catatan di StopWebAsync
             if (proc == null) return;
             try { if (!proc.HasExited) Shell.KillTree(proc.Id); } catch { }
         }
@@ -289,7 +361,7 @@ namespace Phoron.Core
             var mysqld = Path.Combine(mysql.Path, "bin", "mysqld.exe");
             var p = Spawn(mysqld, "--defaults-file=\"" + myIni + "\" --console", mysql.Path, null, "mysql");
             if (p == null) { SetState(ServiceKind.Db, ServiceState.Gagal); return false; }
-            _db = p;
+            PasangDb(p);
 
             // mysqld butuh waktu memulihkan InnoDB; port-nya dijadikan tanda siap
             // karena log-nya berbeda-beda antarversi.
@@ -312,8 +384,7 @@ namespace Phoron.Core
         public async Task StopDbAsync()
         {
             SetState(ServiceKind.Db, ServiceState.Mematikan);
-            var proc = _db;
-            _db = null;
+            var proc = AmbilLepasDb();
             if (proc != null)
             {
                 await Task.Run(() =>
@@ -328,7 +399,7 @@ namespace Phoron.Core
         /// <summary>Matikan MySQL dengan rapi lewat mysqladmin sebelum jalan paksa - InnoDB tidak suka dibunuh.</summary>
         public async Task StopDbGracefullyAsync(Profile profile, BinPackage mysql)
         {
-            if (_db == null) { SetState(ServiceKind.Db, ServiceState.Berhenti); return; }
+            if (AmbilDb() == null) { SetState(ServiceKind.Db, ServiceState.Berhenti); return; }
             SetState(ServiceKind.Db, ServiceState.Mematikan);
             var admin = mysql != null ? Path.Combine(mysql.Path, "bin", "mysqladmin.exe") : null;
             if (admin != null && File.Exists(admin))
@@ -339,7 +410,7 @@ namespace Phoron.Core
                     mysql.Path, 20000));
                 for (int i = 0; i < 30; i++)
                 {
-                    var d = _db;
+                    var d = AmbilDb();
                     if (d == null || d.HasExited) break;
                     await Task.Delay(400);
                 }
@@ -433,23 +504,28 @@ namespace Phoron.Core
             int kode;
             try { kode = p.ExitCode; } catch { kode = -1; }
 
-            if (ReferenceEquals(_web, p))
+            // Uji-lalu-kosongkan, bukan bandingkan lalu kosongkan. Persis satu
+            // pihak yang menang antara ini dan StopWebAsync, jadi penghentian
+            // yang disengaja tidak lagi ikut dilaporkan sebagai kegagalan.
+            // Say dan SetState sengaja DI LUAR kunci - lihat catatan di _lock.
+            if (LepasWebJika(p))
             {
-                _web = null;
                 StopFastCgi();
                 Say(tag + " berhenti sendiri (kode " + kode + "). Lihat logs\\apache-error.log.");
                 SetState(ServiceKind.Web, ServiceState.Gagal);
             }
-            else if (ReferenceEquals(_db, p))
+            else if (LepasDbJika(p))
             {
-                _db = null;
                 Say("MySQL berhenti sendiri (kode " + kode + "). Lihat logs\\mysql-error.log.");
                 SetState(ServiceKind.Db, ServiceState.Gagal);
             }
-            else if (ReferenceEquals(_fcgi, p) && WebState == ServiceState.Jalan)
+            else if (LepasFcgiJika(p))
             {
-                _fcgi = null;
-                Say("php-cgi berhenti sendiri (kode " + kode + ") - halaman PHP akan membalas 503.");
+                // Rujukannya dikosongkan lebih dulu, baru keadaannya diperiksa:
+                // kalau urutannya terbalik, php-cgi yang mati saat web server
+                // sudah berhenti akan tertinggal sebagai rujukan basi.
+                if (WebState == ServiceState.Jalan)
+                    Say("php-cgi berhenti sendiri (kode " + kode + ") - halaman PHP akan membalas 503.");
             }
         }
 
@@ -468,13 +544,22 @@ namespace Phoron.Core
         /// <summary>Bunuh semua proses yang masih dipegang - dipanggil saat aplikasi ditutup.</summary>
         public void StopAll()
         {
-            foreach (var p in new[] { _web, _fcgi, _db }.Where(x => x != null))
+            // Dipotret di dalam kunci, dibunuh di LUAR kunci. KillTree lambat
+            // dan memicu callback Exited di utas kolam yang ikut meminta kunci
+            // yang sama; memegangnya selama pembunuhan berarti menahan mereka
+            // semua di belakang utas layar tanpa alasan.
+            Process w, f, d;
+            lock (_lock)
+            {
+                w = _web; f = _fcgi; d = _db;
+                _web = _fcgi = _db = null;
+            }
+            foreach (var p in new[] { w, f, d }.Where(x => x != null))
             {
                 try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
             }
-            _web = _fcgi = _db = null;
-            WebState = ServiceState.Berhenti;
-            DbState = ServiceState.Berhenti;
+            _webState = ServiceState.Berhenti;
+            _dbState = ServiceState.Berhenti;
         }
     }
 }

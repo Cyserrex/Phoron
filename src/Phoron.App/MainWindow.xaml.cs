@@ -32,7 +32,12 @@ namespace Phoron.App
             // dengan bahasa lama tidak akan berubah sendiri.
             Lang.Pakai(_engine.Settings.Bahasa);
             TerapkanTema(_engine.Settings.Tema);
-            _engine.Services.StateChanged += (kind, state) => Dispatcher.Invoke(RefreshStatus);
+            // BeginInvoke, bukan Invoke: RefreshStatus hanya membaca keadaan lalu
+            // menggambar ulang, jadi utas layanan tidak perlu menunggunya. Invoke
+            // yang memblokir di sini adalah setengah dari kebuntuan yang mungkin
+            // terjadi kalau suatu saat ada kunci dipegang saat peristiwa diangkat.
+            _engine.Services.StateChanged += (kind, state) =>
+                Dispatcher.BeginInvoke(new Action(RefreshStatus));
             _engine.Reload();
 
             SetupTray();

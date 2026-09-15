@@ -67,6 +67,7 @@ namespace Phoron.Tests
                 UjiLogWarna();
                 UjiRiwayatLog();
                 UjiPutaranLog();
+                UjiBalapLayanan();
                 UjiUmpanAtom();
             }
             catch (Exception ex)
@@ -501,6 +502,71 @@ namespace Phoron.Tests
                 Settings.KeluhanTerakhir = "";
                 try { Directory.Delete(akar, true); } catch { }
             }
+        }
+
+        static void UjiBalapLayanan()
+        {
+            Bagian("Perlombaan rujukan layanan");
+            // Dua pihak berebut rujukan proses yang sama: StopWebAsync di utas
+            // layar, dan ProsesMati di utas kolam lewat Process.Exited. Dulu
+            // keduanya membandingkan lalu mengosongkan sebagai dua langkah
+            // terpisah, jadi keduanya bisa sama-sama menang - dan penghentian
+            // yang DISENGAJA pengguna ikut dilaporkan sebagai "berhenti sendiri"
+            // lalu statusnya berubah jadi Gagal.
+            //
+            // Process yang tidak pernah dijalankan sudah cukup: yang diuji
+            // rujukannya, bukan prosesnya.
+            var sm = new ServiceManager();
+            var proses = new System.Diagnostics.Process();
+            var lain = new System.Diagnostics.Process();
+
+            sm.PasangWeb(proses);
+            Ok("Melepas proses yang bukan miliknya tidak mengubah apa pun",
+               !sm.LepasWebJika(lain) && sm.LepasWebJika(proses));
+
+            sm.PasangWeb(proses);
+            Ok("Ambil-lepas mengembalikan prosesnya lalu mengosongkan",
+               ReferenceEquals(sm.AmbilLepasWeb(), proses) && sm.AmbilLepasWeb() == null);
+
+            const int putaran = 1000;
+            var menangGanda = 0;
+            var takAdaYangMenang = 0;
+            for (int i = 0; i < putaran; i++)
+            {
+                sm.PasangWeb(proses);
+                var hasil = new bool[2];
+                var pintu = new System.Threading.Barrier(2);
+                var utas = new System.Threading.Thread[2];
+                for (int u = 0; u < 2; u++)
+                {
+                    var nomor = u;
+                    utas[u] = new System.Threading.Thread(() =>
+                    {
+                        pintu.SignalAndWait();          // berangkat berbarengan
+                        hasil[nomor] = sm.LepasWebJika(proses);
+                    });
+                    utas[u].Start();
+                }
+                foreach (var t in utas) t.Join();
+
+                var menang = (hasil[0] ? 1 : 0) + (hasil[1] ? 1 : 0);
+                if (menang > 1) menangGanda++;
+                if (menang == 0) takAdaYangMenang++;
+            }
+            Ok("Hanya satu pihak yang bisa melepas rujukan yang sama",
+               menangGanda == 0, menangGanda + " dari " + putaran + " putaran menang ganda");
+            Ok("Selalu ada tepat satu yang menang",
+               takAdaYangMenang == 0, takAdaYangMenang + " putaran tanpa pemenang");
+
+            // StopAll harus mengosongkan ketiganya, bukan sebagian.
+            sm.PasangWeb(proses);
+            sm.StopAll();
+            Ok("StopAll mengosongkan rujukan web", sm.AmbilLepasWeb() == null);
+            Ok("StopAll menyetel keadaan jadi berhenti",
+               sm.WebState == ServiceState.Berhenti && sm.DbState == ServiceState.Berhenti);
+
+            proses.Dispose();
+            lain.Dispose();
         }
 
         static void UjiIni()
