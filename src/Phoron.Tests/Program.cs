@@ -59,6 +59,7 @@ namespace Phoron.Tests
                 UjiOracle();
                 UjiRuntimeVc();
                 UjiKonfigurasiNginx();
+                UjiLogWarna();
             }
             catch (Exception ex)
             {
@@ -607,6 +608,53 @@ namespace Phoron.Tests
                 var res = Shell.Run(v.MainExe, "-n -l \"" + file + "\"", v.Path, 30000);
                 Ok(v.Version + ": halaman sambutan lolos php -l", res.Ok, res.All.Trim());
             }
+        }
+
+        static void UjiLogWarna()
+        {
+            Bagian("Warna log");
+            // Baris-baris di bawah ini disalin dari layar Aktivitas yang
+            // sebenarnya, bukan dikarang. Aturan berbasis kata kunci mudah sekali
+            // salah tangkap, dan salah warna pada baris galat lebih buruk
+            // daripada tidak berwarna sama sekali.
+            Action<string, JenisPesan, string> cek = (baris, harap, nama) =>
+                Ok(nama, LogWarna.Golongkan(baris) == harap,
+                   "dapat " + LogWarna.Golongkan(baris) + " untuk: " + baris);
+
+            cek("Konfigurasi Nginx ditolak:", JenisPesan.Galat, "\"ditolak\" = galat");
+            cek("nginx: [emerg] CreateFile() \"fastcgi_params\" failed (2: The system cannot find the file specified)",
+                JenisPesan.Galat, "[emerg] nginx = galat");
+            cek("Apache berhenti seketika (kode 1).", JenisPesan.Galat, "berhenti seketika = galat");
+            cek("Cannot load php5apache2_4.dll into server: %1 is not a valid Win32 application.",
+                JenisPesan.Galat, "gagal muat modul = galat");
+
+            cek("Peringatan: Nama balas-api.test sudah dipakai C:\\laragon\\www\\balas_api",
+                JenisPesan.Peringatan, "\"Peringatan:\" = peringatan");
+            cek("[mysql] 2026-09-15T02:42:55 0 [Warning] TIMESTAMP with implicit DEFAULT value is deprecated.",
+                JenisPesan.Peringatan, "[Warning] mysqld = peringatan");
+            cek("Peringatan: Nama folder \"php-5.6.40-Win32-VC11-x64\" ada di lebih dari satu folder bin",
+                JenisPesan.Peringatan, "folder kembar = peringatan");
+
+            cek("Apache 2.4.38 jalan di port 80 (PID 23804).", JenisPesan.Berhasil, "jalan di port = berhasil");
+            cek("Konfigurasi profil \"PHP 5.6.40 + Apache 2.4.38\" ditulis ulang.",
+                JenisPesan.Berhasil, "ditulis ulang = berhasil");
+
+            cek("MySQL dimatikan.", JenisPesan.Biasa, "baris netral tetap biasa");
+            cek("", JenisPesan.Biasa, "baris kosong tidak meledak");
+
+            // Satu baris bisa memuat kata dari dua golongan sekaligus; yang
+            // menang harus galat, karena itulah yang dicari orang.
+            cek("Peringatan: berkas hosts gagal ditulis", JenisPesan.Galat,
+                "galat menang atas peringatan dalam satu baris");
+
+            Ok("Tiap golongan punya warna, kecuali Biasa",
+               LogWarna.Heks(JenisPesan.Galat).Length > 0
+               && LogWarna.Heks(JenisPesan.Peringatan).Length > 0
+               && LogWarna.Heks(JenisPesan.Berhasil).Length > 0
+               && LogWarna.Heks(JenisPesan.Biasa).Length == 0);
+            Ok("Warnanya berbeda satu sama lain",
+               LogWarna.Heks(JenisPesan.Galat) != LogWarna.Heks(JenisPesan.Peringatan)
+               && LogWarna.Heks(JenisPesan.Peringatan) != LogWarna.Heks(JenisPesan.Berhasil));
         }
 
         static void UjiKonfigurasiNginx()

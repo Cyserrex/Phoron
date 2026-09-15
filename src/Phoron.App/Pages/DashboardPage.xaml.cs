@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Documents;
 using Phoron.Core;
 
 namespace Phoron.App.Pages
@@ -32,9 +34,55 @@ namespace Phoron.App.Pages
                 // sekilas, riwayat lengkapnya ada di halaman Log.
                 _lines.Enqueue(DateTime.Now.ToString("HH:mm:ss") + "  " + text);
                 while (_lines.Count > 200) _lines.Dequeue();
-                TxtLog.Text = string.Join(Environment.NewLine, _lines);
-                TxtLog.ScrollToEnd();
+                GambarLog();
             });
+        }
+
+        /// <summary>
+        /// Menggambar ulang seluruh panel Aktivitas dengan warna per baris.
+        ///
+        /// Digambar ulang seluruhnya, bukan ditambah satu paragraf: antriannya
+        /// dibatasi 200 baris, jadi yang tertua harus ikut hilang dari layar -
+        /// dan menyelaraskan dokumen dengan antrian jauh lebih mudah dipercaya
+        /// daripada menambah di bawah sambil membuang di atas.
+        /// </summary>
+        void GambarLog()
+        {
+            var dok = new FlowDocument { PagePadding = new Thickness(4, 2, 4, 2) };
+            foreach (var baris in _lines)
+            {
+                var par = new Paragraph { Margin = new Thickness(0) };
+
+                // Jam dipisah dan diredupkan: ia berulang di setiap baris, jadi
+                // menuntut perhatian yang sama dengan isinya justru mengaburkan
+                // mana yang penting.
+                var pisah = baris.IndexOf("  ", StringComparison.Ordinal);
+                var jam = pisah > 0 ? baris.Substring(0, pisah + 2) : "";
+                var isi = pisah > 0 ? baris.Substring(pisah + 2) : baris;
+
+                if (jam.Length > 0)
+                    // Abu-abu nada tengah, bukan Opacity: Run memang tidak punya
+                    // Opacity, dan abu-abu ini terbaca di tema terang maupun gelap.
+                    par.Inlines.Add(new Run(jam)
+                    {
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x8A)),
+                    });
+
+                var run = new Run(isi);
+                var heks = LogWarna.Heks(LogWarna.Golongkan(isi));
+                if (heks.Length > 0)
+                {
+                    run.Foreground = new SolidColorBrush(
+                        (Color)ColorConverter.ConvertFromString(heks));
+                    // Galat juga ditebalkan: warna saja tidak cukup bagi yang
+                    // sulit membedakan merah dan hijau.
+                    if (heks == LogWarna.Heks(JenisPesan.Galat)) run.FontWeight = FontWeights.SemiBold;
+                }
+                par.Inlines.Add(run);
+                dok.Blocks.Add(par);
+            }
+            TxtLog.Document = dok;
+            TxtLog.ScrollToEnd();
         }
 
         void LoadProfiles()

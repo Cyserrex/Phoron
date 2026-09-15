@@ -112,10 +112,23 @@
             <Border Style="{StaticResource Kartu}">
                 <StackPanel>
                     <TextBlock Text="{loc:T 'Aktivitas'}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
-                    <TextBox x:Name="TxtLog" IsReadOnly="True" AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto" Height="150"
-                             FontFamily="Consolas" FontSize="11" TextWrapping="NoWrap"
-                             HorizontalScrollBarVisibility="Auto"/>
+                    <!-- RichTextBox, bukan TextBox: tiap baris perlu warnanya
+                         sendiri, dan teksnya harus tetap bisa disorot lalu
+                         disalin - itulah yang dilakukan orang dengan baris
+                         galat. Padding paragraf dinolkan supaya rapat seperti
+                         keluaran terminal. -->
+                    <RichTextBox x:Name="TxtLog" IsReadOnly="True" IsDocumentEnabled="True"
+                                 VerticalScrollBarVisibility="Auto" Height="150"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 FontFamily="Consolas" FontSize="11"
+                                 Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                 BorderThickness="1">
+                        <RichTextBox.Resources>
+                            <Style TargetType="Paragraph">
+                                <Setter Property="Margin" Value="0"/>
+                            </Style>
+                        </RichTextBox.Resources>
+                    </RichTextBox>
                 </StackPanel>
             </Border>
         </StackPanel>
