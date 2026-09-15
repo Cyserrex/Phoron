@@ -65,13 +65,26 @@ namespace Phoron.Core
             return path == null ? null : path.Replace('\\', '/');
         }
 
+        static string _hostsFile;
+
+        /// <summary>
+        /// Berkas hosts Windows.
+        ///
+        /// Bisa disetel - sama seperti <see cref="Root"/> - supaya uji bisa
+        /// mengarahkannya ke berkas sementara. Tanpa itu tidak satu pun perilaku
+        /// penulisan hosts bisa dibuktikan tanpa menyentuh berkas sistem mesin
+        /// yang sedang dipakai, dan justru bagian itulah yang paling berbahaya
+        /// kalau salah.
+        /// </summary>
         public static string HostsFile
         {
             get
             {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                return _hostsFile ?? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System),
                     "drivers", "etc", "hosts");
             }
+            set { _hostsFile = value; }
         }
     }
 }

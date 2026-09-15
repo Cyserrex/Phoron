@@ -102,7 +102,9 @@
                     <WrapPanel>
                         <ui:Button Content="{loc:T 'Buka folder instalasi'}" Margin="0,0,8,0" Click="BtnRoot_Click"/>
                         <ui:Button Content="{loc:T 'Buka phoron.ini'}" Margin="0,0,8,0" Click="BtnIni_Click"/>
-                        <ui:Button Content="{loc:T 'Buang blok hosts milik Phoron'}" Click="BtnBersihHosts_Click"/>
+                        <ui:Button Content="{loc:T 'Buang blok hosts milik Phoron'}" Margin="0,0,8,0" Click="BtnBersihHosts_Click"/>
+                        <ui:Button Content="{loc:T 'Pulihkan berkas hosts...'}" Margin="0,0,8,0" Click="BtnPulihkanHosts_Click"/>
+                        <ui:Button Content="{loc:T 'Buka folder cadangan hosts'}" Click="BtnFolderCadangan_Click"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>

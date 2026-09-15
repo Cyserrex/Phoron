@@ -79,6 +79,24 @@ namespace Phoron.Core
             return kamus.TryGetValue(teks, out hasil) ? hasil : teks;
         }
 
+        /// <summary>
+        /// Apakah kamus bahasa itu benar-benar memuat teks ini.
+        ///
+        /// Berbeda dari membandingkan hasil <see cref="T(string)"/> dengan
+        /// aslinya. Sebagian padanan memang SAMA PERSIS dengan bahasa
+        /// Indonesianya - "Buka www" dalam bahasa Banjar ya "Buka www" - jadi
+        /// menyamakan "tidak berubah" dengan "belum diterjemahkan" akan menuduh
+        /// padanan yang justru sudah benar. Dipakai uji cakupan terjemahan.
+        /// </summary>
+        public static bool Punya(string kode, string teks)
+        {
+            if (string.IsNullOrEmpty(teks)) return true;
+            if (kode == Indonesia) return true;
+            Dictionary<string, string> kamus;
+            if (!Kamus.TryGetValue(kode ?? "", out kamus)) return false;
+            return kamus.ContainsKey(teks);
+        }
+
         /// <summary>Terjemahkan lalu sisipkan nilai, mis. T("Port {0} bebas.", 80).</summary>
         public static string T(string teks, params object[] isi)
         {
@@ -322,6 +340,8 @@ namespace Phoron.Core
                 { "Folder Phoron", "Phoron folder" },
                 { "Buka folder instalasi", "Open install folder" },
                 { "Buka phoron.ini", "Open phoron.ini" },
+                { "Buka folder cadangan hosts", "Open hosts backup folder" },
+                { "Pulihkan berkas hosts...", "Restore hosts file..." },
                 { "Buang blok hosts milik Phoron", "Remove Phoron's hosts block" },
                 { "Pembaruan", "Updates" },
                 { "Cek rilis baru di GitHub saat Phoron dibuka",
@@ -534,6 +554,8 @@ namespace Phoron.Core
                 { "Folder Phoron", "Folder Phoron" },
                 { "Buka folder instalasi", "Bukak folder instalasi" },
                 { "Buka phoron.ini", "Bukak phoron.ini" },
+                { "Buka folder cadangan hosts", "Bukak folder cadhangan hosts" },
+                { "Pulihkan berkas hosts...", "Pulihake berkas hosts..." },
                 { "Buang blok hosts milik Phoron", "Buwang blok hosts duweke Phoron" },
                 { "Pembaruan", "Nganyari" },
                 { "Cek rilis baru di GitHub saat Phoron dibuka",
@@ -828,6 +850,10 @@ namespace Phoron.Core
                   "Buka folder instalasi" },
                 { "Buka phoron.ini",
                   "Buka phoron.ini" },
+                { "Buka folder cadangan hosts",
+                  "Buka folder cadangan hosts" },
+                { "Pulihkan berkas hosts...",
+                  "Pulihakan barakas hosts..." },
                 { "Buang blok hosts milik Phoron",
                   "Buang blok hosts punya Phoron" },
                 { "Pembaruan",

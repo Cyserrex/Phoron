@@ -224,6 +224,53 @@ namespace Phoron.App.Pages
             DaftarHosts.Jalankan(Window.GetWindow(this));
         }
 
+        void BtnFolderCadangan_Click(object sender, RoutedEventArgs e)
+        {
+            Shell.Open(HostsFile.FolderCadangan);
+        }
+
+        /// <summary>
+        /// Kembalikan berkas hosts ke salah satu cadangan.
+        ///
+        /// Yang paling berguna hampir selalu cadangan ASLI - keadaan sebelum
+        /// Phoron pernah menyentuh berkas itu - jadi ia ditawarkan lebih dulu dan
+        /// disebut apa adanya, bukan sekadar sebuah tanggal.
+        /// </summary>
+        void BtnPulihkanHosts_Click(object sender, RoutedEventArgs e)
+        {
+            var daftar = HostsFile.DaftarCadangan();
+            if (daftar.Count == 0)
+            {
+                AppState.Info("Belum ada cadangan berkas hosts. Cadangan pertama dibuat "
+                              + "sendiri saat Phoron menulis berkas hosts untuk pertama kalinya.");
+                return;
+            }
+
+            var asli = daftar.FirstOrDefault(c => c.Asli);
+            var pilihan = asli ?? daftar[0];
+            var keterangan = asli != null
+                ? "cadangan asli, yaitu keadaan sebelum Phoron dipasang"
+                : "cadangan terbaru, " + pilihan.Waktu.ToString("d MMMM yyyy HH:mm");
+
+            if (!AppState.Ask("Kembalikan berkas hosts ke " + keterangan + "?" + Environment.NewLine
+                              + Environment.NewLine + pilihan.Nama + " (" + pilihan.Ukuran + " byte)"
+                              + Environment.NewLine + Environment.NewLine
+                              + "Keadaan sekarang ikut dicadangkan lebih dulu, jadi langkah ini "
+                              + "masih bisa dibatalkan. Cadangan lain ada di folder cadangan."))
+                return;
+
+            try
+            {
+                HostsFile.Pulihkan(pilihan.Path);
+                AppState.Info("Berkas hosts dikembalikan dari " + pilihan.Nama + ".");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Program.RestartAsAdmin("Menyunting berkas hosts butuh hak Administrator.");
+            }
+            catch (Exception ex) { AppState.Warn("Gagal memulihkan: " + ex.Message); }
+        }
+
         void BtnBersihHosts_Click(object sender, RoutedEventArgs e)
         {
             if (!AppState.Ask("Hapus semua baris yang ditambahkan Phoron dari berkas hosts? "

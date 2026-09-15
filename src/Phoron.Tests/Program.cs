@@ -49,6 +49,7 @@ namespace Phoron.Tests
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
                 UjiHosts();
+                UjiHostsAman();
                 UjiPortCheck();
                 UjiNodeApps();
                 UjiPembaruan();
@@ -1004,6 +1005,117 @@ namespace Phoron.Tests
                 HostsFile.Begin.StartsWith("#") && HostsFile.End.StartsWith("#"));
         }
 
+        static void UjiHostsAman()
+        {
+            Bagian("Keselamatan berkas hosts");
+            // Berkas hosts sungguhan TIDAK disentuh: Paths.HostsFile dialihkan ke
+            // berkas sementara. Sebelum ada pengalihan itu, perilaku penulisan
+            // hosts tidak bisa diuji sama sekali - dan justru bagian itulah yang
+            // paling mahal kalau salah.
+            var akarLama = Paths.Root;
+            var hostsLama = Paths.HostsFile;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-hosts-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+                var hosts = Path.Combine(akar, "hosts");
+                Paths.HostsFile = hosts;
+
+                var milikPengguna = new[]
+                {
+                    "127.0.0.1 localhost",
+                    "# catatan lama",
+                    "10.0.0.1 kantor.internal",
+                    "0.0.0.0 iklan.contoh",
+                };
+                File.WriteAllLines(hosts, milikPengguna);
+
+                HostsFile.Sync(new[] { "toko.test" });
+                var sesudah = File.ReadAllLines(hosts);
+                Ok("Blok Phoron ditulis", sesudah.Any(l => l.Contains("toko.test")));
+                Ok("Baris milik pengguna selamat semuanya",
+                   milikPengguna.All(m => sesudah.Contains(m)),
+                   string.Join(" | ", sesudah));
+
+                var asli = Path.Combine(HostsFile.FolderCadangan, HostsFile.NamaAsli);
+                Ok("Cadangan pertama bernama hosts-asli", File.Exists(asli));
+                Ok("Cadangan asli memuat keadaan sebelum Phoron menyentuhnya",
+                   File.Exists(asli) && File.ReadAllLines(asli).SequenceEqual(milikPengguna));
+
+                // Sinkron kedua MEMANG mencadangkan: keadaan awalnya sudah
+                // berbeda, sebab kini memuat blok Phoron. Itu keadaan baru yang
+                // pantas disimpan.
+                var sesudahSatu = HostsFile.DaftarCadangan().Count;
+                HostsFile.Sync(new[] { "toko.test" });
+                Ok("Keadaan yang berubah ikut tercadang",
+                   HostsFile.DaftarCadangan().Count == sesudahSatu + 1,
+                   sesudahSatu + " -> " + HostsFile.DaftarCadangan().Count);
+
+                // Yang harus dijamin: Apply() jalan tiap start dan tiap ganti
+                // profil, jadi sinkron yang tidak mengubah apa pun tidak boleh
+                // menumpuk berkas kembar.
+                var sebelum = HostsFile.DaftarCadangan().Count;
+                HostsFile.Sync(new[] { "toko.test" });
+                HostsFile.Sync(new[] { "toko.test" });
+                Ok("Sinkron berulang tanpa perubahan tidak menumpuk cadangan",
+                   HostsFile.DaftarCadangan().Count == sebelum,
+                   sebelum + " -> " + HostsFile.DaftarCadangan().Count);
+
+                // ---------------- inilah yang membuktikan kerusakannya ----------------
+                // Berkas hosts dikunci sehingga tidak bisa dibaca. Dulu
+                // pembacaannya memaafkan dan mengembalikan larik KOSONG; logika
+                // pemotongan blok jadi tidak berbuat apa-apa, dan berkasnya
+                // ditulis ulang hanya berisi blok Phoron. Seluruh baris milik
+                // pengguna lenyap, tanpa satu pun galat terangkat.
+                var isiSebelumDikunci = File.ReadAllText(hosts);
+                var melempar = false;
+                using (new FileStream(hosts, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    try { HostsFile.Sync(new[] { "baru.test" }); }
+                    catch (Exception) { melempar = true; }
+                }
+                Ok("Gagal membaca hosts berarti gagal menulis", melempar);
+                Ok("Isi hosts tidak berubah sedikit pun saat pembacaannya gagal",
+                   File.ReadAllText(hosts) == isiSebelumDikunci);
+                Ok("Baris pengguna masih ada sesudah pembacaan yang gagal",
+                   milikPengguna.All(m => File.ReadAllLines(hosts).Contains(m)));
+
+                // Batas jumlah cadangan bertanggal.
+                for (int i = 0; i < 15; i++)
+                    AtomicFile.WriteAllLines(
+                        Path.Combine(HostsFile.FolderCadangan, "hosts-lama" + i + ".bak"),
+                        new[] { "cadangan lama " + i });
+                HostsFile.Sync(new[] { "lain.test" });   // isinya berubah, jadi memangkas
+                var bertanggal = HostsFile.DaftarCadangan().Count(c => !c.Asli);
+                Ok("Cadangan bertanggal dibatasi sepuluh",
+                   bertanggal == HostsFile.CadanganMaks, bertanggal.ToString());
+                Ok("Cadangan asli tidak ikut dipangkas", File.Exists(asli));
+
+                // Memulihkan.
+                var isiSekarang = File.ReadAllText(hosts);
+                HostsFile.Pulihkan(asli);
+                Ok("Pulihkan mengembalikan isi cadangan",
+                   File.ReadAllLines(hosts).SequenceEqual(milikPengguna),
+                   File.ReadAllText(hosts).Replace(Environment.NewLine, " | "));
+                Ok("Keadaan sebelum pemulihan ikut dicadangkan lebih dulu",
+                   HostsFile.DaftarCadangan().Any(c => !c.Asli && Sama(c.Path, isiSekarang)));
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                Paths.HostsFile = hostsLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
+        }
+
+        static bool Sama(string path, string isi)
+        {
+            try { return File.ReadAllText(path) == isi; }
+            catch { return false; }
+        }
+
         static void UjiLabelVersi()
         {
             Bagian("Label versi");
@@ -1370,18 +1482,18 @@ namespace Phoron.Tests
 
             foreach (var kode in new[] { Lang.Inggris, Lang.Jawa, Lang.Banjar })
             {
-                Lang.Pakai(kode);
-                // Teks tanpa padanan dikembalikan apa adanya oleh Lang.T; sudah
-                // dipastikan tidak ada kalimat panjang yang terjemahannya
-                // kebetulan sama persis dengan aslinya, jadi tanda ini tidak
-                // menuduh yang benar.
-                var bocor = kalimat.Where(t => Lang.T(t) == t).ToList();
+                // Ditanya ADA tidaknya kunci di kamus, bukan berubah tidaknya
+                // teksnya. Versi pertama uji ini membandingkan Lang.T(t) dengan
+                // t, dan itu menuduh padanan yang justru sudah benar: sebagian
+                // padanan Banjar memang sama persis dengan bahasa Indonesianya,
+                // seperti "Buka www". Ketahuan begitu tombol "Buka folder
+                // cadangan hosts" ditambahkan.
+                var bocor = kalimat.Where(t => !Lang.Punya(kode, t)).ToList();
                 Ok("Tiap kalimat punya padanan " + Lang.NamaBahasa(kode),
                    bocor.Count == 0,
                    string.Join(" | ", bocor.Select(
                        t => t.Substring(0, Math.Min(60, t.Length))).ToArray()));
             }
-            Lang.Pakai(Lang.Indonesia);
         }
 
         static void UjiBanjarTidakBercampur(string dirApp)
