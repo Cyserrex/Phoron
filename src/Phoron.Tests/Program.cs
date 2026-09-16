@@ -59,6 +59,8 @@ namespace Phoron.Tests
                 UjiAutostart();
                 UjiLabelVersi();
                 UjiBahasa();
+                UjiBahasaPemasang();
+                UjiBahasaDariPemasang();
                 UjiHostsTool();
                 UjiTataLetakBin();
                 UjiOracle();
@@ -567,6 +569,215 @@ namespace Phoron.Tests
 
             proses.Dispose();
             lain.Dispose();
+        }
+
+        /// <summary>
+        /// Pemasang dan aplikasi harus sepakat soal bahasa.
+        ///
+        /// Kode bahasa di [Languages] dipakai apa adanya sebagai nilai "bahasa"
+        /// di phoron.ini. Satu huruf beda - "jw" bukan "jv" - membuat Phoron
+        /// menganggapnya tidak sah lalu diam-diam jatuh ke Indonesia, dan orang
+        /// yang baru saja memilih Basa Jawa di pemasang tidak pernah tahu
+        /// kenapa pilihannya diabaikan.
+        ///
+        /// Diperiksa di sumber .iss karena harness ini tidak merakit installer;
+        /// Inno Setup pun hanya ada di CI.
+        /// </summary>
+        static void UjiBahasaPemasang()
+        {
+            Bagian("Bahasa pemasang");
+            var iss = CariBerkasPemasang();
+            if (iss == null)
+            {
+                Ok("Berkas installer\\setup.iss ditemukan", false,
+                   "tidak ketemu dari " + AppDomain.CurrentDomain.BaseDirectory);
+                return;
+            }
+            var teks = File.ReadAllText(iss);
+
+            // Kerusakan yang pernah benar-benar terjadi: karakter TAB sungguhan
+            // tertulis di tempat "\t" seharusnya berada, sehingga jalur
+            // {sys}\taskkill.exe berubah jadi berkas yang tidak pernah ada -
+            // dan jalur paksa penutupan Phoron diam-diam tidak berbuat apa-apa
+            // selama beberapa rilis. Tidak ada TAB yang sah di berkas ini.
+            Ok("Tidak ada karakter TAB di skrip pemasang",
+               teks.IndexOf('\t') < 0,
+               "TAB pertama di indeks " + teks.IndexOf('\t'));
+
+            var blokBahasa = Blok(teks, "[Languages]");
+            var kode = new List<string>();
+            foreach (Match m in Regex.Matches(blokBahasa, "Name:\\s*\"([^\"]+)\""))
+                kode.Add(m.Groups[1].Value);
+
+            Ok("Pemasang menawarkan empat bahasa", kode.Count == 4,
+               string.Join(", ", kode.ToArray()));
+            Ok("Tiap kode bahasa pemasang dikenal Phoron",
+               kode.All(k => Lang.Sah(k)),
+               string.Join(", ", kode.Where(k => !Lang.Sah(k)).ToArray()));
+            Ok("Tidak ada bahasa Phoron yang terlewat di pemasang",
+               Lang.Semua.All(k => kode.Contains(k)),
+               string.Join(", ", Lang.Semua.Where(k => !kode.Contains(k)).ToArray()));
+            Ok("Indonesia terdaftar pertama, jadi ia yang jadi bawaan",
+               kode.Count > 0 && kode[0] == Lang.Indonesia,
+               kode.Count > 0 ? kode[0] : "(kosong)");
+
+            // Tanpa keduanya, Windows berbahasa Inggris akan memilih Inggris
+            // sendiri - padahal bahasa asal aplikasi ini Indonesia.
+            Ok("Dialog bahasa selalu ditampilkan",
+               Regex.IsMatch(teks, @"(?m)^\s*ShowLanguageDialog\s*=\s*yes"));
+            Ok("Bahasa tidak ditebak dari lokal Windows",
+               Regex.IsMatch(teks, @"(?m)^\s*LanguageDetectionMethod\s*=\s*none"));
+
+            // Pilihan bahasa harus benar-benar sampai ke phoron.ini.
+            Ok("Bahasa pilihan ditulis ke phoron.ini",
+               teks.Contains("SetIniString('umum', 'bahasa', sekarang, ini)"));
+            Ok("Bahasa hanya ditulis ulang kalau pilihannya berubah",
+               teks.Contains("bahasa_pemasang"));
+
+            // CustomMessage yang tidak punya padanan gagal saat PEMASANGAN
+            // berjalan, bukan saat dirakit - jadi kesalahannya baru ketahuan di
+            // komputer orang lain.
+            var didefinisikan = new Dictionary<string, HashSet<string>>();
+            foreach (Match m in Regex.Matches(Blok(teks, "[CustomMessages]"),
+                                              @"(?m)^\s*(\w+)\.(\w+)\s*="))
+            {
+                var nama = m.Groups[2].Value;
+                if (!didefinisikan.ContainsKey(nama))
+                    didefinisikan[nama] = new HashSet<string>();
+                didefinisikan[nama].Add(m.Groups[1].Value);
+            }
+
+            var dipakai = new HashSet<string>();
+            foreach (Match m in Regex.Matches(teks, @"\{cm:(\w+)\}"))
+                dipakai.Add(m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(teks, @"CustomMessage\('(\w+)'\)"))
+                dipakai.Add(m.Groups[1].Value);
+
+            Ok("Pesan khusus memang dipakai di skrip", dipakai.Count >= 10,
+               dipakai.Count.ToString());
+            // Kalau pencari bloknya rusak, daftar di bawah jadi kosong dan
+            // seluruh pemeriksaan berikutnya lulus tanpa memeriksa apa pun.
+            Ok("Daftar pesan khusus terbaca dari berkasnya",
+               didefinisikan.Count >= 10, didefinisikan.Count.ToString());
+
+            var kurang = new List<string>();
+            foreach (var nama in dipakai.OrderBy(x => x))
+            {
+                HashSet<string> punya;
+                if (!didefinisikan.TryGetValue(nama, out punya)) { kurang.Add(nama + " (tidak ada sama sekali)"); continue; }
+                foreach (var k in Lang.Semua)
+                    if (!punya.Contains(k)) kurang.Add(nama + "/" + k);
+            }
+            Ok("Tiap pesan khusus punya padanan di keempat bahasa",
+               kurang.Count == 0, string.Join(", ", kurang.ToArray()));
+
+            // Entri [Messages] tanpa awalan bahasa berlaku untuk SEMUA bahasa.
+            // Itulah keadaan sebelum pemasang punya lebih dari satu bahasa, dan
+            // akibatnya teks Indonesia ikut muncul saat memilih English.
+            var tanpaAwalan = new List<string>();
+            foreach (var baris in Blok(teks, "[Messages]")
+                     .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var t = baris.Trim();
+                if (t.Length == 0 || t[0] == ';') continue;
+                var sama = t.IndexOf('=');
+                if (sama <= 0) continue;
+                var kunci = t.Substring(0, sama).Trim();
+                if (kunci.IndexOf('.') < 0) tanpaAwalan.Add(kunci);
+            }
+            Ok("Tiap pesan bawaan diberi awalan bahasa",
+               tanpaAwalan.Count == 0, string.Join(", ", tanpaAwalan.ToArray()));
+        }
+
+        /// <summary>
+        /// Isi satu bagian berkas .iss, dari judulnya sampai judul berikutnya.
+        ///
+        /// Judulnya dicari HARUS di awal baris. Versi pertama fungsi ini memakai
+        /// IndexOf biasa, dan ia menemukan "[CustomMessages]" yang kebetulan
+        /// disebut di dalam komentar di atas bagiannya - sehingga bloknya
+        /// terbaca kosong dan dua uji di bawah lulus tanpa memeriksa apa pun.
+        /// </summary>
+        static string Blok(string teks, string judul)
+        {
+            var awal = Regex.Match(teks, @"(?m)^" + Regex.Escape(judul) + @"\s*$");
+            if (!awal.Success) return "";
+            var i = awal.Index + awal.Length;
+            var j = Regex.Match(teks.Substring(i), @"(?m)^\[[A-Za-z]+\]\s*$");
+            return j.Success ? teks.Substring(i, j.Index) : teks.Substring(i);
+        }
+
+        static string CariBerkasPemasang()
+        {
+            var d = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (d != null)
+            {
+                var calon = Path.Combine(d.FullName, Path.Combine("installer", "setup.iss"));
+                if (File.Exists(calon)) return calon;
+                d = d.Parent;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Sisi aplikasi dari perpindahan bahasa pemasang ke Phoron.
+        ///
+        /// Pemasang menulis dua kunci ke phoron.ini: "bahasa" yang dikenal
+        /// Phoron, dan "bahasa_pemasang" yang TIDAK dikenalnya. Yang kedua
+        /// dipakai untuk membedakan "pengguna mengubah bahasa di dalam Phoron"
+        /// dari "pengguna memilih bahasa lain di pemasang", supaya pemasangan
+        /// ulang tidak mengembalikan pilihan orang tanpa sebab.
+        ///
+        /// Itu hanya bekerja kalau kunci asing benar-benar selamat melewati
+        /// Settings.Save(), yang memuat ulang berkasnya lalu menulis ulang
+        /// seluruhnya. Di situlah uji ini berdiri.
+        /// </summary>
+        static void UjiBahasaDariPemasang()
+        {
+            Bagian("Bahasa dari pemasang");
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-bhs-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+
+                // Persis bentuk yang ditinggalkan pemasang sesudah memilih Jawa.
+                File.WriteAllText(Paths.SettingsFile,
+                    "[umum]" + Environment.NewLine +
+                    "bahasa=jv" + Environment.NewLine +
+                    "bahasa_pemasang=jv" + Environment.NewLine);
+
+                var setelan = Settings.Load();
+                Ok("Bahasa pilihan pemasang terbaca Phoron", setelan.Bahasa == "jv", setelan.Bahasa);
+
+                setelan.Save();
+                var isi = File.ReadAllText(Paths.SettingsFile);
+                Ok("Bahasa tetap tersimpan sesudah menyimpan setelan",
+                   isi.Contains("bahasa=jv"));
+                Ok("Kunci milik pemasang tidak ikut terhapus",
+                   isi.Contains("bahasa_pemasang=jv"), isi.Replace(Environment.NewLine, " | "));
+
+                // Pengguna lalu mengganti bahasa dari dalam Phoron.
+                setelan.Bahasa = Lang.Banjar;
+                setelan.Save();
+                var isi2 = File.ReadAllText(Paths.SettingsFile);
+                Ok("Perubahan bahasa dari dalam Phoron tersimpan",
+                   isi2.Contains("bahasa=bjn"));
+                Ok("Catatan pilihan pemasang tetap utuh sesudahnya",
+                   isi2.Contains("bahasa_pemasang=jv"));
+
+                // Kode yang tidak dikenal tidak boleh membuat layar jadi aneh.
+                File.WriteAllText(Paths.SettingsFile,
+                    "[umum]" + Environment.NewLine + "bahasa=zz" + Environment.NewLine);
+                Ok("Kode bahasa yang tidak dikenal jatuh ke Indonesia",
+                   Settings.Load().Bahasa == Lang.Indonesia);
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
         }
 
         static void UjiIni()

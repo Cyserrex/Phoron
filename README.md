@@ -39,6 +39,14 @@ kedua aplikasi saling menimpa.
 Unduh `Phoron-<versi>-Setup.exe` dari [halaman Releases](https://github.com/Cyserrex/Phoron/releases),
 atau ambil `Phoron.exe` saja — satu berkas, bisa dijalankan langsung dari mana pun.
 
+Layar pertama installer menanyakan bahasa: **Bahasa Indonesia** (bawaan), English,
+Basa Jawa, atau Bahasa Banjar. Pilihan itu bukan cuma untuk installer — ia ikut
+tersimpan, jadi Phoron langsung menyala dalam bahasa yang tadi dipilih.
+
+Kalau Anda nanti menggantinya dari **Pengaturan → Bahasa**, pemasangan ulang tidak
+akan mengembalikannya: installer hanya menulis bahasa lagi kalau pilihan di
+installer-nya sendiri memang berubah.
+
 Installer menawarkan dua cara:
 
 - **Untuk semua pengguna** (butuh admin) → dipasang ke `C:\Phoron`.
