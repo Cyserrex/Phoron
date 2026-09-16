@@ -93,6 +93,15 @@ namespace Phoron.App.Pages
         void IsiDaftar(Profile pilih)
         {
             _loading = true;
+            // Penanda profil aktif disetel di sini, tiap kali daftarnya diisi
+            // ulang. Profile tidak tahu apa-apa soal Engine, jadi ia tidak bisa
+            // menyimpulkannya sendiri - dan daftar ini memang selalu diisi ulang
+            // sesudah apa pun yang bisa mengubah profil aktif.
+            foreach (var p in _e.Profiles)
+                p.Aktif = _e.Active != null
+                       && string.Equals(p.FileName, _e.Active.FileName,
+                                        StringComparison.OrdinalIgnoreCase);
+
             Daftar.ItemsSource = null;
             Daftar.ItemsSource = _e.Profiles;
             _loading = false;

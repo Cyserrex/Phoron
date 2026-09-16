@@ -3,6 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:loc="clr-namespace:Phoron.App">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolKeTampak"/>
+    </UserControl.Resources>
     <Grid Margin="4,8,4,4">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -23,6 +26,21 @@
 
             <DockPanel Grid.Column="0" Margin="0,0,12,0">
                 <StackPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+                    <!-- Tindakan terhadap profil yang dipilih duduk tepat di
+                         bawah daftarnya, bukan di ujung bawah penyunting yang
+                         panjang - di sana keduanya baru terlihat setelah
+                         digulung, padahal itulah tombol yang paling sering
+                         ditekan. -->
+                    <ui:Button Content="{loc:T 'Switch ke profil ini'}" Appearance="Primary"
+                               HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                               Margin="0,0,0,6" Click="BtnSwitch_Click"/>
+                    <!-- Menjawab "versi mana cocok dengan mana" - pertanyaan yang
+                         jadi sulit begitu XAMPP dan Laragon dipakai berdampingan
+                         dengan arsitektur berbeda. -->
+                    <ui:Button Content="{loc:T 'Sarankan otomatis'}" HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Center" Margin="0,0,0,14"
+                               Click="BtnSaran_Click"/>
+
                     <ui:Button Content="{loc:T 'Profil baru'}" HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Center" Margin="0,0,0,6" Click="BtnBaru_Click"/>
                     <Grid>
@@ -36,7 +54,30 @@
                                    HorizontalContentAlignment="Center" Margin="3,0,0,0" Click="BtnHapus_Click"/>
                     </Grid>
                 </StackPanel>
-                <ListBox x:Name="Daftar" SelectionChanged="Daftar_Changed" DisplayMemberPath="Name"/>
+                <!-- Sorotan biru hanya menyatakan "yang sedang dilihat", bukan
+                     "yang sedang dipakai". Keduanya kerap berbeda - orang
+                     menyunting profil lain tanpa berpindah ke sana - dan tanpa
+                     penanda tersendiri tidak ada cara tahu mana yang sebenarnya
+                     sedang berjalan. -->
+                <ListBox x:Name="Daftar" SelectionChanged="Daftar_Changed">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <DockPanel>
+                                <!-- Centang DAN keterangan saat disentuh: warna
+                                     hijau saja tidak cukup bagi yang sulit
+                                     membedakan warna. -->
+                                <TextBlock DockPanel.Dock="Right" Text="&#xE73E;"
+                                           FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                           Foreground="#4CAF50" VerticalAlignment="Center"
+                                           Margin="8,0,0,0"
+                                           ToolTip="{loc:T 'Profil aktif'}"
+                                           Visibility="{Binding Aktif,
+                                               Converter={StaticResource BoolKeTampak}}"/>
+                                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </DockPanel>
 
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
@@ -117,15 +158,6 @@
                                        Margin="0,0,12,0"/>
                         </DockPanel>
                     </Border>
-
-                    <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
-                        <ui:Button Content="{loc:T 'Switch ke profil ini'}" Appearance="Primary"
-                                   Margin="0,0,8,0" Click="BtnSwitch_Click"/>
-                        <!-- Menjawab "versi mana cocok dengan mana" - pertanyaan
-                             yang jadi sulit begitu XAMPP dan Laragon dipakai
-                             berdampingan dengan arsitektur berbeda. -->
-                        <ui:Button Content="{loc:T 'Sarankan otomatis'}" Click="BtnSaran_Click"/>
-                    </StackPanel>
 
                     <TextBlock x:Name="TxtStatusSimpan" Style="{StaticResource SubJudul}" FontSize="12"
                                Margin="0,0,0,10" TextWrapping="Wrap"

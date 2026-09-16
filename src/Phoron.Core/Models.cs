@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.25.0";
+        public const string Version = "1.26.0";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
@@ -127,6 +127,21 @@ namespace Phoron.Core
         /// Id web server yang benar-benar dipakai profil ini, sesuai pilihan
         /// Apache atau Nginx-nya.
         /// </summary>
+        /// <summary>
+        /// Penanda tampilan: profil inikah yang sedang aktif.
+        ///
+        /// Tidak pernah ikut tersimpan ke berkas profil - ProfileStore menulis
+        /// kunci yang disebutnya satu per satu - dan tidak dibaca siapa pun
+        /// selain daftar di halaman Profil, yang menyetelnya sendiri tiap kali
+        /// daftar itu diisi ulang. Profil tidak tahu apa-apa soal Engine, jadi
+        /// ia tidak bisa menyimpulkannya sendiri.
+        /// </summary>
+        /// PROPERTI, bukan medan: WPF hanya mengikat ke properti, dan
+        /// pengikatan ke medan gagal TANPA SUARA - centangnya lalu memakai
+        /// nilai bawaan Visibility, yaitu tampak, sehingga muncul di semua
+        /// baris sekaligus. Itu persis yang terjadi pada percobaan pertama.
+        public bool Aktif { get; set; }
+
         public string WebId { get { return WebServer == "nginx" ? NginxId : ApacheId; } }
 
         /// <summary>

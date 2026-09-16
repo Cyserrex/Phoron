@@ -151,10 +151,57 @@ namespace Phoron.App.Pages
                 ? db.Label + " · port " + (p != null ? p.MySqlPort.ToString() : "?")
                 : "belum dipilih di profil";
 
+            TitikKartu();
+
             BtnSsl.Content = !SslTool.Exists ? "Buat sertifikat SSL"
                            : !SslTool.IsTrusted ? "Percayai sertifikat SSL"
                            : "Buat ulang sertifikat SSL";
             ShowConflicts();
+        }
+
+        /// <summary>
+        /// Titik penanda di pojok tiap kartu: hijau saat layanannya benar-benar
+        /// melayani, kelabu saat berhenti atau memang tidak dipakai, merah saat
+        /// gagal.
+        ///
+        /// Kartu PHP mengikuti keadaan WEB SERVER, dan itu disengaja. PHP tidak
+        /// punya proses sendiri yang bisa "jalan": ia dimuat ke dalam httpd
+        /// (mod_php) atau dilayani php-cgi yang hanya hidup selama web server
+        /// hidup. Titik hijau di kartu PHP karena itu berarti satu hal yang
+        /// benar - halaman PHP sedang dilayani - bukan "ada proses php.exe".
+        ///
+        /// Warnanya sama persis dengan titik di panel kiri; keduanya memakai
+        /// WarnaLayanan supaya tidak pernah berbeda untuk keadaan yang sama.
+        /// </summary>
+        void TitikKartu()
+        {
+            var p = _e.Active;
+            var web = _e.Services.WebState;
+            var db = _e.Services.DbState;
+            var namaWeb = p != null && p.WebServer == "nginx" ? "Nginx" : "Apache";
+
+            var pakaiWeb = p == null || p.PakaiWeb;
+            var pakaiDb = p == null || p.PakaiMySql;
+            var adaPhp = _e.Php != null;
+
+            // Kelabu untuk yang tidak dipakai: titik merah pada layanan yang
+            // memang sengaja tidak dipilih membaca seperti kerusakan.
+            var keadaanWeb = pakaiWeb ? web : ServiceState.Berhenti;
+            var keadaanDb = pakaiDb ? db : ServiceState.Berhenti;
+            var keadaanPhp = adaPhp && pakaiWeb ? web : ServiceState.Berhenti;
+
+            DotKartuWeb.Fill = WarnaLayanan.Titik(keadaanWeb);
+            DotKartuDb.Fill = WarnaLayanan.Titik(keadaanDb);
+            DotKartuPhp.Fill = WarnaLayanan.Titik(keadaanPhp);
+
+            // Keterangan saat disentuh, supaya artinya tidak hanya dibawa warna.
+            DotKartuWeb.ToolTip = namaWeb + " " + Lang.T(pakaiWeb
+                ? web.ToString().ToLowerInvariant() : "tidak dipakai");
+            DotKartuDb.ToolTip = "MySQL " + Lang.T(pakaiDb
+                ? db.ToString().ToLowerInvariant() : "tidak dipakai");
+            DotKartuPhp.ToolTip = !adaPhp
+                ? "PHP " + Lang.T("tidak dipakai")
+                : "PHP " + Lang.T(keadaanPhp == ServiceState.Jalan ? "dilayani" : "belum dilayani");
         }
 
         void ShowConflicts()

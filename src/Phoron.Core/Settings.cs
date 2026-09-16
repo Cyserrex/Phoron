@@ -17,7 +17,18 @@ namespace Phoron.Core
         public string ActiveProfile = "";
         public bool AutoStartServices;      // nyalakan Apache+MySQL saat aplikasi dibuka
         public bool MinimizeToTray = true;
-        public bool AutoVhost = true;       // buat vhost otomatis untuk tiap folder di www
+        /// <summary>
+        /// Membuat Virtual Host sendiri untuk tiap folder proyek, sehingga
+        /// tiap proyek punya alamat "nama.test".
+        ///
+        /// Bawaannya MATI. Alamat .test hanya hidup kalau namanya juga masuk ke
+        /// berkas hosts Windows, dan itu butuh hak Administrator - yang tidak
+        /// dipunyai Phoron saat dinyalakan Windows lewat autostart. Menyalakan
+        /// ini secara bawaan berarti menyambut pemakai baru dengan peringatan
+        /// tentang sesuatu yang belum tentu ia butuhkan, padahal
+        /// http://localhost/nama-proyek/ sudah bekerja tanpa syarat apa pun.
+        /// </summary>
+        public bool AutoVhost = false;
         public bool ManageHosts = true;     // sinkronkan berkas hosts (butuh admin)
         /// <summary>
         /// Tulis php.ini langsung ke folder PHP, bukan ke etc\php\&lt;versi&gt;\.
@@ -108,7 +119,10 @@ namespace Phoron.Core
             s.ActiveProfile = ini.Get("umum", "profil_aktif", "");
             s.AutoStartServices = ini.GetBool("umum", "auto_start", false);
             s.MinimizeToTray = ini.GetBool("umum", "minimize_ke_tray", true);
-            s.AutoVhost = ini.GetBool("umum", "auto_vhost", true);
+            // Bawaannya false. Pemasangan yang sudah ada tidak terpengaruh:
+            // phoron.ini miliknya sudah memuat auto_vhost, jadi nilainya dibaca
+            // dari sana - yang berubah hanya pemasangan baru.
+            s.AutoVhost = ini.GetBool("umum", "auto_vhost", false);
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);

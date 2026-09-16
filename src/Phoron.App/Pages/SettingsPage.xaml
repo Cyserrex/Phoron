@@ -48,8 +48,10 @@
                              Content="{loc:T 'Nyalakan layanan otomatis saat Phoron dibuka'}"/>
             <ui:ToggleSwitch x:Name="SwTray" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
                              Content="{loc:T 'Tombol tutup mengecilkan ke baki sistem, bukan keluar'}"/>
-            <ui:ToggleSwitch x:Name="SwVhost" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
-                             Content="{loc:T 'Buat vhost otomatis untuk tiap folder di www'}"/>
+            <ui:ToggleSwitch x:Name="SwVhost" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                             Content="{loc:T 'Virtual Host: beri tiap folder proyek alamatnya sendiri'}"/>
+            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                       Text="{loc:T 'Mati secara bawaan. Alamat seperti tokoonline.test baru hidup kalau namanya ikut masuk ke berkas hosts Windows, dan itu butuh hak Administrator. Tanpa ini, proyek tetap terbuka lewat http://localhost/nama-proyek/.'}"/>
             <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
                              Content="{loc:T 'Sinkronkan berkas hosts Windows (butuh Administrator)'}"/>
             <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,6"

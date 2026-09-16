@@ -252,17 +252,8 @@ namespace Phoron.App
             if (dash != null) dash.RefreshState();
         }
 
-        static Brush Dot(ServiceState s)
-        {
-            switch (s)
-            {
-                case ServiceState.Jalan: return new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50));
-                case ServiceState.Gagal: return new SolidColorBrush(Color.FromRgb(0xE0, 0x4A, 0x4A));
-                case ServiceState.Menyalakan:
-                case ServiceState.Mematikan: return new SolidColorBrush(Color.FromRgb(0xF0, 0xA0, 0x20));
-                default: return new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
-            }
-        }
+        // Warnanya dipakai bersama dengan kartu di Beranda - lihat WarnaLayanan.
+        static Brush Dot(ServiceState s) { return WarnaLayanan.Titik(s); }
 
         async void BtnPower_Click(object sender, RoutedEventArgs e)
         {

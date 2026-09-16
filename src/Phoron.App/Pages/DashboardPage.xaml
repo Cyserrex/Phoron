@@ -45,25 +45,49 @@
 
             <UniformGrid Columns="3" Margin="0,0,0,0">
                 <Border Style="{StaticResource Kartu}" Margin="0,0,6,12">
-                    <StackPanel>
-                        <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
-                        <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
+                            <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Ellipse x:Name="DotKartuPhp" Grid.Column="1" Width="10" Height="10"
+                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                    </Grid>
                 </Border>
                 <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
-                    <StackPanel>
-                        <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
-                        <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
+                            <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Ellipse x:Name="DotKartuWeb" Grid.Column="1" Width="10" Height="10"
+                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                    </Grid>
                 </Border>
                 <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
-                    <StackPanel>
-                        <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
-                        <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
+                            <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <Ellipse x:Name="DotKartuDb" Grid.Column="1" Width="10" Height="10"
+                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                    </Grid>
                 </Border>
             </UniformGrid>
 
