@@ -231,6 +231,14 @@ namespace Phoron.Core
         {
             SiteWarnings = new List<string>();
             Sites = Active != null ? SiteScanner.Scan(Active, SiteWarnings) : new List<Site>();
+
+            // Catatan dari pemindai situs seluruhnya tentang NAMA host - nama
+            // yang bentrok lalu diberi akhiran -2, dan seterusnya. Tanpa Virtual
+            // Host, nama itu tidak dipakai siapa pun: alamatnya jalur localhost,
+            // dan dua folder berbeda tidak pernah berebut apa pun. Menampilkan
+            // keberatan tentang sesuatu yang tidak berlaku hanya melatih orang
+            // mengabaikan panel catatan.
+            if (!Settings.AutoVhost) SiteWarnings.Clear();
         }
 
         // ------------------------------------------------------------- Resolusi

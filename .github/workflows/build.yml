@@ -237,18 +237,19 @@ jobs:
             installer/Output/*.exe
             installer/Output/SHA256SUMS.txt
           generate_release_notes: true
+          # Keterangan yang sama di tiap rilis - SmartScreen, sidik berkas, cara
+          # membuktikan asal-usul - dilipat ke dalam <details>. Isinya tetap
+          # dibutuhkan orang yang baru pertama kali mengunduh dan tidak akan
+          # membuka rilis lama, tapi ia tidak boleh menenggelamkan daftar
+          # perubahan yang justru berbeda tiap versi. Sidiknya sendiri memang
+          # berganti tiap rilis, jadi ia harus ikut di sini.
           body: |
             ${{ steps.catatan.outputs.isi }}
 
-            ---
+            <details>
+            <summary>Memastikan berkasnya utuh, dan soal "Windows protected your PC"</summary>
 
-            Windows akan menampilkan **"Windows protected your PC"** saat installer ini dijalankan pertama kali. Itu bukan tanda berkasnya bermasalah: Phoron belum ditandatangani dengan sertifikat berbayar, dan SmartScreen memperingatkan setiap berkas yang belum punya rekam jejak unduhan. Klik **More info**, lalu **Run anyway**.
-
-            Sebelum menjalankannya, Anda bisa memastikan berkasnya utuh:
-
-            ```
-            Get-FileHash Phoron-${{ needs.test.outputs.version }}-Setup.exe -Algorithm SHA256
-            ```
+            Windows menampilkan **"Windows protected your PC"** saat installer ini dijalankan pertama kali. Itu bukan tanda berkasnya bermasalah: Phoron belum ditandatangani dengan sertifikat berbayar, dan SmartScreen memperingatkan setiap berkas yang belum punya rekam jejak unduhan. Klik **More info**, lalu **Run anyway**.
 
             Sidik SHA-256 berkas rilis ini:
 
@@ -256,9 +257,17 @@ jobs:
             ${{ steps.sidik.outputs.isi }}
             ```
 
-            Dan asal-usulnya bisa dibuktikan langsung ke GitHub:
+            Bandingkan dengan berkas yang Anda unduh:
+
+            ```
+            Get-FileHash Phoron-${{ needs.test.outputs.version }}-Setup.exe -Algorithm SHA256
+            ```
+
+            Asal-usulnya bisa dibuktikan langsung ke GitHub:
 
             ```
             gh attestation verify Phoron-${{ needs.test.outputs.version }}-Setup.exe --repo Cyserrex/Phoron
             ```
+
+            </details>
 

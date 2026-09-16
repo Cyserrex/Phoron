@@ -1147,6 +1147,10 @@ namespace Phoron.Tests
                 var kedua = Path.Combine(akar, "proyek-lain");
                 Directory.CreateDirectory(Path.Combine(utama, "toko"));
                 Directory.CreateDirectory(Path.Combine(kedua, "gudang"));
+                // Nama yang bentrok: dua folder "kembar" di akar berbeda akan
+                // memperebutkan host kembar.test, dan pemindai mencatatnya.
+                Directory.CreateDirectory(Path.Combine(utama, "kembar"));
+                Directory.CreateDirectory(Path.Combine(kedua, "kembar"));
 
                 Directory.CreateDirectory(Paths.Profiles);
                 File.WriteAllText(Path.Combine(Paths.Profiles, "uji.ini"),
@@ -1163,7 +1167,10 @@ namespace Phoron.Tests
 
                 var e = new Engine();
                 e.Reload();
-                Ok("Kedua situs terbaca", e.Sites.Count == 2, e.Sites.Count.ToString());
+                Ok("Keempat situs terbaca", e.Sites.Count == 4, e.Sites.Count.ToString());
+                Ok("Nama yang bentrok dicatat saat Virtual Host menyala",
+                   e.SiteWarnings.Any(w => w.Contains("kembar.test")),
+                   string.Join(" | ", e.SiteWarnings.ToArray()));
 
                 var toko = e.Sites.FirstOrDefault(x => x.Folder == "toko");
                 var gudang = e.Sites.FirstOrDefault(x => x.Folder == "gudang");
@@ -1198,6 +1205,15 @@ namespace Phoron.Tests
                    HostsTool.SemuaNamaSitus().Count == 0,
                    string.Join(", ", HostsTool.SemuaNamaSitus().ToArray()));
 
+                // Seluruh catatan pemindai situs bicara soal NAMA host. Tanpa
+                // Virtual Host nama itu tidak dipakai siapa pun, jadi keberatan
+                // tentang nama yang bentrok tidak berlaku lagi - dan panel
+                // catatan yang bicara soal hal yang tidak berlaku cuma melatih
+                // orang mengabaikannya.
+                Ok("Catatan nama host hilang saat Virtual Host mati",
+                   e.SiteWarnings.Count == 0,
+                   string.Join(" | ", e.SiteWarnings.ToArray()));
+
                 // --- dinyalakan lagi: harus pulih seutuhnya ---
                 e.Settings.AutoVhost = true;
                 e.Settings.Save();
@@ -1206,6 +1222,8 @@ namespace Phoron.Tests
                    HostsFile.AllNames().Contains("toko.test"));
                 Ok("Dinyalakan lagi, alamatnya kembali memakai .test",
                    e.SiteUrl(toko) == "http://toko.test/", e.SiteUrl(toko));
+                Ok("Dinyalakan lagi, catatan nama host kembali muncul",
+                   e.SiteWarnings.Any(w => w.Contains("kembar.test")));
             }
             finally
             {

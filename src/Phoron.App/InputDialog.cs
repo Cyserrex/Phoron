@@ -26,7 +26,21 @@ namespace Phoron.App
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             ShowInTaskbar = false;
-            if (induk != null) { Owner = induk; Background = induk.Background; }
+            if (induk != null) Owner = induk;
+
+            // JANGAN menyalin Background jendela induk. MainWindow adalah
+            // FluentWindow ber-backdrop Mica: latarnya sengaja tembus supaya
+            // Windows yang melukisnya. Disalin ke jendela biasa yang tidak punya
+            // backdrop, yang tersisa hanya kehampaan - dan kotak ini tampil
+            // hitam pekat dengan tulisan yang ikut tak terbaca.
+            //
+            // Yang benar adalah meminta warna dari tema yang sedang berlaku.
+            // SetResourceReference, bukan penetapan sekali jalan: warnanya ikut
+            // berubah kalau temanya diganti selagi kotak ini terbuka. Kalau
+            // kuncinya tidak ada, propertinya tetap di nilai bawaan Windows -
+            // putih, bukan hitam.
+            SetResourceReference(BackgroundProperty, "ApplicationBackgroundBrush");
+            SetResourceReference(ForegroundProperty, "TextFillColorPrimaryBrush");
 
             var isi = new StackPanel { Margin = new Thickness(18) };
             isi.Children.Add(new TextBlock
