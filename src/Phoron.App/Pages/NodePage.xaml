@@ -68,10 +68,21 @@
                 </Grid.RowDefinitions>
                 <TextBlock Grid.Row="0" x:Name="TxtJudulLog" Text="{loc:T 'Keluaran'}" Margin="0,0,0,6"
                            FontWeight="SemiBold" FontSize="12" Opacity="0.8"/>
-                <TextBox Grid.Row="1" x:Name="TxtLog" IsReadOnly="True" AcceptsReturn="True"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                         TextWrapping="NoWrap" FontFamily="Consolas" FontSize="11"
-                         BorderThickness="0" Background="Transparent"/>
+                <!-- RichTextBox, bukan TextBox: tiap baris perlu warnanya sendiri,
+                     sama seperti panel Aktivitas di Beranda. Keluaran server
+                     pengembangan panjang dan seragam, dan satu baris galat di
+                     tengahnya sulit sekali ditemukan tanpa warna. Padding
+                     paragraf dinolkan supaya rapat seperti keluaran terminal. -->
+                <RichTextBox Grid.Row="1" x:Name="TxtLog" IsReadOnly="True" IsDocumentEnabled="True"
+                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                             FontFamily="Consolas" FontSize="11"
+                             BorderThickness="0" Background="Transparent">
+                    <RichTextBox.Resources>
+                        <Style TargetType="Paragraph">
+                            <Setter Property="Margin" Value="0"/>
+                        </Style>
+                    </RichTextBox.Resources>
+                </RichTextBox>
             </Grid>
         </Border>
     </Grid>

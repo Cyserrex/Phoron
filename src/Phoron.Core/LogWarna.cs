@@ -32,7 +32,10 @@ namespace Phoron.Core
             "gagal", "ditolak", "galat", "error", "[emerg]", "[alert]", "[crit]",
             "failed", "meledak", "berhenti seketika", "cannot load", "not a valid",
             "tidak bisa", "tidak dapat", "unable to", "could not", "syntax error",
-            "tidak ditemukan", "kadaluwarsa",
+            "tidak ditemukan", "kadaluwarsa", "kasalahan",
+            // Keluaran perkakas Node; hampir selalu berbahasa Inggris apa pun
+            // bahasa yang dipilih di Phoron.
+            "npm err!", "eaddrinuse", "cannot find module", "module not found",
         };
 
         static readonly string[] KataPeringatan =
@@ -40,12 +43,18 @@ namespace Phoron.Core
             "peringatan", "[warning]", "warning:", "deprecated", "[note]",
             "sudah dipakai", "lebih dari satu", "dilewati", "belum ada",
             "tidak akan", "hati-hati", "perlu hak administrator",
+            "npm warn",
         };
 
         static readonly string[] KataBerhasil =
         {
             "jalan di port", "berhasil", "ditulis ulang", "selesai", "sudah terdaftar",
             "dibuat di", "tersimpan", "terpasang", "dihentikan", "sudah versi terbaru",
+            // Padanan "dihentikan" di bahasa lain, supaya baris yang sama tetap
+            // berwarna sama saat bahasanya diganti.
+            "stopped", "dipateni", "dipajahakan",
+            // Keluaran server pengembangan Node saat sudah siap melayani.
+            "ready in", "ready on", "compiled successfully",
         };
 
         public static JenisPesan Golongkan(string baris)

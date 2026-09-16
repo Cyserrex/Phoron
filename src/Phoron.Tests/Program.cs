@@ -69,6 +69,7 @@ namespace Phoron.Tests
                 UjiRuntimeVc();
                 UjiKonfigurasiNginx();
                 UjiLogWarna();
+                UjiKeluaranNode();
                 UjiRiwayatLog();
                 UjiPutaranLog();
                 UjiBalapLayanan();
@@ -1046,6 +1047,70 @@ namespace Phoron.Tests
             for (var p = 34100; p < 34200; p++)
                 if (PortCheck.IsFree(p)) return p;
             return 34199;
+        }
+
+        /// <summary>
+        /// Panel keluaran Node memakai penggolong warna yang sama dengan panel
+        /// Aktivitas di Beranda, jadi penggolongnya harus mengenal dua hal yang
+        /// tidak pernah muncul di Beranda: keluaran perkakas Node yang selalu
+        /// berbahasa Inggris, dan penanda Phoron sendiri yang IKUT berganti
+        /// bahasa.
+        ///
+        /// Yang kedua itu gampang terlewat. Menerjemahkan "-- dihentikan --"
+        /// tanpa menambahkan padanannya ke daftar kata membuat baris yang sama
+        /// kehilangan warnanya begitu bahasanya diganti.
+        /// </summary>
+        static void UjiKeluaranNode()
+        {
+            Bagian("Keluaran Node");
+
+            Ok("npm ERR! dianggap galat",
+               LogWarna.Golongkan("npm ERR! code ELIFECYCLE") == JenisPesan.Galat);
+            Ok("Port terpakai dianggap galat",
+               LogWarna.Golongkan("Error: listen EADDRINUSE: address already in use :::3000")
+               == JenisPesan.Galat);
+            Ok("Modul hilang dianggap galat",
+               LogWarna.Golongkan("Cannot find module 'next'") == JenisPesan.Galat);
+            Ok("npm WARN dianggap peringatan",
+               LogWarna.Golongkan("npm WARN deprecated") == JenisPesan.Peringatan);
+            Ok("Server siap dianggap berhasil",
+               LogWarna.Golongkan("  - Ready in 1.2s") == JenisPesan.Berhasil);
+
+            // Penanda milik Phoron, di keempat bahasa.
+            Ok("Penanda dihentikan berwarna sama di tiap bahasa",
+               LogWarna.Golongkan("-- dihentikan --") == JenisPesan.Berhasil
+               && LogWarna.Golongkan("-- stopped --") == JenisPesan.Berhasil
+               && LogWarna.Golongkan("-- dipateni --") == JenisPesan.Berhasil
+               && LogWarna.Golongkan("-- dipajahakan --") == JenisPesan.Berhasil);
+
+            Ok("Proses yang berakhir dengan galat berwarna merah",
+               LogWarna.Golongkan("-- proses berakhir dengan galat (kode 1) --") == JenisPesan.Galat
+               && LogWarna.Golongkan("-- process ended with an error (code 1) --") == JenisPesan.Galat
+               && LogWarna.Golongkan("-- proses rampung kanthi galat (kode 1) --") == JenisPesan.Galat
+               && LogWarna.Golongkan("-- proses baranti lawan kasalahan (kode 1) --") == JenisPesan.Galat);
+
+            // Berakhir dengan kode 0 BUKAN kegagalan, jadi tidak boleh merah.
+            Ok("Proses yang berakhir normal tidak diwarnai galat",
+               LogWarna.Golongkan("-- proses berakhir (kode 0) --") != JenisPesan.Galat
+               && LogWarna.Golongkan("-- process ended (code 0) --") != JenisPesan.Galat);
+
+            // Teks halaman Node benar-benar berganti saat bahasanya diganti -
+            // inilah keluhan yang memulai perbaikan ini.
+            try
+            {
+                Lang.Pakai(Lang.Inggris);
+                Ok("Status proyek ikut berganti bahasa",
+                   Lang.T("jalan") == "running" && Lang.T("berhenti") == "stopped"
+                   && Lang.T("folder hilang") == "folder missing",
+                   Lang.T("jalan") + " / " + Lang.T("berhenti") + " / " + Lang.T("folder hilang"));
+                Ok("Penanda keluaran ikut berganti bahasa",
+                   Lang.T("-- dihentikan --") == "-- stopped --");
+                Ok("Pesan berparameter tetap menyisipkan nilainya",
+                   Lang.T("Proyek {0} siap di {1}", "kalsel", "http://localhost:3000")
+                   == "Project kalsel is ready at http://localhost:3000",
+                   Lang.T("Proyek {0} siap di {1}", "kalsel", "http://localhost:3000"));
+            }
+            finally { Lang.Pakai(Lang.Indonesia); }
         }
 
         static void UjiIni()

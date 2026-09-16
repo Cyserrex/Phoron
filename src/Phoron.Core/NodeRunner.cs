@@ -19,8 +19,32 @@ namespace Phoron.Core
             public string Url;
         }
 
+        /// <summary>
+        /// Menjaga daftar proses yang sedang berjalan. Ia disentuh dari utas
+        /// layar - tombol Jalankan dan Hentikan - dan dari panggilan balik
+        /// Process.Exited yang datang di utas kolam.
+        /// </summary>
+        readonly object _kunci = new object();
+
         readonly Dictionary<string, Berjalan> _jalan =
             new Dictionary<string, Berjalan>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Uji-lalu-lepas dalam satu langkah: benar hanya bagi pihak yang
+        /// pertama sampai. Inilah yang membedakan proses yang berakhir SENDIRI
+        /// dari yang sengaja dihentikan lewat Stop().
+        /// </summary>
+        bool LepasJika(string folder, System.Diagnostics.Process p)
+        {
+            lock (_kunci)
+            {
+                Berjalan ada;
+                if (folder == null || !_jalan.TryGetValue(folder, out ada)
+                    || !ReferenceEquals(ada.Proc, p)) return false;
+                _jalan.Remove(folder);
+                return true;
+            }
+        }
 
         /// <summary>(folder, baris) - keluaran mentah dari proses.</summary>
         public event Action<string, string> Output;
@@ -40,17 +64,22 @@ namespace Phoron.Core
         public bool IsRunning(string folder)
         {
             Berjalan b;
-            if (folder == null || !_jalan.TryGetValue(folder, out b)) return false;
+            lock (_kunci)
+                if (folder == null || !_jalan.TryGetValue(folder, out b)) return false;
             try { return b.Proc != null && !b.Proc.HasExited; } catch { return false; }
         }
 
         public string UrlOf(string folder)
         {
             Berjalan b;
-            return folder != null && _jalan.TryGetValue(folder, out b) ? b.Url : null;
+            lock (_kunci)
+                return folder != null && _jalan.TryGetValue(folder, out b) ? b.Url : null;
         }
 
-        public IEnumerable<string> RunningFolders { get { return new List<string>(_jalan.Keys); } }
+        public IEnumerable<string> RunningFolders
+        {
+            get { lock (_kunci) return new List<string>(_jalan.Keys); }
+        }
 
         /// <summary>Jalankan skrip. Mengembalikan pesan kesalahan, atau null bila berhasil dimulai.</summary>
         public string Start(NodeApp app, BinPackage node)
@@ -59,7 +88,7 @@ namespace Phoron.Core
             if (!Directory.Exists(app.Path)) return "Folder tidak ada: " + app.Path;
             if (!PackageJson.LooksLikeNodeProject(app.Path))
                 return "Tidak ada package.json di " + app.Path + ".";
-            if (IsRunning(app.Path)) return "Proyek ini sudah jalan.";
+            if (IsRunning(app.Path)) return Lang.T("Proyek ini sudah jalan.");
 
             var manager = string.IsNullOrWhiteSpace(app.Manager) ? "npm" : app.Manager.Trim();
             var skrip = string.IsNullOrWhiteSpace(app.Script) ? "dev" : app.Script.Trim();
@@ -96,7 +125,7 @@ namespace Phoron.Core
             {
                 p = new Process { StartInfo = psi, EnableRaisingEvents = true };
                 var entri = new Berjalan { Proc = p };
-                _jalan[app.Path] = entri;
+                lock (_kunci) _jalan[app.Path] = entri;
 
                 DataReceivedEventHandler baca = (s, e) =>
                 {
@@ -117,12 +146,19 @@ namespace Phoron.Core
                 p.ErrorDataReceived += baca;
                 p.Exited += (s, e) =>
                 {
-                    Berjalan ada;
-                    if (_jalan.TryGetValue(app.Path, out ada) && ReferenceEquals(ada.Proc, p))
-                        _jalan.Remove(app.Path);
+                    // Rujukannya masih kita berarti proses ini berakhir SENDIRI.
+                    // Kalau sudah dilepas, penghentiannya disengaja lewat Stop()
+                    // - dan Stop() sudah melapor "dihentikan". Dulu keduanya
+                    // dilaporkan, jadi menekan tombol Hentikan menghasilkan dua
+                    // baris, yang kedua menyebut kode keluar bukan-nol seolah
+                    // ada yang gagal.
+                    if (!LepasJika(app.Path, p)) return;
+
                     int kode;
                     try { kode = p.ExitCode; } catch { kode = -1; }
-                    Lapor(app.Path, "-- proses berakhir (kode " + kode + ") --");
+                    Lapor(app.Path, kode == 0
+                        ? Lang.T("-- proses berakhir (kode 0) --")
+                        : Lang.T("-- proses berakhir dengan galat (kode {0}) --", kode));
                     Ubah(app.Path, false);
                 };
 
@@ -133,8 +169,8 @@ namespace Phoron.Core
             }
             catch (Exception ex)
             {
-                _jalan.Remove(app.Path);
-                return "Tidak bisa menjalankan: " + ex.Message;
+                lock (_kunci) _jalan.Remove(app.Path);
+                return Lang.T("Tidak bisa menjalankan: ") + ex.Message;
             }
 
             Lapor(app.Path, "> " + perintah + "   (di " + app.Path + ")");
@@ -145,8 +181,11 @@ namespace Phoron.Core
         public void Stop(string folder)
         {
             Berjalan b;
-            if (folder == null || !_jalan.TryGetValue(folder, out b)) return;
-            _jalan.Remove(folder);   // dilepas dulu supaya Exited tidak melapor dua kali
+            lock (_kunci)
+            {
+                if (folder == null || !_jalan.TryGetValue(folder, out b)) return;
+                _jalan.Remove(folder);   // dilepas dulu supaya Exited tidak melapor dua kali
+            }
             try
             {
                 // Pohon proses, bukan cmd.exe-nya saja: cmd hanya pembungkus,
@@ -154,13 +193,13 @@ namespace Phoron.Core
                 if (b.Proc != null && !b.Proc.HasExited) Shell.KillTree(b.Proc.Id);
             }
             catch { }
-            Lapor(folder, "-- dihentikan --");
+            Lapor(folder, Lang.T("-- dihentikan --"));
             Ubah(folder, false);
         }
 
         public void StopAll()
         {
-            foreach (var f in new List<string>(_jalan.Keys)) Stop(f);
+            foreach (var f in RunningFolders) Stop(f);
         }
 
         void Lapor(string folder, string baris)

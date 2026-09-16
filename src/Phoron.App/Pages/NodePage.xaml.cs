@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Documents;
 using Phoron.Core;
 using Forms = System.Windows.Forms;
 
@@ -52,7 +54,7 @@ namespace Phoron.App.Pages
             var rows = new List<object>();
             // Entri pertama: Node dari PATH sistem. Itu yang dipakai orang di
             // terminal sehari-hari, jadi jadikan pilihan bakunya.
-            rows.Add(new { Teks = "Node dari PATH sistem", Pkg = (BinPackage)null });
+            rows.Add(new { Teks = Lang.T("Node dari PATH sistem"), Pkg = (BinPackage)null });
             foreach (var n in _e.Of(BinKind.Node))
                 rows.Add(new { Teks = n.Id + "   —   " + n.SourceRoot, Pkg = n });
             CmbNode.ItemsSource = rows;
@@ -72,8 +74,8 @@ namespace Phoron.App.Pages
                 Folder = a.Path,
                 Kerangka = PackageJson.DetectFramework(a.Path),
                 Perintah = (a.Manager == "yarn" ? a.Manager + " " : a.Manager + " run ") + a.Script,
-                Status = _e.Node.IsRunning(a.Path) ? "jalan"
-                       : Directory.Exists(a.Path) ? "berhenti" : "folder hilang",
+                Status = _e.Node.IsRunning(a.Path) ? Lang.T("jalan")
+                       : Directory.Exists(a.Path) ? Lang.T("berhenti") : Lang.T("folder hilang"),
                 Alamat = _e.Node.UrlOf(a.Path) ?? "",
                 App = a,
             }).ToList();
@@ -84,8 +86,7 @@ namespace Phoron.App.Pages
             if (Daftar.SelectedItem == null && Daftar.Items.Count > 0) Daftar.SelectedIndex = 0;
 
             TxtInfo.Text = _e.NodeAppsList.Count == 0
-                ? "Belum ada proyek. Tekan \"Tambah proyek...\" lalu pilih folder yang berisi package.json — "
-                  + "boleh di mana saja, tidak harus di dalam www."
+                ? Lang.T("Belum ada proyek. Tekan \"Tambah proyek...\" lalu pilih folder yang berisi package.json - boleh di mana saja, tidak harus di dalam www.")
                 : _e.NodeAppsList.Count + " proyek terdaftar. Klik ganda untuk menjalankan atau menghentikan.";
             _mengisi = false;
             SegarkanPilihan();
@@ -101,7 +102,7 @@ namespace Phoron.App.Pages
         {
             var a = Terpilih();
             var jalan = a != null && _e.Node.IsRunning(a.Path);
-            BtnJalan.Content = jalan ? "Hentikan" : "Jalankan";
+            BtnJalan.Content = Lang.T(jalan ? "Hentikan" : "Jalankan");
             BtnJalan.Appearance = jalan
                 ? Wpf.Ui.Controls.ControlAppearance.Danger
                 : Wpf.Ui.Controls.ControlAppearance.Primary;
@@ -130,16 +131,66 @@ namespace Phoron.App.Pages
             else CmbSkrip.ItemsSource = null;
             _mengisi = false;
 
-            TxtJudulLog.Text = a == null ? "Keluaran" : "Keluaran — " + a.DisplayName;
+            TxtJudulLog.Text = a == null ? Lang.T("Keluaran")
+                             : Lang.T("Keluaran") + " - " + a.DisplayName;
             TampilkanLog(a != null ? a.Path : null);
         }
 
+        /// <summary>
+        /// Menggambar panel keluaran dengan warna per baris, memakai penggolong
+        /// yang sama dengan panel Aktivitas di Beranda.
+        ///
+        /// FlowDocument yang dibuat lewat kode TIDAK mewarisi font dari
+        /// RichTextBox-nya, dan perataan bawaannya Justify - itu yang membuat
+        /// hurufnya membesar dan barisnya melar. Ketiganya disetel tegas supaya
+        /// panel ini tetap terlihat seperti keluaran terminal.
+        /// </summary>
         void TampilkanLog(string folder)
         {
+            var dok = new FlowDocument
+            {
+                PagePadding = new Thickness(0),
+                FontFamily = TxtLog.FontFamily,
+                FontSize = TxtLog.FontSize,
+                TextAlignment = TextAlignment.Left,
+            };
+
             Queue<string> q;
-            TxtLog.Text = folder != null && _log.TryGetValue(folder, out q)
-                ? string.Join(Environment.NewLine, q) : "";
+            if (folder != null && _log.TryGetValue(folder, out q))
+            {
+                foreach (var baris in q)
+                {
+                    var par = new Paragraph { Margin = new Thickness(0) };
+                    var run = new Run(baris);
+                    var heks = LogWarna.Heks(LogWarna.Golongkan(baris));
+                    if (heks.Length > 0)
+                    {
+                        run.Foreground = new SolidColorBrush(
+                            (Color)ColorConverter.ConvertFromString(heks));
+                        // Galat ditebalkan juga: warna saja tidak cukup bagi yang
+                        // sulit membedakan merah dan hijau.
+                        if (heks == LogWarna.Heks(JenisPesan.Galat))
+                            run.FontWeight = FontWeights.SemiBold;
+                    }
+                    par.Inlines.Add(run);
+                    dok.Blocks.Add(par);
+                }
+            }
+            TxtLog.Document = dok;
+            GulungKeBawah();
+        }
+
+        /// <summary>
+        /// Selalu perlihatkan baris terbaru. Sekali panggil tidak cukup: saat
+        /// halaman ini baru dibuat, kotaknya belum ditata sehingga belum ada
+        /// yang bisa digulung - persis kekeliruan yang pernah terjadi di panel
+        /// Aktivitas Beranda.
+        /// </summary>
+        void GulungKeBawah()
+        {
             TxtLog.ScrollToEnd();
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
+                                   new Action(() => TxtLog.ScrollToEnd()));
         }
 
         // -------------------------------------------------------------- Kejadian
@@ -166,7 +217,7 @@ namespace Phoron.App.Pages
         {
             Dispatcher.Invoke(() =>
             {
-                _e.Say("Proyek " + Path.GetFileName(folder.TrimEnd('\\')) + " siap di " + url);
+                _e.Say(Lang.T("Proyek {0} siap di {1}", Path.GetFileName(folder.TrimEnd('\\')), url));
                 Isi();
             });
         }
@@ -210,13 +261,13 @@ namespace Phoron.App.Pages
             if (_e.Node.IsRunning(a.Path)) { _e.Node.Stop(a.Path); return; }
 
             if (!PackageJson.HasNodeModules(a.Path)
-                && !AppState.Ask("Folder node_modules belum ada di proyek ini, jadi perintahnya "
-                                 + "kemungkinan besar gagal.\n\nJalankan juga?")) return;
+                && !AppState.Ask(Lang.T("Folder node_modules belum ada di proyek ini, jadi perintahnya kemungkinan besar gagal.")
+                                 + "\n\n" + Lang.T("Jalankan juga?"))) return;
 
             var node = string.IsNullOrEmpty(a.NodeId) ? null : _e.Find(BinKind.Node, a.NodeId);
             var err = _e.Node.Start(a, node);
             if (err != null) { AppState.Warn(err); return; }
-            _e.Say("Menjalankan " + a.DisplayName + " (" + a.Manager + " " + a.Script + ").");
+            _e.Say(Lang.T("Menjalankan {0} ({1} {2}).", a.DisplayName, a.Manager, a.Script));
             Isi();
         }
 
@@ -224,14 +275,14 @@ namespace Phoron.App.Pages
         {
             using (var dlg = new Forms.FolderBrowserDialog())
             {
-                dlg.Description = "Pilih folder proyek Node (yang berisi package.json)";
+                dlg.Description = Lang.T("Pilih folder proyek Node (yang berisi package.json)");
                 if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
                 var folder = dlg.SelectedPath.TrimEnd('\\');
 
                 if (_e.NodeAppsList.Any(x => string.Equals(x.Path, folder, StringComparison.OrdinalIgnoreCase)))
-                { AppState.Info("Folder itu sudah terdaftar."); return; }
+                { AppState.Info(Lang.T("Folder itu sudah terdaftar.")); return; }
                 if (!PackageJson.LooksLikeNodeProject(folder)
-                    && !AppState.Ask("Tidak ada package.json di folder itu. Tetap tambahkan?")) return;
+                    && !AppState.Ask(Lang.T("Tidak ada package.json di folder itu. Tetap tambahkan?"))) return;
 
                 var app = new NodeApp
                 {
@@ -257,8 +308,8 @@ namespace Phoron.App.Pages
         {
             var a = Terpilih();
             if (a == null) return;
-            if (!AppState.Ask("Hapus \"" + a.DisplayName + "\" dari daftar Phoron?\n\n"
-                              + "Folder dan isinya TIDAK dihapus.")) return;
+            if (!AppState.Ask(Lang.T("Hapus \"{0}\" dari daftar Phoron?", a.DisplayName)
+                              + "\n\n" + Lang.T("Folder dan isinya TIDAK dihapus."))) return;
             if (_e.Node.IsRunning(a.Path)) _e.Node.Stop(a.Path);
             _e.NodeAppsList.Remove(a);
             NodeAppStore.SaveAll(_e.NodeAppsList);
@@ -272,8 +323,7 @@ namespace Phoron.App.Pages
             var url = _e.Node.UrlOf(a.Path);
             if (url == null)
             {
-                AppState.Info("Alamatnya belum terlihat di keluaran. Jalankan proyeknya dulu, "
-                              + "lalu tunggu server pengembangan mencetak alamatnya.");
+                AppState.Info(Lang.T("Alamatnya belum terlihat di keluaran. Jalankan proyeknya dulu, lalu tunggu server pengembangan mencetak alamatnya."));
                 return;
             }
             Shell.Open(url);
