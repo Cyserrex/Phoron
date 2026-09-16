@@ -561,6 +561,16 @@ namespace Phoron.Core
         public Task<bool> StartWebAsync()
         {
             if (Active == null) return Task.FromResult(false);
+            // Tidak memakai web server adalah pilihan, bukan kegagalan. Dulu
+            // jalur ini berakhir di ServiceManager yang menyetel keadaan jadi
+            // Gagal - titik merah di layar dan baris "Profil belum menunjuk web
+            // server" setiap kali tombol Nyalakan ditekan, untuk profil yang
+            // memang sengaja hanya menjalankan MySQL.
+            if (!Active.PakaiWeb)
+            {
+                Say("Profil \"" + Active.Name + "\" tidak memakai web server, jadi tidak ada yang dinyalakan.");
+                return Task.FromResult(false);
+            }
             if (LastBuild == null) Apply();
             return Services.StartWebAsync(Active, WebPackage, Php, LastBuild);
         }
@@ -570,6 +580,11 @@ namespace Phoron.Core
         public Task<bool> StartDbAsync()
         {
             if (Active == null) return Task.FromResult(false);
+            if (!Active.PakaiMySql)
+            {
+                Say("Profil \"" + Active.Name + "\" tidak memakai MySQL, jadi tidak ada yang dinyalakan.");
+                return Task.FromResult(false);
+            }
             if (LastBuild == null) Apply();
             return Services.StartDbAsync(Active, MySql);
         }

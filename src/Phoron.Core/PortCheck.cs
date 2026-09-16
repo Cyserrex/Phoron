@@ -22,6 +22,14 @@ namespace Phoron.Core
             public bool InUse;
             public int Pid;
             public string ProcessName = "";
+
+            /// <summary>
+            /// Jalur exe pemegang port. Inilah yang membedakan httpd milik
+            /// Phoron dari httpd milik Laragon - dan tanpa itu, tawaran
+            /// "hentikan proses yang tertinggal" meminta orang memutuskan
+            /// tanpa satu pun keterangan.
+            /// </summary>
+            public string Jalur = "";
             public string Describe()
             {
                 if (!InUse) return "Port " + Port + " bebas.";
@@ -59,7 +67,15 @@ namespace Phoron.Core
             u.Pid = FindPid(port);
             if (u.Pid > 0)
             {
-                try { u.ProcessName = Process.GetProcessById(u.Pid).ProcessName; }
+                try
+                {
+                    var proc = Process.GetProcessById(u.Pid);
+                    u.ProcessName = proc.ProcessName;
+                    // Bisa gagal untuk proses milik pengguna lain atau yang
+                    // berhak lebih tinggi; namanya saja sudah cukup berguna.
+                    try { u.Jalur = proc.MainModule.FileName; }
+                    catch { }
+                }
                 catch { }
             }
             return u;
@@ -97,8 +113,18 @@ namespace Phoron.Core
         /// <summary>Periksa semua port sebuah profil sekaligus; hanya yang bermasalah yang dikembalikan.</summary>
         public static List<Usage> Conflicts(Profile p, bool https)
         {
-            var ports = new List<int> { p.HttpPort, p.MySqlPort };
-            if (https) ports.Add(p.HttpsPort);
+            // Port layanan yang TIDAK dipakai profil ini tidak diperiksa sama
+            // sekali. Kalau tidak, profil tanpa MySQL akan mengeluh port 3306
+            // dipegang orang lain - padahal ia memang tidak berniat memakainya,
+            // dan yang memegangnya sering justru Laragon atau XAMPP milik orang
+            // itu sendiri yang sedang dipakai.
+            var ports = new List<int>();
+            if (p.PakaiWeb)
+            {
+                ports.Add(p.HttpPort);
+                if (https) ports.Add(p.HttpsPort);
+            }
+            if (p.PakaiMySql) ports.Add(p.MySqlPort);
             return ports.Distinct().Select(Check).Where(u => u.InUse).ToList();
         }
     }

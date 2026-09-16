@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.24.1";
+        public const string Version = "1.24.2";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
@@ -123,6 +123,24 @@ namespace Phoron.Core
         /// http://localhost dan yang dibuka tombol "Buka www".
         /// </summary>
         public List<string> ProjectRoots = new List<string>();
+        /// <summary>
+        /// Id web server yang benar-benar dipakai profil ini, sesuai pilihan
+        /// Apache atau Nginx-nya.
+        /// </summary>
+        public string WebId { get { return WebServer == "nginx" ? NginxId : ApacheId; } }
+
+        /// <summary>
+        /// Apakah profil ini memang memakai layanan tersebut.
+        ///
+        /// Kosong berarti "(tidak dipakai)", dan itu pilihan yang disengaja -
+        /// ada entrinya di ComboBox halaman Profil. Membedakannya dari "disebut
+        /// tapi tidak ketemu" penting di banyak tempat: yang pertama tidak
+        /// boleh dilaporkan sebagai kegagalan, tidak perlu diperiksa portnya,
+        /// dan tidak pantas ditandai merah di layar.
+        /// </summary>
+        public bool PakaiWeb { get { return !string.IsNullOrEmpty(WebId); } }
+        public bool PakaiMySql { get { return !string.IsNullOrEmpty(MySqlId); } }
+
         public string SiteSuffix = "test";
         /// <summary>Ekstensi PHP yang dinyalakan profil ini (nama tanpa awalan php_).</summary>
         public List<string> PhpExtensions = new List<string>();

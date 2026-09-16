@@ -44,12 +44,32 @@ namespace Phoron.Core
         {
             var r = new Result();
             if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp);
-            if (profile.WebServer == "nginx" && nginx != null)
-                r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
-            else if (apache != null)
-                r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses, berandaDiAkar);
+            // Dipilah menurut web server yang DIPILIH profil, bukan menurut
+            // paket mana yang kebetulan tersedia.
+            //
+            // Bentuk lamanya - "nginx kalau ada, kalau tidak Apache" - membuat
+            // profil bernginx yang versinya dikosongkan diam-diam menghasilkan
+            // konfigurasi APACHE. Dan kalau tidak ada keduanya, keluhannya
+            // selalu menyebut Apache, walau yang dipilih profil itu Nginx.
+            if (!profile.PakaiWeb)
+            {
+                // Sengaja tidak memakai web server. Tidak ada yang perlu
+                // ditulis, dan tidak ada yang perlu dikeluhkan - profil yang
+                // hanya menjalankan MySQL adalah pemakaian yang sah.
+            }
+            else if (profile.WebServer == "nginx")
+            {
+                if (nginx != null) r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
+                else r.Warnings.Add("Versi Nginx yang dicatat profil tidak ada di komputer ini, "
+                                    + "dan tidak ada Nginx lain sebagai gantinya.");
+            }
             else
-                r.Warnings.Add("Profil belum menunjuk versi Apache mana pun.");
+            {
+                if (apache != null)
+                    r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses, berandaDiAkar);
+                else r.Warnings.Add("Versi Apache yang dicatat profil tidak ada di komputer ini, "
+                                    + "dan tidak ada Apache lain sebagai gantinya.");
+            }
             if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
             Beranda.Tulis(profile, sites, php, apache ?? nginx, mysql);
             return r;

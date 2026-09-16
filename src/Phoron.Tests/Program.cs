@@ -43,6 +43,7 @@ namespace Phoron.Tests
                 UjiPemindai();
                 UjiProfil();
                 UjiVersiTidakDipakai();
+                UjiLayananTidakDipakai();
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
@@ -867,6 +868,26 @@ namespace Phoron.Tests
 
                 e.Active.MySqlId = "";
                 Ok("Dikosongkan lagi, MySQL kembali tidak dipakai", e.MySql == null);
+
+                // Menyalakan layanan yang memang tidak dipakai bukan kegagalan.
+                // Dulu jalur web berakhir dengan keadaan Gagal - titik MERAH di
+                // layar - untuk profil yang sengaja hanya menjalankan MySQL.
+                Ok("Menyalakan MySQL yang tidak dipakai tidak dianggap gagal",
+                   !e.StartDbAsync().Result
+                   && e.Services.DbState == ServiceState.Berhenti,
+                   e.Services.DbState.ToString());
+
+                e.Active.ApacheId = "";
+                Ok("Profil tanpa web server tidak memakai web", !e.Active.PakaiWeb);
+                Ok("Menyalakan web yang tidak dipakai tidak dianggap gagal",
+                   !e.StartWebAsync().Result
+                   && e.Services.WebState == ServiceState.Berhenti,
+                   e.Services.WebState.ToString());
+
+                // Dan keadaannya dikatakan apa adanya di riwayat, bukan didiamkan.
+                Ok("Alasannya dicatat di Aktivitas",
+                   e.Riwayat().Any(x => x.Teks.Contains("tidak memakai web server")),
+                   string.Join(" | ", e.Riwayat().Select(x => x.Teks).ToArray()));
             }
             finally
             {
@@ -882,6 +903,149 @@ namespace Phoron.Tests
             var berkas = Path.Combine(folder, exe);
             Directory.CreateDirectory(Path.GetDirectoryName(berkas));
             File.WriteAllText(berkas, "");
+        }
+
+        /// <summary>
+        /// Layanan yang tidak dipakai profil tidak boleh diperlakukan sebagai
+        /// kegagalan, dan portnya tidak boleh diperiksa sama sekali.
+        ///
+        /// Dua gejalanya sama-sama bikin bingung. Profil yang hanya menjalankan
+        /// MySQL menyalakan titik MERAH di sisi web setiap kali tombol Nyalakan
+        /// ditekan, lengkap dengan baris "Profil belum menunjuk web server" -
+        /// padahal memang tidak diminta. Dan profil tanpa MySQL mengeluh port
+        /// 3306 dipegang orang lain, padahal yang memegangnya sering justru
+        /// Laragon atau XAMPP milik orang itu sendiri yang sedang dipakai.
+        /// </summary>
+        static void UjiLayananTidakDipakai()
+        {
+            Bagian("Layanan yang tidak dipakai");
+
+            var pWeb = new Profile { ApacheId = "httpd-2.4.57-win64-VS16", WebServer = "apache" };
+            Ok("Profil dengan Apache dianggap memakai web", pWeb.PakaiWeb);
+            Ok("Profil dengan Apache tapi tanpa MySQL", !pWeb.PakaiMySql);
+
+            // Yang dilihat adalah web server YANG DIPILIH, bukan sembarang yang
+            // terisi: profil bernginx dengan Apache terisi tetap tidak punya web.
+            var pNginx = new Profile { ApacheId = "httpd-2.4.57-win64-VS16", NginxId = "", WebServer = "nginx" };
+            Ok("Nginx dipilih tapi kosong berarti tidak memakai web", !pNginx.PakaiWeb);
+            pNginx.NginxId = "nginx-1.27.1";
+            Ok("Nginx terisi berarti memakai web", pNginx.PakaiWeb);
+            Ok("Yang dibaca id web server yang dipilih", pNginx.WebId == "nginx-1.27.1", pNginx.WebId);
+
+            // ---- port layanan yang tidak dipakai tidak diperiksa ----
+            var port = PortBebas();
+            var pendengar = new System.Net.Sockets.TcpListener(
+                System.Net.IPAddress.Loopback, port);
+            pendengar.Start();
+            try
+            {
+                Ok("Port percobaan benar-benar terpakai", !PortCheck.IsFree(port), port.ToString());
+
+                var tanpaDb = new Profile
+                {
+                    ApacheId = "httpd-2.4.57-win64-VS16",
+                    WebServer = "apache",
+                    MySqlId = "",
+                    HttpPort = PortBebas(),
+                    MySqlPort = port,
+                };
+                Ok("Port MySQL tidak diperiksa saat MySQL tidak dipakai",
+                   PortCheck.Conflicts(tanpaDb, false).Count == 0,
+                   string.Join(" | ", PortCheck.Conflicts(tanpaDb, false)
+                       .Select(x => x.Describe()).ToArray()));
+
+                tanpaDb.MySqlId = "mysql-5.7.38-winx64";
+                Ok("Port MySQL diperiksa lagi begitu MySQL dipakai",
+                   PortCheck.Conflicts(tanpaDb, false).Any(x => x.Port == port));
+
+                var tanpaWeb = new Profile
+                {
+                    ApacheId = "",
+                    WebServer = "apache",
+                    MySqlId = "",
+                    HttpPort = port,
+                    MySqlPort = PortBebas(),
+                };
+                Ok("Port web tidak diperiksa saat web tidak dipakai",
+                   PortCheck.Conflicts(tanpaWeb, false).Count == 0);
+            }
+            finally { try { pendengar.Stop(); } catch { } }
+
+            UjiKonfigurasiIkutWebServer();
+        }
+
+        /// <summary>
+        /// Konfigurasi yang ditulis harus mengikuti web server YANG DIPILIH
+        /// profil, bukan paket mana yang kebetulan tersedia.
+        ///
+        /// Bentuk lamanya - "nginx kalau ada, kalau tidak Apache" - membuat
+        /// profil bernginx yang versinya dikosongkan diam-diam menghasilkan
+        /// konfigurasi Apache, dan keluhannya selalu menyebut Apache walau yang
+        /// dipilih profil itu Nginx.
+        /// </summary>
+        static void UjiKonfigurasiIkutWebServer()
+        {
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-webcfg-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+
+                var apache = new BinPackage
+                {
+                    Kind = BinKind.Apache,
+                    Id = "httpd-2.4.57-win64-VS16",
+                    Version = "2.4.57",
+                    Path = Path.Combine(akar, "apache-palsu"),
+                };
+                var situs = new List<Site>();
+
+                // Profil bernginx, versi Nginx dikosongkan, Apache kebetulan ada.
+                var pNginx = new Profile
+                {
+                    Name = "Nginx tanpa versi",
+                    WebServer = "nginx",
+                    NginxId = "",
+                    ApacheId = apache.Id,
+                };
+                var rNginx = ConfigWriter.Build(pNginx, null, apache, null, null, situs);
+                Ok("Profil bernginx tidak menghasilkan konfigurasi Apache",
+                   rNginx.HttpdConf == null, rNginx.HttpdConf ?? "(null)");
+                Ok("Keluhannya tidak menyebut Apache untuk profil bernginx",
+                   !rNginx.Warnings.Any(w => w.Contains("Apache")),
+                   string.Join(" | ", rNginx.Warnings.ToArray()));
+
+                // Profil yang sengaja tanpa web server: tidak ada keluhan sama sekali.
+                var pTanpaWeb = new Profile { Name = "MySQL saja", WebServer = "apache", ApacheId = "" };
+                var rTanpa = ConfigWriter.Build(pTanpaWeb, null, apache, null, null, situs);
+                Ok("Profil tanpa web server tidak menghasilkan konfigurasi web",
+                   rTanpa.HttpdConf == null && rTanpa.NginxConf == null);
+                Ok("Profil tanpa web server tidak dikeluhkan",
+                   rTanpa.Warnings.Count == 0,
+                   string.Join(" | ", rTanpa.Warnings.ToArray()));
+
+                // Sisi sebaliknya: web server yang DIMINTA tapi tidak ada tetap dikeluhkan.
+                var pMinta = new Profile { Name = "Nginx hilang", WebServer = "nginx", NginxId = "nginx-9.9.9" };
+                var rMinta = ConfigWriter.Build(pMinta, null, null, null, null, situs);
+                Ok("Web server yang diminta tapi tidak ada tetap dikeluhkan",
+                   rMinta.Warnings.Any(w => w.Contains("Nginx")),
+                   string.Join(" | ", rMinta.Warnings.ToArray()));
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
+        }
+
+        /// <summary>Port tinggi yang sedang bebas, untuk dipakai percobaan.</summary>
+        static int PortBebas()
+        {
+            for (var p = 34100; p < 34200; p++)
+                if (PortCheck.IsFree(p)) return p;
+            return 34199;
         }
 
         static void UjiIni()

@@ -233,8 +233,9 @@ namespace Phoron.App.Pages
             BtnBebaskan.Visibility = sisa.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (sisa.Count > 0)
                 TxtPeringatan.Text += (TxtPeringatan.Text.Length > 0 ? Environment.NewLine : "")
-                    + "Proses itu milik Phoron yang sebelumnya berjalan dan tidak sempat "
-                    + "membersihkan diri - bisa dihentikan dari sini.";
+                    + "Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat "
+                    + "membersihkan diri - tapi bisa juga milik Laragon atau XAMPP yang memang "
+                    + "sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan.";
         }
 
         void BtnPembaruan_Click(object sender, RoutedEventArgs e)
@@ -246,10 +247,20 @@ namespace Phoron.App.Pages
         {
             var sisa = _e.SisaProses();
             if (sisa.Count == 0) { RefreshState(); return; }
+            // Jalur berkasnya ikut ditampilkan. Phoron tidak punya cara
+            // membuktikan bahwa proses ini miliknya - ia memindai folder bin
+            // Laragon dan XAMPP juga, jadi httpd yang sama persis bisa saja
+            // dijalankan Laragon sendiri. Yang bisa diperbuat adalah menyodorkan
+            // keterangan secukupnya supaya orang memutuskan, bukan mengaku-aku.
             if (!AppState.Ask("Hentikan proses berikut?" + Environment.NewLine + Environment.NewLine
                               + string.Join(Environment.NewLine, sisa.Select(u =>
-                                    "  " + u.ProcessName + " (PID " + u.Pid + ") di port " + u.Port))
+                                    "  " + u.ProcessName + " (PID " + u.Pid + ") di port " + u.Port
+                                    + (string.IsNullOrEmpty(u.Jalur)
+                                       ? "" : Environment.NewLine + "      " + u.Jalur)))
                               + Environment.NewLine + Environment.NewLine
+                              + "Periksa jalurnya dulu: kalau ia berada di folder Laragon atau "
+                              + "XAMPP, kemungkinan besar itu milik aplikasi lain yang sedang "
+                              + "berjalan." + Environment.NewLine + Environment.NewLine
                               + "MySQL diminta berhenti dengan rapi lebih dulu.")) return;
 
             BtnBebaskan.IsEnabled = false;

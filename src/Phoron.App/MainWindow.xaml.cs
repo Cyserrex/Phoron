@@ -214,10 +214,18 @@ namespace Phoron.App
             var db = _engine.Services.DbState;
             var webName = _engine.Active != null && _engine.Active.WebServer == "nginx" ? "Nginx" : "Apache";
 
-            DotWeb.Fill = Dot(web);
-            DotDb.Fill = Dot(db);
-            TxtWeb.Text = webName + " " + Lang.T(web.ToString().ToLowerInvariant());
-            TxtDb.Text = "MySQL " + Lang.T(db.ToString().ToLowerInvariant());
+            // Layanan yang memang tidak dipakai profil ini dikatakan apa
+            // adanya, bukan "berhenti" - yang terbaca seolah ia seharusnya
+            // jalan - apalagi merah.
+            var pakaiWeb = _engine.Active == null || _engine.Active.PakaiWeb;
+            var pakaiDb = _engine.Active == null || _engine.Active.PakaiMySql;
+
+            DotWeb.Fill = pakaiWeb ? Dot(web) : Dot(ServiceState.Berhenti);
+            DotDb.Fill = pakaiDb ? Dot(db) : Dot(ServiceState.Berhenti);
+            TxtWeb.Text = webName + " " + Lang.T(pakaiWeb
+                ? web.ToString().ToLowerInvariant() : "tidak dipakai");
+            TxtDb.Text = "MySQL " + Lang.T(pakaiDb
+                ? db.ToString().ToLowerInvariant() : "tidak dipakai");
             TxtProfil.Text = _engine.Active != null ? _engine.Active.Name : Lang.T("(belum ada profil)");
 
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
