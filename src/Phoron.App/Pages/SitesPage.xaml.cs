@@ -56,7 +56,9 @@ namespace Phoron.App.Pages
 
             Daftar.ItemsSource = _e.Sites.Select(s => new Baris
             {
-                Alamat = _e.SiteUrl(s),
+                // Kosong berarti situs ini tidak terjangkau tanpa Virtual Host -
+                // ia berada di folder proyek kedua, yang tidak dilayani akar utama.
+                Alamat = Kosong(_e.SiteUrl(s)),
                 Folder = s.Folder,
                 Root = s.Root,
                 // Ditampilkan relatif terhadap folder situsnya sendiri; yang perlu
@@ -155,14 +157,26 @@ namespace Phoron.App.Pages
 
         void Daftar_DoubleClick(object sender, RoutedEventArgs e) { BtnBuka_Click(sender, e); }
 
+        static string Kosong(string url)
+        {
+            return string.IsNullOrEmpty(url)
+                ? Lang.T("(tidak terjangkau tanpa Virtual Host)") : url;
+        }
+
         void BtnBuka_Click(object sender, RoutedEventArgs e)
         {
             var s = Terpilih();
             if (s == null) return;
+            var url = _e.SiteUrl(s);
+            if (string.IsNullOrEmpty(url))
+            {
+                AppState.Info(Lang.T("Situs ini ada di folder proyek kedua, yang hanya terjangkau lewat Virtual Host. Nyalakan Virtual Host di Pengaturan, atau pindahkan foldernya ke folder proyek utama."));
+                return;
+            }
             if (_e.Services.WebState != ServiceState.Jalan
                 && !AppState.Ask("Web server belum jalan, jadi halamannya kemungkinan besar tidak terbuka. "
                                  + "Tetap buka?")) return;
-            Shell.Open(_e.SiteUrl(s));
+            Shell.Open(url);
         }
 
         void BtnFolder_Click(object sender, RoutedEventArgs e)

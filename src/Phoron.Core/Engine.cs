@@ -543,9 +543,16 @@ namespace Phoron.Core
         {
             try
             {
-                var names = Sites.Select(s => s.HostName).ToList();
-                names.Add("localhost");
-                HostsFile.Sync(names.Where(n => n != "localhost").ToList());
+                // Tanpa Virtual Host, blok Phoron dikosongkan - bukan dibiarkan.
+                // Nama yang tertinggal di berkas hosts tetap menunjuk 127.0.0.1
+                // dan dijawab vhost bawaan, jadi alamatnya tampak hidup padahal
+                // menampilkan proyek yang salah. Hanya blok milik Phoron yang
+                // disentuh; baris orang lain dijaga HostsFile sendiri.
+                var names = Settings.AutoVhost
+                    ? Sites.Select(s => s.HostName)
+                           .Where(n => !string.IsNullOrWhiteSpace(n) && n != "localhost").ToList()
+                    : new List<string>();
+                HostsFile.Sync(names);
                 RefreshSites();
             }
             catch (UnauthorizedAccessException)
@@ -621,11 +628,40 @@ namespace Phoron.Core
             return env;
         }
 
+        /// <summary>
+        /// Alamat sebuah situs, MENGIKUTI keadaan Virtual Host.
+        ///
+        /// Tanpa Virtual Host, nama seperti toko.test tidak dilayani vhost mana
+        /// pun. Menampilkannya tetap membuat orang mengira alamat itu bekerja -
+        /// dan selama namanya masih tertinggal di berkas hosts, ia memang
+        /// "menjawab", tapi yang menjawab adalah vhost bawaan dengan isi proyek
+        /// LAIN, atau galat 500. Alamat yang salah lebih menyesatkan daripada
+        /// alamat yang jelas-jelas tidak ada.
+        ///
+        /// Yang benar-benar bekerja tanpa vhost adalah jalur di bawah akar
+        /// utama. Situs dari folder proyek KEDUA dan seterusnya tidak terjangkau
+        /// sama sekali - untuk itu dikembalikan kosong, dan layar menampilkannya
+        /// apa adanya.
+        /// </summary>
         public string SiteUrl(Site site)
         {
-            if (Active == null) return "http://localhost/";
+            if (Active == null || site == null) return "http://localhost/";
             var port = Active.HttpPort == 80 ? "" : ":" + Active.HttpPort;
-            return "http://" + site.HostName + port + "/";
+            if (Settings.AutoVhost) return "http://" + site.HostName + port + "/";
+
+            var utama = SiteScanner.DocumentRoot(Active);
+            if (string.IsNullOrEmpty(utama) || string.IsNullOrEmpty(site.Path)) return "";
+            var jalur = site.Path.TrimEnd('\\');
+            var akar = utama.TrimEnd('\\');
+            // Dibandingkan pada BATAS FOLDER, bukan sebagai teks biasa. Tanpa
+            // pemisah di belakang, "proyek-lain" dikira berada di dalam
+            // "proyek", dan alamatnya keluar sebagai http://localhost/-lain/...
+            if (!string.Equals(jalur, akar, StringComparison.OrdinalIgnoreCase)
+                && !jalur.StartsWith(akar + Path.DirectorySeparatorChar,
+                                     StringComparison.OrdinalIgnoreCase)) return "";
+
+            var relatif = jalur.Substring(akar.Length).Trim('\\').Replace('\\', '/');
+            return "http://localhost" + port + "/" + (relatif.Length > 0 ? relatif + "/" : "");
         }
 
         public string RootUrl()

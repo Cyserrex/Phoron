@@ -44,6 +44,7 @@ namespace Phoron.Tests
                 UjiProfil();
                 UjiVersiTidakDipakai();
                 UjiLayananTidakDipakai();
+                UjiVirtualHostMati();
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
@@ -1111,6 +1112,107 @@ namespace Phoron.Tests
                    Lang.T("Proyek {0} siap di {1}", "kalsel", "http://localhost:3000"));
             }
             finally { Lang.Pakai(Lang.Indonesia); }
+        }
+
+        /// <summary>
+        /// Mematikan Virtual Host harus benar-benar mematikannya.
+        ///
+        /// Gejala yang diuji, diambil dari mesin pengguna: Virtual Host sudah
+        /// dimatikan dan tidak ada satu pun vhost per situs tersisa, TAPI nama
+        /// .test masih terdaftar di berkas hosts. Namanya jadi tetap menunjuk
+        /// 127.0.0.1 dan dijawab vhost bawaan - satu alamat membalas galat 500,
+        /// yang lain membalas isi proyek yang sama sekali berbeda. Alamat yang
+        /// "jalan" tapi menampilkan hal yang salah lebih menyesatkan daripada
+        /// alamat yang jelas-jelas tidak ada.
+        /// </summary>
+        static void UjiVirtualHostMati()
+        {
+            Bagian("Virtual Host dimatikan");
+            var akarLama = Paths.Root;
+            var hostsLama = Paths.HostsFile;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-vh-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+                var hosts = Path.Combine(akar, "hosts");
+                Paths.HostsFile = hosts;
+                File.WriteAllText(hosts, "127.0.0.1 localhost" + Environment.NewLine
+                                         + "10.0.0.1 kantor.internal" + Environment.NewLine);
+
+                // Dua folder proyek: yang kedua hanya terjangkau lewat Virtual
+                // Host, sebab akar yang dilayani Apache cuma yang pertama.
+                var utama = Path.Combine(akar, "proyek");
+                var kedua = Path.Combine(akar, "proyek-lain");
+                Directory.CreateDirectory(Path.Combine(utama, "toko"));
+                Directory.CreateDirectory(Path.Combine(kedua, "gudang"));
+
+                Directory.CreateDirectory(Paths.Profiles);
+                File.WriteAllText(Path.Combine(Paths.Profiles, "uji.ini"),
+                    "[profil]" + Environment.NewLine +
+                    "nama=Uji" + Environment.NewLine +
+                    "folder_proyek=" + utama + ";" + kedua + Environment.NewLine +
+                    "akhiran_situs=test" + Environment.NewLine);
+
+                File.WriteAllText(Paths.SettingsFile,
+                    "[umum]" + Environment.NewLine +
+                    "profil_aktif=uji" + Environment.NewLine +
+                    "auto_vhost=1" + Environment.NewLine +
+                    "kelola_hosts=1" + Environment.NewLine);
+
+                var e = new Engine();
+                e.Reload();
+                Ok("Kedua situs terbaca", e.Sites.Count == 2, e.Sites.Count.ToString());
+
+                var toko = e.Sites.FirstOrDefault(x => x.Folder == "toko");
+                var gudang = e.Sites.FirstOrDefault(x => x.Folder == "gudang");
+                Ok("Situs dari kedua folder proyek ditemukan", toko != null && gudang != null);
+
+                // --- Virtual Host menyala ---
+                Ok("Alamat memakai nama .test saat Virtual Host menyala",
+                   e.SiteUrl(toko) == "http://toko.test/", e.SiteUrl(toko));
+                e.Apply();
+                Ok("Nama .test terdaftar di hosts saat Virtual Host menyala",
+                   HostsFile.AllNames().Contains("toko.test"));
+
+                // --- Virtual Host dimatikan ---
+                e.Settings.AutoVhost = false;
+                e.Settings.Save();
+                e.Apply();
+
+                Ok("Blok hosts dikosongkan saat Virtual Host dimatikan",
+                   !HostsFile.AllNames().Contains("toko.test"),
+                   string.Join(", ", HostsFile.AllNames().ToArray()));
+                Ok("Baris milik orang lain tetap selamat",
+                   File.ReadAllText(hosts).Contains("10.0.0.1 kantor.internal"));
+
+                // Alamat yang ditampilkan harus yang BENAR-BENAR bekerja.
+                Ok("Alamat berubah jadi jalur localhost",
+                   e.SiteUrl(toko) == "http://localhost/toko/", e.SiteUrl(toko));
+                Ok("Situs di folder proyek kedua dinyatakan tidak terjangkau",
+                   e.SiteUrl(gudang) == "", "[" + e.SiteUrl(gudang) + "]");
+
+                // Dan tidak ada lagi yang ditawarkan untuk didaftarkan.
+                Ok("Tidak ada nama yang perlu didaftarkan lagi",
+                   HostsTool.SemuaNamaSitus().Count == 0,
+                   string.Join(", ", HostsTool.SemuaNamaSitus().ToArray()));
+
+                // --- dinyalakan lagi: harus pulih seutuhnya ---
+                e.Settings.AutoVhost = true;
+                e.Settings.Save();
+                e.Apply();
+                Ok("Dinyalakan lagi, nama .test kembali terdaftar",
+                   HostsFile.AllNames().Contains("toko.test"));
+                Ok("Dinyalakan lagi, alamatnya kembali memakai .test",
+                   e.SiteUrl(toko) == "http://toko.test/", e.SiteUrl(toko));
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                Paths.HostsFile = hostsLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
         }
 
         static void UjiIni()
@@ -2288,6 +2390,11 @@ namespace Phoron.Tests
             {
                 Directory.CreateDirectory(akar);
                 Paths.Root = akar;
+                // Pengumpul nama menghormati Virtual Host, dan bawaannya
+                // sekarang MATI - tanpa baris ini tidak ada nama yang
+                // dikumpulkan, dan yang diuji di bawah jadi tidak berarti.
+                File.WriteAllText(Paths.SettingsFile,
+                    "[umum]" + Environment.NewLine + "auto_vhost=1" + Environment.NewLine);
 
                 var satu = Path.Combine(akar, "proyek-satu");
                 var dua = Path.Combine(akar, "proyek-dua");

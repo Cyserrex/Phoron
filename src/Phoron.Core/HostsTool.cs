@@ -25,6 +25,11 @@ namespace Phoron.Core
         /// <summary>Nama host semua situs di semua profil, tanpa localhost.</summary>
         public static List<string> SemuaNamaSitus()
         {
+            // Virtual Host mati berarti tidak ada nama yang perlu didaftarkan.
+            // Tanpa penjaga ini, Beranda tetap menawarkan "daftarkan nama situs
+            // sekali" untuk nama yang toh tidak akan dilayani siapa pun.
+            if (!Settings.Load().AutoVhost) return new List<string>();
+
             var nama = new List<string>();
             foreach (var profil in ProfileStore.LoadAll())
             {

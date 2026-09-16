@@ -78,6 +78,11 @@ jobs:
     needs: test
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Riwayat penuh, bukan satu commit terakhir: changelog di bawah
+          # disusun dari commit sejak tag sebelumnya, dan keduanya tidak ada
+          # pada kloning dangkal.
+          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -149,6 +154,47 @@ jobs:
       # berkas yang diunduh memang berkas yang dirakit di sini, bukan berkas
       # yang disisipi orang lain di tengah jalan. Dua langkah di bawah itulah
       # gunanya.
+      # Catatan rilis bawaan GitHub menyusun daftarnya dari pull request, dan
+      # proyek ini mendorong langsung ke main - jadi yang terbit selama ini
+      # hanya tautan pembanding, sama persis di tiap versi. Changelog disusun
+      # dari commit sejak tag sebelumnya, dikelompokkan menurut awalan
+      # conventional commit yang memang sudah dipakai.
+      - name: Susun changelog
+        id: catatan
+        shell: pwsh
+        run: |
+          $sebelum = git tag --list "v*" --sort=-v:refname | Select-Object -First 1
+          if ($sebelum) {
+              Write-Host "Membandingkan dengan $sebelum"
+              $subjek = git log "$sebelum..HEAD" --no-merges --format=%s
+          } else {
+              Write-Host "Belum ada tag sebelumnya - memakai seluruh riwayat"
+              $subjek = git log --no-merges --format=%s
+          }
+          $subjek = @($subjek | Where-Object { $_ -and $_.Trim() })
+
+          $baru = @(); $perbaikan = @(); $lain = @()
+          foreach ($b in $subjek) {
+              # Awalan seperti "feat(node): " dibuang; yang tersisa kalimatnya.
+              $isi = $b -replace '^[a-z]+(\([^)]*\))?:\s*', ''
+              if ($b -match '^feat')      { $baru += $isi }
+              elseif ($b -match '^fix')   { $perbaikan += $isi }
+              elseif ($b -match '^chore\(rilis\)') { }   # commit penaik versi
+              else                        { $lain += $isi }
+          }
+
+          $bagian = @()
+          if ($baru.Count)      { $bagian += "### Baru";     $bagian += ($baru      | ForEach-Object { "- $_" }) }
+          if ($perbaikan.Count) { $bagian += "### Perbaikan"; $bagian += ($perbaikan | ForEach-Object { "- $_" }) }
+          if ($lain.Count)      { $bagian += "### Lainnya";  $bagian += ($lain      | ForEach-Object { "- $_" }) }
+          if (-not $bagian.Count) { $bagian = @("Tidak ada perubahan yang tercatat.") }
+
+          $teks = $bagian -join "`n"
+          Write-Host $teks
+          "isi<<CATATAN_EOF" >> $env:GITHUB_OUTPUT
+          $teks                >> $env:GITHUB_OUTPUT
+          "CATATAN_EOF"        >> $env:GITHUB_OUTPUT
+
       - name: Hitung sidik SHA-256
         id: sidik
         shell: pwsh
@@ -192,6 +238,10 @@ jobs:
             installer/Output/SHA256SUMS.txt
           generate_release_notes: true
           body: |
+            ${{ steps.catatan.outputs.isi }}
+
+            ---
+
             Windows akan menampilkan **"Windows protected your PC"** saat installer ini dijalankan pertama kali. Itu bukan tanda berkasnya bermasalah: Phoron belum ditandatangani dengan sertifikat berbayar, dan SmartScreen memperingatkan setiap berkas yang belum punya rekam jejak unduhan. Klik **More info**, lalu **Run anyway**.
 
             Sebelum menjalankannya, Anda bisa memastikan berkasnya utuh:
