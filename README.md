@@ -159,6 +159,35 @@ tidak pernah tersentuh:
 # === Phoron selesai ===
 ```
 
+Berkas hosts itu milik sistem, bukan milik Phoron, jadi ia diperlakukan hati-hati.
+Sebelum menulis, keadaan sebelumnya selalu disalin ke `data\hosts-backup\`.
+Salinan pertama bernama `hosts-asli.bak` dan **tidak pernah dibuang** — itulah
+keadaan sebelum Phoron ikut campur, dan itulah yang dicari orang kalau ada yang
+kacau. Selebihnya bertanggal, sepuluh terbaru. Keduanya bisa dikembalikan lewat
+**Pengaturan → Pulihkan berkas hosts**.
+
+Dua penjaga lain bekerja diam-diam. Kalau berkas hosts tidak bisa **dibaca** —
+terkunci antivirus, misalnya — Phoron menolak menulisnya sama sekali, sebab
+menulis dari bacaan yang gagal berarti membuang seluruh baris milik Anda. Dan
+sebelum menyimpan, tiap baris di luar blok Phoron dibandingkan sebelum-sesudah;
+kalau ada yang akan hilang, penulisannya dibatalkan.
+
+### Kalau ada yang tidak beres
+
+Galat yang tidak terduga tidak lagi membuat Phoron mati tanpa jejak. Laporannya
+ditulis ke `logs\crash-<tanggal>.log`, lengkap dengan versi, keadaan mesin, dan
+**40 baris terakhir panel Aktivitas** — bagian terakhir itu yang paling menolong,
+sebab ia menceritakan apa yang sedang dikerjakan Phoron saat itu. Dua puluh
+laporan terbaru disimpan.
+
+Untuk galat di antarmuka, Phoron tetap berjalan dan hanya memberi tahu: ia sedang
+memegang Apache dan MySQL yang hidup, dan menutup diri karena satu galat kecil
+berarti ikut mematikan pekerjaan Anda.
+
+`logs\phoron.log` berputar di 2 MB dengan tiga generasi (`phoron.log.1` sampai
+`.3`), jadi ia tidak lagi tumbuh tanpa batas. Semuanya bisa dibuka dari halaman
+**Log**.
+
 ### Halaman yang tersedia
 
 - **Beranda** — pilih profil, **Switch & Jalankan** (pindah profil lalu langsung nyalakan), nyalakan/matikan, pintasan (www, localhost, terminal
