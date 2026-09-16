@@ -39,6 +39,37 @@ kedua aplikasi saling menimpa.
 Unduh `Phoron-<versi>-Setup.exe` dari [halaman Releases](https://github.com/Cyserrex/Phoron/releases),
 atau ambil `Phoron.exe` saja — satu berkas, bisa dijalankan langsung dari mana pun.
 
+### "Windows protected your PC"
+
+Saat installer dijalankan pertama kali, Windows menampilkan layar biru
+**"Windows protected your PC"**. Klik **More info**, lalu **Run anyway**.
+
+Itu bukan tanda berkasnya bermasalah, dan bukan hasil pemindaian antivirus yang
+menemukan sesuatu. Windows SmartScreen menimbang dua hal: apakah berkasnya
+ditandatangani sertifikat penerbit yang dikenal, dan apakah berkas ini sudah
+pernah diunduh banyak orang tanpa masalah. Phoron belum ditandatangani — itu
+butuh sertifikat berbayar — dan tiap rilis baru punya sidik berkas yang berbeda,
+jadi rekam jejaknya selalu dimulai dari nol.
+
+Yang bisa Anda lakukan untuk memastikan berkasnya utuh, tanpa bergantung pada
+SmartScreen:
+
+```powershell
+Get-FileHash Phoron-1.24.3-Setup.exe -Algorithm SHA256
+```
+
+Bandingkan hasilnya dengan sidik yang tercantum di catatan rilis. Kalau Anda
+punya GitHub CLI, asal-usulnya bahkan bisa dibuktikan langsung:
+
+```powershell
+gh attestation verify Phoron-1.24.3-Setup.exe --repo Cyserrex/Phoron
+```
+
+Perintah itu menjawab pertanyaan yang sebenarnya lebih penting daripada
+peringatan SmartScreen: apakah berkas di tangan Anda benar-benar keluaran alur
+kerja pembangun Phoron, dari commit yang bisa Anda baca sendiri — bukan berkas
+yang disisipi orang di tengah jalan.
+
 Layar pertama installer menanyakan bahasa: **Bahasa Indonesia** (bawaan), English,
 Basa Jawa, atau Bahasa Banjar. Pilihan itu bukan cuma untuk installer — ia ikut
 tersimpan, jadi Phoron langsung menyala dalam bahasa yang tadi dipilih.
