@@ -260,6 +260,24 @@ namespace Phoron.Core
         /// </summary>
         public BinPackage Pakai(BinKind jenis, string id)
         {
+            // Kosong berarti TIDAK DIPAKAI, dan itu pilihan yang disengaja -
+            // ada entri "(tidak dipakai)" di ComboBox-nya. Menggantinya dengan
+            // versi tertinggi yang kebetulan terpasang adalah kebalikan dari
+            // yang diminta orang.
+            //
+            // Akibatnya nyata dan tidak terlihat sama sekali: profil tanpa
+            // MySQL tetap menyalakan MySQL, dan yang dipilih adalah versi
+            // tertinggi di seluruh folder bin yang dipindai - termasuk milik
+            // XAMPP atau Laragon. Di mesin penulis, profil yang MySQL-nya
+            // "(tidak dipakai)" menyalakan MariaDB 10.1.38 dari D:\xampp di
+            // port 3306, dan panel Perhatian tidak berkata apa-apa.
+            //
+            // Penggantian di bawah memang untuk keadaan LAIN: id yang DISEBUT
+            // profil tapi tidak ada di komputer ini - penyesuaian antar
+            // perangkat. Penyesuaian() sudah memakai batas yang sama sejak
+            // awal; hanya di sinilah keduanya tidak sepakat.
+            if (string.IsNullOrEmpty(id)) return null;
+
             var tepat = Find(jenis, id);
             if (tepat != null) return tepat;
 

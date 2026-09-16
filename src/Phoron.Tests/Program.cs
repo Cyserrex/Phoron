@@ -42,6 +42,7 @@ namespace Phoron.Tests
                 UjiLaporanGalat();
                 UjiPemindai();
                 UjiProfil();
+                UjiVersiTidakDipakai();
                 UjiSitus();
                 UjiBanyakFolderProyek();
                 UjiPhpIni();
@@ -778,6 +779,109 @@ namespace Phoron.Tests
                 Paths.Root = akarLama;
                 try { Directory.Delete(akar, true); } catch { }
             }
+        }
+
+        /// <summary>
+        /// "(tidak dipakai)" harus benar-benar berarti tidak dipakai.
+        ///
+        /// Gejalanya di mesin pengguna: profil yang MySQL-nya dikosongkan tetap
+        /// menyalakan MySQL - dan yang dinyalakan adalah versi TERTINGGI di
+        /// seluruh folder bin yang dipindai, yaitu MariaDB 10.1.38 milik XAMPP
+        /// di D:\xampp. Phoron menyalakan basis data milik pemasangan lain, di
+        /// port 3306, tanpa diminta, dan panel Perhatian tidak berkata apa-apa.
+        ///
+        /// Sebabnya Pakai() memperlakukan id kosong sama dengan id yang disebut
+        /// profil tapi tidak ada di komputer ini, lalu memakai penggantian
+        /// antar-perangkat. Uji ini menjaga keduanya tetap berbeda: yang kedua
+        /// HARUS tetap bekerja, sebab itulah yang membuat profil tetap jalan
+        /// saat dibawa ke laptop lain.
+        /// </summary>
+        static void UjiVersiTidakDipakai()
+        {
+            Bagian("Versi yang tidak dipakai");
+            var akarLama = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(),
+                                    "phoron-pakai-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            try
+            {
+                Directory.CreateDirectory(akar);
+                Paths.Root = akar;
+
+                // Folder bin tiruan. Nama foldernya sudah menyebut versi, jadi
+                // pemindai tidak perlu menjalankan binernya sama sekali.
+                var bin = Path.Combine(akar, "binpalsu");
+                BuatPaket(bin, Path.Combine("php", "php-8.3.12-Win32-vs16-x64"), "php.exe");
+                BuatPaket(bin, Path.Combine("apache", "httpd-2.4.57-win64-VS16"),
+                          Path.Combine("bin", "httpd.exe"));
+                BuatPaket(bin, Path.Combine("mysql", "mysql-5.7.38-winx64"),
+                          Path.Combine("bin", "mysqld.exe"));
+                // Yang paling tinggi versinya - inilah yang dulu terpilih
+                // diam-diam, meniru MariaDB 10.1.38 milik XAMPP.
+                BuatPaket(bin, Path.Combine("mysql", "mariadb-10.1.38-winx64"),
+                          Path.Combine("bin", "mysqld.exe"));
+
+                File.WriteAllText(Paths.SettingsFile,
+                    "[umum]" + Environment.NewLine +
+                    "bin_roots=" + bin + Environment.NewLine +
+                    "profil_aktif=tanpa-db" + Environment.NewLine +
+                    "kelola_hosts=0" + Environment.NewLine +
+                    "vhost_otomatis=0" + Environment.NewLine);
+
+                Directory.CreateDirectory(Paths.Profiles);
+                File.WriteAllText(Path.Combine(Paths.Profiles, "tanpa-db.ini"),
+                    "[profil]" + Environment.NewLine +
+                    "nama=Tanpa MySQL" + Environment.NewLine +
+                    "php=php-8.3.12-Win32-vs16-x64" + Environment.NewLine +
+                    "apache=httpd-2.4.57-win64-VS16" + Environment.NewLine +
+                    "mysql=" + Environment.NewLine);
+
+                var e = new Engine();
+                e.Reload();
+                Ok("Folder bin tiruan terbaca",
+                   e.Of(BinKind.MySql).Count() == 2, e.Of(BinKind.MySql).Count().ToString());
+
+                // Profil aktif dipilih lewat phoron.ini, sama seperti di
+                // aplikasinya - Active memang tidak boleh disetel dari luar.
+                Ok("Profil tanpa MySQL jadi profil aktif",
+                   e.Active != null && e.Active.FileName == "tanpa-db",
+                   e.Active != null ? e.Active.FileName : "(null)");
+
+                // Inilah yang membuktikan kerusakannya.
+                Ok("Profil tanpa MySQL tidak memakai MySQL mana pun",
+                   e.MySql == null, e.MySql != null ? e.MySql.Id : "(null)");
+                Ok("PHP dan Apache yang disebut profil tetap terpakai",
+                   e.Php != null && e.Apache != null);
+                Ok("Tidak ada penyesuaian yang dilaporkan untuk profil ini",
+                   e.Penyesuaian().Count == 0,
+                   string.Join(" | ", e.Penyesuaian().ToArray()));
+
+                // Sisi sebaliknya: versi yang DISEBUT profil tapi tidak ada di
+                // komputer ini harus tetap diganti - itulah penyesuaian antar
+                // perangkat, dan ia tidak boleh ikut mati oleh perbaikan ini.
+                e.Active.MySqlId = "mysql-9.9.9-winx64";
+                Ok("Versi yang disebut tapi tidak ada tetap diganti",
+                   e.MySql != null, "(null)");
+                Ok("Penggantinya dilaporkan, tidak diam-diam",
+                   e.Penyesuaian().Any(x => x.Contains("mysql-9.9.9-winx64")),
+                   string.Join(" | ", e.Penyesuaian().ToArray()));
+
+                e.Active.MySqlId = "";
+                Ok("Dikosongkan lagi, MySQL kembali tidak dipakai", e.MySql == null);
+            }
+            finally
+            {
+                Paths.Root = akarLama;
+                try { Directory.Delete(akar, true); } catch { }
+            }
+        }
+
+        /// <summary>Folder paket tiruan: cukup ada exe-nya, isinya tidak dibaca.</summary>
+        static void BuatPaket(string akarBin, string relatif, string exe)
+        {
+            var folder = Path.Combine(akarBin, relatif);
+            var berkas = Path.Combine(folder, exe);
+            Directory.CreateDirectory(Path.GetDirectoryName(berkas));
+            File.WriteAllText(berkas, "");
         }
 
         static void UjiIni()
