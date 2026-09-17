@@ -53,7 +53,41 @@ namespace Phoron.Core
             Services.Log += Say;
             Services.LogRinci = Settings.LogRinci;
             Node = new NodeRunner();
+            Node.UrlFound += PeriksaHsts;
             NodeAppsList = new List<NodeApp>();
+        }
+
+        /// <summary>
+        /// Begitu sebuah proyek Node mengumumkan alamatnya, periksa apakah ia
+        /// mengirim HSTS untuk localhost - lihat <see cref="HstsPeriksa"/>.
+        ///
+        /// Dijalankan di utas latar: pemeriksaannya menunggu jawaban jaringan
+        /// sampai beberapa detik, dan peristiwa ini datang dari utas pembaca
+        /// keluaran proses. Menahannya di situ berarti menahan keluaran proyek
+        /// yang baru saja dijalankan pengguna.
+        /// </summary>
+        void PeriksaHsts(string folder, string url)
+        {
+            if (!HstsPeriksa.Berlaku(url)) return;
+            var nama = folder;
+            try { nama = System.IO.Path.GetFileName((folder ?? "").TrimEnd('\\')); }
+            catch { }
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    var keluhan = HstsPeriksa.Keluhan(nama, url, HstsPeriksa.BacaHeader(url));
+                    if (keluhan == null) return;
+                    // Dua tempat sekaligus, dan itu disengaja. Catatan aktivitas
+                    // Beranda adalah yang tersimpan ke phoron.log dan bisa dibaca
+                    // lagi berhari-hari kemudian - saat gejalanya baru muncul.
+                    // Keluaran proyeknya adalah yang sedang ditatap pengguna
+                    // detik itu juga.
+                    Say(keluhan);
+                    Node.Sisipkan(folder, keluhan);
+                }
+                catch { /* pemeriksaan penyedap; kegagalannya bukan urusan pengguna */ }
+            });
         }
 
         /// <summary>Nama proses yang memang dijalankan Phoron - dipakai mengenali sisa yang tertinggal.</summary>

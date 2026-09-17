@@ -78,6 +78,7 @@ namespace Phoron.Tests
                 UjiBalapLayanan();
                 UjiUmpanAtom();
                 UjiSalinanKedua();
+                UjiHsts();
             }
             catch (Exception ex)
             {
@@ -2660,6 +2661,83 @@ namespace Phoron.Tests
                     try { mutex.ReleaseMutex(); } catch { }
                 }
             }
+        }
+
+        /// <summary>
+        /// Deteksi header HSTS dari server pengembangan Node.
+        ///
+        /// Yang membuat gejalanya membingungkan: sebabnya di satu proyek Node
+        /// ber-HTTPS, akibatnya di situs PHP pada port 80 - dan baru terasa
+        /// sesudah server Node-nya dimatikan. Aturan mana yang berlaku dan mana
+        /// yang tidak diuji satu per satu di sini, sebab peringatan palsu pada
+        /// hal seperti ini lebih merusak daripada diam.
+        /// </summary>
+        static void UjiHsts()
+        {
+            Bagian("Deteksi HSTS localhost");
+
+            // HTTPS + nama localhost: inilah satu-satunya bentuk yang dicatat browser.
+            Ok("https://localhost:3000 dianggap berisiko", HstsPeriksa.Berlaku("https://localhost:3000"));
+            Ok("Subdomain .localhost ikut dianggap berisiko", HstsPeriksa.Berlaku("https://app.localhost:3000/"));
+
+            // Header HSTS lewat HTTP polos DIABAIKAN browser; memperingatkan di
+            // sini hanya akan membuat orang mengejar hantu.
+            Ok("http:// polos tidak dianggap berisiko", !HstsPeriksa.Berlaku("http://localhost:3000"));
+
+            // Browser tidak menyimpan HSTS untuk alamat IP telanjang.
+            Ok("IP telanjang tidak dianggap berisiko", !HstsPeriksa.Berlaku("https://127.0.0.1:3000"));
+            Ok("[::1] tidak dianggap berisiko", !HstsPeriksa.Berlaku("https://[::1]:3000"));
+
+            Ok("Host lain bukan urusan Phoron", !HstsPeriksa.Berlaku("https://contoh.test/"));
+            Ok("Alamat ngawur tidak meledak", !HstsPeriksa.Berlaku("bukan alamat"));
+
+            Ok("max-age dibaca jadi hari",
+               HstsPeriksa.HariDariMaxAge("max-age=63072000; includeSubDomains") == 730,
+               "dapat " + HstsPeriksa.HariDariMaxAge("max-age=63072000; includeSubDomains"));
+            Ok("max-age tanpa nilai tidak meledak", HstsPeriksa.HariDariMaxAge("max-age") == 0);
+            Ok("Header kosong = 0 hari", HstsPeriksa.HariDariMaxAge(null) == 0);
+
+            Ok("Tanpa header, tidak ada keluhan", HstsPeriksa.Keluhan("proyek", "https://localhost:3000", null) == null);
+
+            var keluhan = HstsPeriksa.Keluhan("izin_keluar_peg", "https://localhost:3000",
+                                              "max-age=63072000; includeSubDomains");
+            Ok("Keluhan menyebut nama proyeknya",
+               keluhan != null && keluhan.Contains("izin_keluar_peg"));
+            // Tanpa kalimat ini peringatannya tidak menjawab pertanyaan yang
+            // sebenarnya dipunyai pengguna: "kenapa PHP saya mati?"
+            Ok("Keluhan menyebut akibatnya pada port 80",
+               keluhan != null && keluhan.Contains("port 80"));
+
+            // Baris ini harus terlihat sebagai peringatan di keempat bahasa.
+            var semula = Lang.Kode;
+            try
+            {
+                foreach (var kode in Lang.Semua)
+                {
+                    Lang.Pakai(kode);
+                    var pesan = HstsPeriksa.Keluhan("proyek", "https://localhost:3000", "max-age=31536000");
+                    Ok("Peringatan HSTS berwarna peringatan (" + kode + ")",
+                       LogWarna.Golongkan(pesan) == JenisPesan.Peringatan,
+                       "digolongkan " + LogWarna.Golongkan(pesan));
+                }
+            }
+            finally { Lang.Pakai(semula); }
+
+            // Pemeriksaannya harus benar-benar TERPASANG. Logika yang benar tapi
+            // tidak pernah dipanggil adalah kegagalan yang paling sunyi.
+            var mesin = new Engine();
+            var medan = typeof(NodeRunner).GetField("UrlFound",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Ok("Engine mendengarkan alamat yang diumumkan proyek Node",
+               medan != null && medan.GetValue(mesin.Node) != null);
+
+            // Peringatan harus sampai ke keluaran proyeknya juga, bukan cuma ke
+            // catatan Beranda: di situlah mata pengguna berada saat itu.
+            string folderTerlapor = null, barisTerlapor = null;
+            mesin.Node.Output += (f, b) => { folderTerlapor = f; barisTerlapor = b; };
+            mesin.Node.Sisipkan(@"C:\proyek", "halo");
+            Ok("Peringatan bisa disisipkan ke keluaran proyek",
+               folderTerlapor == @"C:\proyek" && barisTerlapor == "halo");
         }
 
         static string CariPhoronExe()

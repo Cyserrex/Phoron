@@ -202,6 +202,14 @@ namespace Phoron.Core
             foreach (var f in RunningFolders) Stop(f);
         }
 
+        /// <summary>
+        /// Sisipkan satu baris ke keluaran sebuah proyek, seolah-olah datang
+        /// dari prosesnya. Dipakai Engine untuk peringatan yang ia temukan
+        /// sendiri - lihat HstsPeriksa - supaya terbaca di tempat pengguna
+        /// sedang menatap, bukan hanya di catatan aktivitas Beranda.
+        /// </summary>
+        public void Sisipkan(string folder, string baris) { Lapor(folder, baris); }
+
         void Lapor(string folder, string baris)
         {
             var h = Output;

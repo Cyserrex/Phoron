@@ -44,6 +44,9 @@ namespace Phoron.Core
             "sudah dipakai", "lebih dari satu", "dilewati", "belum ada",
             "tidak akan", "hati-hati", "perlu hak administrator",
             "npm warn",
+            // Ditulis eksplisit supaya baris peringatan HSTS berwarna sama di
+            // keempat bahasa - kata "peringatan" hanya ada di yang Indonesia.
+            "hsts",
         };
 
         static readonly string[] KataBerhasil =
