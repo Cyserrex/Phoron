@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Phoron.Core;
 
 namespace Phoron.Tests
@@ -75,6 +77,7 @@ namespace Phoron.Tests
                 UjiPutaranLog();
                 UjiBalapLayanan();
                 UjiUmpanAtom();
+                UjiSalinanKedua();
             }
             catch (Exception ex)
             {
@@ -2597,6 +2600,78 @@ namespace Phoron.Tests
             foreach (var w in terlarang)
                 if (Regex.IsMatch(hasil, "(?<![A-Za-z])" + w + "(?![A-Za-z])", RegexOptions.IgnoreCase))
                     bocor.Add("\"" + w + "\" di: " + hasil.Substring(0, Math.Min(50, hasil.Length)));
+        }
+
+        /// <summary>
+        /// Menekan ikon Phoron di taskbar sementara Phoron sudah berjalan dan
+        /// menyusut ke baki sistem harus MEMUNCULKAN jendelanya, bukan menegur
+        /// pengguna dengan kotak "Phoron sudah berjalan".
+        ///
+        /// Uji ini memerankan instans pertama: ia memegang mutex instans tunggal
+        /// dan memasang event yang ditunggu jendela sungguhan, lalu menjalankan
+        /// Phoron.exe sebagai salinan kedua. Yang dibuktikan: salinan kedua
+        /// mengirim sinyalnya lalu keluar sendiri, tanpa kotak pesan yang
+        /// menggantung menunggu diklik.
+        /// </summary>
+        static void UjiSalinanKedua()
+        {
+            Bagian("Salinan kedua Phoron");
+
+            var exe = CariPhoronExe();
+            if (exe == null) { Console.WriteLine("     dilewati: Phoron.exe belum dibangun"); return; }
+
+            // Kalau Phoron milik pengguna sedang berjalan, uji ini akan
+            // membangunkan JENDELANYA - jendela sungguhan yang melompat ke depan
+            // di tengah pekerjaan orang. Lebih baik dilewati.
+            Mutex milikOrang;
+            if (Mutex.TryOpenExisting("Phoron.SingleInstance", out milikOrang))
+            {
+                milikOrang.Close();
+                Console.WriteLine("     dilewati: Phoron sedang berjalan di mesin ini");
+                return;
+            }
+
+            bool baru;
+            using (var mutex = new Mutex(true, "Phoron.SingleInstance", out baru))
+            using (var sinyal = new EventWaitHandle(false, EventResetMode.AutoReset, "Phoron.Tampilkan"))
+            {
+                if (!baru) { Console.WriteLine("     dilewati: mutex direbut proses lain"); return; }
+
+                Process p = null;
+                try
+                {
+                    p = Process.Start(new ProcessStartInfo(exe) { UseShellExecute = false });
+                    bool diminta = sinyal.WaitOne(TimeSpan.FromSeconds(15));
+                    Ok("Salinan kedua meminta jendela dimunculkan, bukan menampilkan kotak pesan", diminta);
+
+                    bool keluar = p.WaitForExit(10000);
+                    Ok("Salinan kedua keluar sendiri", keluar,
+                       keluar ? "" : "masih hidup - kemungkinan besar tergantung di kotak pesan modal");
+                    Ok("Salinan kedua keluar dengan kode 0", keluar && p.ExitCode == 0,
+                       keluar ? "kode " + p.ExitCode : "belum keluar");
+                }
+                finally
+                {
+                    if (p != null)
+                    {
+                        try { if (!p.HasExited) p.Kill(); } catch { }
+                        try { p.Dispose(); } catch { }
+                    }
+                    try { mutex.ReleaseMutex(); } catch { }
+                }
+            }
+        }
+
+        static string CariPhoronExe()
+        {
+            var app = CariFolderApp();
+            if (app == null) return null;
+            foreach (var rasa in new[] { "Release", "Debug" })
+            {
+                var calon = Path.Combine(app, Path.Combine("bin", Path.Combine(rasa, Path.Combine("net48", "Phoron.exe"))));
+                if (File.Exists(calon)) return calon;
+            }
+            return null;
         }
 
         static string CariFolderApp()

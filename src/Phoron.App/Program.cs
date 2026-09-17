@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 
@@ -45,6 +46,11 @@ namespace Phoron.App
             _single = new Mutex(true, "Phoron.SingleInstance", out baru);
             if (!baru)
             {
+                // Tetapi menekan ikon Phoron di taskbar sementara Phoron sudah
+                // menyusut ke baki sistem BUKAN kekeliruan yang perlu ditegur.
+                // Yang dimaksud pengguna jelas: "tampilkan Phoron". Salinan
+                // kedua membangunkan yang pertama lalu keluar tanpa sepatah kata.
+                if (BangunkanYangSudahJalan()) return 0;
                 MessageBox.Show("Phoron sudah berjalan. Lihat ikonnya di baki sistem (system tray).",
                     "Phoron", MessageBoxButton.OK, MessageBoxImage.Information);
                 return 0;
@@ -84,6 +90,66 @@ namespace Phoron.App
             app.MainWindow = win;
             if (!keTray) win.Show();
             return app.Run();
+        }
+
+        /// <summary>
+        /// Nama event yang ditunggu instans yang sedang berjalan (lihat
+        /// MainWindow.PasangSinyalTampil). Disetel salinan kedua untuk meminta
+        /// jendelanya dimunculkan dari baki sistem.
+        /// </summary>
+        public const string NamaSinyalTampil = "Phoron.Tampilkan";
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        static extern bool AllowSetForegroundWindow(int dwProcessId);
+
+        /// <summary>
+        /// Minta Phoron yang sudah berjalan memunculkan jendelanya.
+        /// Mengembalikan false bila permintaannya tidak sampai - misalnya
+        /// salinan pertama masih dalam proses start dan belum memasang
+        /// sinyalnya - sehingga pemanggil bisa kembali ke kotak pesan.
+        /// </summary>
+        static bool BangunkanYangSudahJalan()
+        {
+            // Mutex dibuat di awal start, sedangkan sinyalnya baru dipasang saat
+            // MainWindow terbentuk. Di antara keduanya ada celah beberapa ratus
+            // milidetik: klik kedua yang jatuh tepat di situ harus menunggu
+            // sebentar, bukan langsung menyerah.
+            for (int coba = 0; coba < 20; coba++)
+            {
+                try
+                {
+                    EventWaitHandle sinyal;
+                    if (EventWaitHandle.TryOpenExisting(NamaSinyalTampil, out sinyal))
+                    {
+                        // Tanpa izin ini Windows menolak permintaan proses lain
+                        // untuk maju ke depan: jendelanya memang tampil, tapi
+                        // hanya berkedip di taskbar dan tetap tertutup jendela
+                        // yang sedang aktif.
+                        IzinkanMajuKeDepan();
+                        using (sinyal) sinyal.Set();
+                        return true;
+                    }
+                }
+                catch { return false; }
+                Thread.Sleep(100);
+            }
+            return false;
+        }
+
+        static void IzinkanMajuKeDepan()
+        {
+            try
+            {
+                var aku = Process.GetCurrentProcess();
+                foreach (var lain in Process.GetProcessesByName(aku.ProcessName))
+                {
+                    if (lain.Id == aku.Id) continue;
+                    try { AllowSetForegroundWindow(lain.Id); } catch { }
+                    lain.Dispose();
+                }
+            }
+            catch { /* izin ini penyedap, bukan syarat */ }
         }
 
         static int SinkronHostsSaja()

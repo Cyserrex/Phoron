@@ -44,6 +44,7 @@ namespace Phoron.App
             Closing += OnClosing;
             SourceInitialized += (s, e) => PasangPengawasSesi();
             PasangSinyalKeluar();
+            PasangSinyalTampil();
             Nav.SelectedIndex = 0;
             RefreshStatus();
 
@@ -326,6 +327,30 @@ namespace Phoron.App
             catch { /* tanpa sinyal, pemasang masih punya jalur paksa */ }
         }
 
+        /// <summary>
+        /// Event bernama yang disetel salinan kedua Phoron - lazimnya karena
+        /// pengguna menekan ikon Phoron di taskbar sementara jendelanya sedang
+        /// tersembunyi di baki sistem - untuk meminta jendela ini dimunculkan.
+        /// </summary>
+        System.Threading.EventWaitHandle _sinyalTampil;
+        System.Threading.RegisteredWaitHandle _daftarTampil;
+
+        void PasangSinyalTampil()
+        {
+            try
+            {
+                bool baru;
+                _sinyalTampil = new System.Threading.EventWaitHandle(
+                    false, System.Threading.EventResetMode.AutoReset,
+                    Program.NamaSinyalTampil, out baru);
+                _daftarTampil = System.Threading.ThreadPool.RegisterWaitForSingleObject(
+                    _sinyalTampil,
+                    (keadaan, kehabisanWaktu) => Dispatcher.BeginInvoke(new Action(ShowFromTray)),
+                    null, System.Threading.Timeout.Infinite, false);
+            }
+            catch { /* tanpa sinyal, perilakunya kembali seperti sebelumnya */ }
+        }
+
         /// <summary>Tutup Phoron sepenuhnya karena pemasang pembaruan akan berjalan.</summary>
         public void TutupUntukPembaruan()
         {
@@ -402,8 +427,22 @@ namespace Phoron.App
         void ShowFromTray()
         {
             Show();
-            WindowState = WindowState.Normal;
+            // Dipulihkan HANYA bila memang sedang dikecilkan: memaksa Normal
+            // pada jendela yang sedang dimaksimalkan akan mengecilkannya, dan
+            // pengguna kehilangan ukuran jendela yang ia pilih sendiri.
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
             Activate();
+            // Kedipan Topmost: jaring pengaman kalau Windows tetap menolak
+            // memajukan jendela ini (lihat AllowSetForegroundWindow di
+            // Program.cs). Tanpa ini jendelanya bisa muncul di belakang jendela
+            // yang sedang aktif dan seolah-olah tidak terjadi apa-apa.
+            if (!IsActive)
+            {
+                var semulaTopmost = Topmost;
+                Topmost = true;
+                Topmost = semulaTopmost;
+            }
+            Focus();
         }
 
         void OnClosing(object sender, CancelEventArgs e)
@@ -422,6 +461,8 @@ namespace Phoron.App
             _engine.Node.StopAll();
             if (_daftarSinyal != null) { try { _daftarSinyal.Unregister(null); } catch { } }
             if (_sinyalKeluar != null) { try { _sinyalKeluar.Close(); } catch { } }
+            if (_daftarTampil != null) { try { _daftarTampil.Unregister(null); } catch { } }
+            if (_sinyalTampil != null) { try { _sinyalTampil.Close(); } catch { } }
             if (_tray != null) { _tray.Visible = false; _tray.Dispose(); }
             // ShutdownMode aplikasi ini OnExplicitShutdown (lihat Program.cs),
             // jadi menutup jendela saja tidak mengakhiri prosesnya.
