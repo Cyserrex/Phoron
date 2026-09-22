@@ -152,65 +152,10 @@ namespace Phoron.Core
             return hasil;
         }
 
-        /// <summary>Daftar basis data, tanpa skema bawaan milik server.</summary>
-        public static List<string> DaftarBasisData(Sambungan s, out string galat)
-        {
-            galat = null;
-            var h = Jalankan(s, "SHOW DATABASES");
-            if (!h.Ok) { galat = h.Galat; return new List<string>(); }
-            var sistem = new HashSet<string>(
-                new[] { "information_schema", "performance_schema", "mysql", "sys" },
-                StringComparer.OrdinalIgnoreCase);
-            return h.Tabel.Baris
-                .Where(b => b.Length > 0 && !sistem.Contains(b[0]))
-                .Select(b => b[0])
-                .ToList();
-        }
-
-        public sealed class InfoTabel
-        {
-            public string Nama { get; set; }
-            public string Jenis { get; set; }     // tabel atau tilikan
-            public long Baris { get; set; }       // perkiraan; -1 bila tidak diketahui
-            public string Mesin { get; set; }
-        }
-
-        /// <summary>
-        /// Daftar tabel sebuah basis data berikut perkiraan jumlah barisnya.
-        ///
-        /// Angkanya PERKIRAAN, diambil dari information_schema. Untuk InnoDB
-        /// angka itu memang tidak tepat - MySQL menaksirnya dari sampel halaman
-        /// indeks. Menghitung tepat berarti SELECT COUNT(*) di setiap tabel,
-        /// dan pada basis data berisi puluhan tabel besar itu membuat daftar
-        /// yang seharusnya terbit seketika menggantung berpuluh detik.
-        /// </summary>
-        public static List<InfoTabel> DaftarTabel(Sambungan s, string db, out string galat)
-        {
-            galat = null;
-            var daftar = new List<InfoTabel>();
-            if (string.IsNullOrEmpty(db)) return daftar;
-
-            var h = Jalankan(s,
-                "SELECT TABLE_NAME, TABLE_TYPE, IFNULL(TABLE_ROWS,-1), IFNULL(ENGINE,'') "
-                + "FROM information_schema.TABLES WHERE TABLE_SCHEMA = " + KutipTeks(db)
-                + " ORDER BY TABLE_NAME");
-            if (!h.Ok) { galat = h.Galat; return daftar; }
-
-            foreach (var b in h.Tabel.Baris)
-            {
-                if (b.Length < 4) continue;
-                long n;
-                if (!long.TryParse(b[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) n = -1;
-                daftar.Add(new InfoTabel
-                {
-                    Nama = b[0],
-                    Jenis = b[1] == "VIEW" ? Lang.T("tilikan") : Lang.T("tabel"),
-                    Baris = b[1] == "VIEW" ? -1 : n,
-                    Mesin = b[3],
-                });
-            }
-            return daftar;
-        }
+        // Daftar basis data, daftar tabel, dan InfoTabel dulu ada di sini.
+        // Dipindah ke MySqlSkema, yang juga membawa ukuran, mesin, dan kolasi -
+        // meninggalkan dua jalan untuk hal yang sama berarti cepat atau lambat
+        // ada layar yang memakai yang lebih miskin tanpa alasan.
 
         // ------------------------------------------------------------- Pemanggilan
 

@@ -89,6 +89,7 @@ namespace Phoron.Tests
                 UjiSambunganBasisData(sandbox);
                 UjiMyIniMengikutiProfil(sandbox);
                 UjiKamusBanjar();
+                UjiLabelTidakBentrok();
             }
             catch (Exception ex)
             {

@@ -353,6 +353,51 @@ namespace Phoron.Tests
         }
 
         /// <summary>
+        /// Tombol yang MERUSAK tidak boleh berbagi label dengan tombol yang tidak.
+        ///
+        /// Ditemukan saat memandangi tangkapan layar tema gelap: tombol yang
+        /// menjalankan TRUNCATE TABLE diberi label "Kosongkan", dan kata itu
+        /// sudah dipakai halaman Log untuk membersihkan TAMPILAN - padanan
+        /// Inggrisnya "Clear". Jadi dalam bahasa Inggris tombol yang membuang
+        /// seluruh isi tabel dan tombol yang cuma menyapu layar bertuliskan sama
+        /// persis, bersebelahan di layar yang sama.
+        ///
+        /// Ini jenis cacat yang tidak akan tertangkap uji terjemahan mana pun:
+        /// kedua padanan benar, hanya tidak boleh bertemu.
+        /// </summary>
+        static void UjiLabelTidakBentrok()
+        {
+            Bagian("Label perbuatan merusak");
+
+            // Kiri merusak, kanan tidak. Tidak boleh sama di bahasa mana pun.
+            var pasangan = new[]
+            {
+                new[] { "Kosongkan tabel", "Kosongkan" },
+                new[] { "Kosongkan tabel", "Bersihkan" },
+                new[] { "Hapus tabel", "Bersihkan" },
+                new[] { "Hapus basis data", "Bersihkan" },
+            };
+
+            var dulu = Lang.Kode;
+            try
+            {
+                foreach (var kode in Lang.Semua)
+                {
+                    Lang.Pakai(kode);
+                    foreach (var p in pasangan)
+                    {
+                        var rusak = Lang.T(p[0]);
+                        var aman = Lang.T(p[1]);
+                        Ok("[" + kode + "] \"" + p[0] + "\" beda dari \"" + p[1] + "\"",
+                           !string.Equals(rusak, aman, StringComparison.OrdinalIgnoreCase),
+                           rusak + " vs " + aman);
+                    }
+                }
+            }
+            finally { Lang.Pakai(dulu); }
+        }
+
+        /// <summary>
         /// Seluruh padanan Banjar diperiksa, bukan hanya yang muncul di XAML.
         ///
         /// Penjaga yang sudah ada memindai berkas XAML dan menerjemahkan tiap
