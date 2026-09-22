@@ -22,10 +22,21 @@
 [CmdletBinding()]
 param(
     # Folder tujuan; isinya dipakai langsung oleh [Files] di setup.iss.
-    [string]$Tujuan = (Join-Path $PSScriptRoot 'heidisql')
+    # Kosong berarti "di sebelah skrip ini" - dihitung di badan, BUKAN sebagai
+    # nilai bawaan param: $PSScriptRoot belum terisi saat blok param dinilai,
+    # dan akibatnya Join-Path menolak jalur kosong. Di mesin pengembang hal itu
+    # bisa saja lolos; di runner CI ia langsung menggagalkan build.
+    [string]$Tujuan = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $Tujuan) {
+    $akarSkrip = $PSScriptRoot
+    if (-not $akarSkrip) { $akarSkrip = Split-Path -Parent $MyInvocation.MyCommand.Path }
+    if (-not $akarSkrip) { throw 'Tidak bisa menentukan folder skrip ini.' }
+    $Tujuan = Join-Path $akarSkrip 'heidisql'
+}
 
 $Versi  = '12.21'
 $Berkas = "HeidiSQL_${Versi}_64_Portable.zip"
