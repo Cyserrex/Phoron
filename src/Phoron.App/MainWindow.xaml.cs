@@ -313,9 +313,9 @@ namespace Phoron.App
             try
             {
                 bool baru;
-                _sinyalKeluar = new System.Threading.EventWaitHandle(
-                    false, System.Threading.EventResetMode.AutoReset,
-                    "Phoron.KeluarSekarang", out baru);
+                _sinyalKeluar = ObjekAntarProses.BuatEvent(
+                    "Phoron.KeluarSekarang",
+                    System.Threading.EventResetMode.AutoReset, out baru);
                 _daftarSinyal = System.Threading.ThreadPool.RegisterWaitForSingleObject(
                     _sinyalKeluar,
                     (keadaan, kehabisanWaktu) => Dispatcher.BeginInvoke(new Action(() =>
@@ -341,9 +341,9 @@ namespace Phoron.App
             try
             {
                 bool baru;
-                _sinyalTampil = new System.Threading.EventWaitHandle(
-                    false, System.Threading.EventResetMode.AutoReset,
-                    Program.NamaSinyalTampil, out baru);
+                _sinyalTampil = ObjekAntarProses.BuatEvent(
+                    Program.NamaSinyalTampil,
+                    System.Threading.EventResetMode.AutoReset, out baru);
                 _daftarTampil = System.Threading.ThreadPool.RegisterWaitForSingleObject(
                     _sinyalTampil,
                     (keadaan, kehabisanWaktu) => Dispatcher.BeginInvoke(new Action(ShowFromTray)),

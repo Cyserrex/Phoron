@@ -32,6 +32,7 @@ namespace Phoron.App.Pages
             SwAutoStart.IsChecked = s.AutoStartServices;
             SwTray.IsChecked = s.MinimizeToTray;
             SwVhost.IsChecked = s.AutoVhost;
+            SwOpcache.IsChecked = s.Opcache;
             SwHosts.IsChecked = s.ManageHosts;
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
             SwLogRinci.IsChecked = s.LogRinci;
@@ -150,11 +151,13 @@ namespace Phoron.App.Pages
             var logLama = s.LogRinci;
             var berandaLama = s.BerandaDiAkar;
             var phpIniLama = s.PhpIniKeFolderPhp;
+            var opcacheLama = s.Opcache;
             var rootsLama = string.Join(";", s.BinRoots);
 
             s.AutoStartServices = SwAutoStart.IsChecked == true;
             s.MinimizeToTray = SwTray.IsChecked == true;
             s.AutoVhost = SwVhost.IsChecked == true;
+            s.Opcache = SwOpcache.IsChecked == true;
             s.ManageHosts = SwHosts.IsChecked == true;
             s.LogRinci = SwLogRinci.IsChecked == true;
             s.BerandaDiAkar = SwBerandaAkar.IsChecked == true;
@@ -179,7 +182,7 @@ namespace Phoron.App.Pages
             }
             if (rootsBerubah || s.AutoVhost != vhostLama || s.ManageHosts != hostsLama
                 || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama
-                || s.BerandaDiAkar != berandaLama)
+                || s.BerandaDiAkar != berandaLama || s.Opcache != opcacheLama)
             {
                 // Peringatannya cukup masuk log; kotak pesan modal tiap kali
                 // sakelar disentuh justru mengganggu.

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace Phoron.Core
@@ -51,12 +52,43 @@ namespace Phoron.Core
         public static string EtcMysql { get { return Sub(Path.Combine("etc", "mysql")); } }
         public static string SettingsFile { get { return Path.Combine(Root, "phoron.ini"); } }
 
+        // Folder yang sudah dipastikan ada.
+        //
+        // KENAPA DISINGGAHKAN. Sub() dipanggil dari properti yang dibaca sangat
+        // sering: Engine.Say menyentuh Paths.Logs untuk SETIAP baris log, dan
+        // SslTool menyentuh Paths.EtcSsl beberapa kali tiap penyegaran. Tanpa
+        // singgahan, sekadar MEMBACA sebuah jalur berarti satu panggilan
+        // CreateDirectory yang menemui cakram.
+        //
+        // Diikat pada akarnya, sebab Paths.Root bisa diganti - harness uji
+        // menggantinya di tiap sandbox - dan singgahan yang tidak ikut berganti
+        // akan menunjuk folder milik pemasangan yang lain.
+        static string _akarSinggahan;
+        static readonly Dictionary<string, string> _sub =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>Folder di bawah akar; dibuat kalau belum ada supaya pemanggil tidak perlu mengecek.</summary>
         static string Sub(string name)
         {
-            var p = Path.Combine(Root, name);
-            try { Directory.CreateDirectory(p); } catch { }
-            return p;
+            lock (_sub)
+            {
+                if (!string.Equals(_akarSinggahan, Root, StringComparison.OrdinalIgnoreCase))
+                {
+                    _sub.Clear();
+                    _akarSinggahan = Root;
+                }
+                string siap;
+                if (_sub.TryGetValue(name, out siap)) return siap;
+
+                var p = Path.Combine(Root, name);
+                try { Directory.CreateDirectory(p); } catch { }
+                // Hanya disinggahkan kalau foldernya memang jadi ada. Kalau
+                // pembuatannya gagal - cakram penuh, hak akses, folder yang
+                // dihapus orang - panggilan berikutnya harus mencoba lagi,
+                // bukan mewarisi kegagalan itu selamanya.
+                if (Directory.Exists(p)) _sub[name] = p;
+                return p;
+            }
         }
 
         /// <summary>Apache dan MySQL hanya menerima garis miring maju di berkas konfigurasinya.</summary>

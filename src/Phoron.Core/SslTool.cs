@@ -76,6 +76,10 @@ namespace Phoron.Core
                 { "OPENSSL_CONF", cnf },
             };
             var res = Shell.Run(openssl, args, Path.GetDirectoryName(openssl), 120000, env);
+            // Sertifikatnya berganti, jadi jawaban "sudah dipercaya" yang
+            // tersimpan menjawab pertanyaan tentang sertifikat yang sudah tidak
+            // ada lagi.
+            LupakanKepercayaan();
             if (!Exists) return "openssl gagal: " + res.All;
             return null;
         }
@@ -91,28 +95,70 @@ namespace Phoron.Core
             get
             {
                 if (!Exists) return false;
-                string sidik;
-                try { sidik = new X509Certificate2(CrtPath).Thumbprint; }
-                catch { return false; }
-
-                foreach (var lokasi in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
+                lock (_kunciPercaya)
                 {
+                    if (_adaJawaban && DateTime.UtcNow - _percayaWaktu < UmurPercaya)
+                        return _percaya;
+                    _percaya = HitungKepercayaan();
+                    _adaJawaban = true;
+                    _percayaWaktu = DateTime.UtcNow;
+                    return _percaya;
+                }
+            }
+        }
+
+        // Jawabannya disinggahkan. Menelusuri gudang Trusted Root berarti
+        // membaca RATUSAN sertifikat, dua gudang sekaligus - dan halaman Beranda
+        // menanyakannya beberapa kali dalam satu penyegaran.
+        //
+        // Umurnya pendek, dan singgahannya dibuang tegas begitu Phoron sendiri
+        // memasang sertifikatnya. Yang tidak boleh terjadi: orang menekan
+        // "percayai sertifikat", Windows menerimanya, lalu layar tetap berkata
+        // belum dipercaya.
+        static readonly object _kunciPercaya = new object();
+        static bool _percaya;
+        static bool _adaJawaban;
+        static DateTime _percayaWaktu = DateTime.MinValue;
+        static readonly TimeSpan UmurPercaya = TimeSpan.FromSeconds(20);
+
+        /// <summary>Lupakan jawaban <see cref="IsTrusted"/> yang tersimpan.</summary>
+        public static void LupakanKepercayaan()
+        {
+            lock (_kunciPercaya) { _adaJawaban = false; }
+        }
+
+        static bool HitungKepercayaan()
+        {
+            string sidik;
+            try
+            {
+                // Dibuang sesudah dipakai: X509Certificate2 memegang sumber daya
+                // tak terkelola, dan properti ini dibaca berkali-kali per menit.
+                using (var punya = new X509Certificate2(CrtPath)) sidik = punya.Thumbprint;
+            }
+            catch { return false; }
+
+            foreach (var lokasi in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
+            {
+                try
+                {
+                    var store = new X509Store(StoreName.Root, lokasi);
+                    store.Open(OpenFlags.ReadOnly);
                     try
                     {
-                        var store = new X509Store(StoreName.Root, lokasi);
-                        store.Open(OpenFlags.ReadOnly);
-                        try
+                        foreach (var c in store.Certificates)
                         {
-                            foreach (var c in store.Certificates)
-                                if (string.Equals(c.Thumbprint, sidik, StringComparison.OrdinalIgnoreCase))
-                                    return true;
+                            bool sama = string.Equals(c.Thumbprint, sidik,
+                                                      StringComparison.OrdinalIgnoreCase);
+                            c.Dispose();
+                            if (sama) return true;
                         }
-                        finally { store.Close(); }
                     }
-                    catch { }
+                    finally { store.Close(); }
                 }
-                return false;
+                catch { }
             }
+            return false;
         }
 
         /// <summary>Pasang sertifikat ke Trusted Root Windows. Butuh hak admin.</summary>
@@ -121,6 +167,8 @@ namespace Phoron.Core
             if (!Exists) return "Sertifikat belum dibuat.";
             if (!HostsFile.IsAdmin()) return "Perlu menjalankan Phoron sebagai Administrator.";
             var res = Shell.Run("certutil.exe", "-addstore -f Root \"" + CrtPath + "\"", Paths.Root, 60000);
+            // Jawaban lama tidak berlaku lagi - gudangnya baru saja berubah.
+            LupakanKepercayaan();
             return res.Ok ? null : "certutil gagal: " + res.All;
         }
     }

@@ -43,7 +43,22 @@ namespace Phoron.App
             // Dua salinan Phoron berarti dua Apache berebut port 80 dan dua
             // penulis berkas konfigurasi yang sama. Instans kedua langsung keluar.
             bool baru;
-            _single = new Mutex(true, "Phoron.SingleInstance", out baru);
+            bool tertutup = false;
+            try
+            {
+                _single = ObjekAntarProses.BuatMutex("Phoron.SingleInstance", true, out baru);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Mutexnya ADA, hanya tidak bisa dibuka proses ini - lazimnya
+                // karena Phoron yang berjalan dinaikkan haknya oleh versi lama
+                // yang belum memberi izin apa pun pada objek bernamanya.
+                // Tanpa penjaga ini, menekan ikon taskbar berakhir di kotak
+                // galat: sudah ada yang berjalan, tapi jalur sopannya tidak
+                // pernah tercapai.
+                baru = false;
+                tertutup = true;
+            }
             if (!baru)
             {
                 // Tetapi menekan ikon Phoron di taskbar sementara Phoron sudah
@@ -51,7 +66,13 @@ namespace Phoron.App
                 // Yang dimaksud pengguna jelas: "tampilkan Phoron". Salinan
                 // kedua membangunkan yang pertama lalu keluar tanpa sepatah kata.
                 if (BangunkanYangSudahJalan()) return 0;
-                MessageBox.Show("Phoron sudah berjalan. Lihat ikonnya di baki sistem (system tray).",
+                MessageBox.Show(
+                    "Phoron sudah berjalan. Lihat ikonnya di baki sistem (system tray)."
+                    + (tertutup
+                        ? Environment.NewLine + Environment.NewLine
+                          + "Phoron yang berjalan tampaknya dijalankan sebagai Administrator, "
+                          + "jadi jendelanya hanya bisa dimunculkan lewat ikon itu."
+                        : ""),
                     "Phoron", MessageBoxButton.OK, MessageBoxImage.Information);
                 return 0;
             }

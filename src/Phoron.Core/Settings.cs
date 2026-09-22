@@ -29,6 +29,23 @@ namespace Phoron.Core
         /// http://localhost/nama-proyek/ sudah bekerja tanpa syarat apa pun.
         /// </summary>
         public bool AutoVhost = false;
+        /// <summary>
+        /// Menyalakan opcache - penyinggah kode PHP yang sudah diurai.
+        ///
+        /// Bawaannya HIDUP, dan sengaja TIDAK ikut daftar ekstensi profil.
+        /// Daftar itu adalah keadaan komputer tempat profilnya dibuat; kalau
+        /// opcache dimasukkan ke sana, profil yang sudah terlanjur ada tidak
+        /// akan ikut berubah - padahal justru merekalah yang paling merasakan
+        /// bedanya.
+        ///
+        /// Tanpa ini setiap permintaan halaman mengurai ulang seluruh kerangka
+        /// kerja dari nol, berulang-ulang, tanpa satu pun berkas berubah.
+        ///
+        /// Yang membuatnya tetap aman untuk ngoding ada di ConfigWriter:
+        /// validate_timestamps=1 dan revalidate_freq=0. Alasannya ditulis di
+        /// sana, dan bukan hiasan.
+        /// </summary>
+        public bool Opcache = true;
         public bool ManageHosts = true;     // sinkronkan berkas hosts (butuh admin)
         /// <summary>
         /// Tulis php.ini langsung ke folder PHP, bukan ke etc\php\&lt;versi&gt;\.
@@ -142,6 +159,7 @@ namespace Phoron.Core
             // phoron.ini miliknya sudah memuat auto_vhost, jadi nilainya dibaca
             // dari sana - yang berubah hanya pemasangan baru.
             s.AutoVhost = ini.GetBool("umum", "auto_vhost", false);
+            s.Opcache = ini.GetBool("umum", "opcache", true);
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
@@ -218,6 +236,7 @@ namespace Phoron.Core
             ini.Set("umum", "auto_start", AutoStartServices ? "1" : "0");
             ini.Set("umum", "minimize_ke_tray", MinimizeToTray ? "1" : "0");
             ini.Set("umum", "auto_vhost", AutoVhost ? "1" : "0");
+            ini.Set("umum", "opcache", Opcache ? "1" : "0");
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");

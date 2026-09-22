@@ -22,18 +22,22 @@ namespace Phoron.Core
             var list = new List<Profile>();
             foreach (var f in Directory.GetFiles(Paths.Profiles, "*.ini").OrderBy(x => x))
             {
-                try { list.Add(Load(f)); }
-                catch (Exception ex)
+                // Dibaca SEKALI. Dulu tiap berkas profil dibaca dua kali - sekali
+                // untuk isinya lewat Load(), sekali lagi untuk memeriksa apakah
+                // ia cacat - padahal satu pembacaan sudah memberi keduanya.
+                var periksa = Ini.Baca(f);
+                if (periksa.GagalBaca)
                 {
                     if (keluhan != null)
                         keluhan.Add("Profil " + Path.GetFileName(f) + " tidak terbaca ("
-                                    + ex.Message + "), jadi dilewati.");
+                                    + (periksa.Sebab != null ? periksa.Sebab.Message : "sebab tidak diketahui")
+                                    + "), jadi dilewati.");
                     continue;
                 }
+                list.Add(Dari(periksa.Isi, f));
 
-                // Terbaca, tapi isinya cacat: dikarantina sebelum sesuatu
-                // menimpanya dengan nilai bawaan.
-                var periksa = Ini.Baca(f);
+                // Terbaca, tapi isinya cacat: dikeluhkan supaya tidak diam-diam
+                // ditimpa dengan nilai bawaan.
                 if (periksa.Rusak && keluhan != null)
                     keluhan.Add("Profil " + Path.GetFileName(f) + " ada yang tidak terbaca: "
                                 + string.Join("; ", periksa.Keluhan.ToArray()));
@@ -43,7 +47,12 @@ namespace Phoron.Core
 
         public static Profile Load(string path)
         {
-            var ini = Ini.Load(path);
+            return Dari(Ini.Load(path), path);
+        }
+
+        /// <summary>Bentuk sebuah profil dari isi ini yang SUDAH dibaca.</summary>
+        static Profile Dari(Ini ini, string path)
+        {
             var p = new Profile
             {
                 FileName = Path.GetFileNameWithoutExtension(path),

@@ -162,15 +162,13 @@ namespace Phoron.App.Pages
                 {
                     var par = new Paragraph { Margin = new Thickness(0) };
                     var run = new Run(baris);
-                    var heks = LogWarna.Heks(LogWarna.Golongkan(baris));
-                    if (heks.Length > 0)
+                    // Kuas beku yang dipakai bersama panel Aktivitas - lihat KuasLog.
+                    var jenis = LogWarna.Golongkan(baris);
+                    var kuas = KuasLog.Untuk(jenis);
+                    if (kuas != null)
                     {
-                        run.Foreground = new SolidColorBrush(
-                            (Color)ColorConverter.ConvertFromString(heks));
-                        // Galat ditebalkan juga: warna saja tidak cukup bagi yang
-                        // sulit membedakan merah dan hijau.
-                        if (heks == LogWarna.Heks(JenisPesan.Galat))
-                            run.FontWeight = FontWeights.SemiBold;
+                        run.Foreground = kuas;
+                        if (KuasLog.Tebal(jenis)) run.FontWeight = FontWeights.SemiBold;
                     }
                     par.Inlines.Add(run);
                     dok.Blocks.Add(par);
@@ -195,9 +193,24 @@ namespace Phoron.App.Pages
 
         // -------------------------------------------------------------- Kejadian
 
+        int _keluaranTertunda;
+
+        /// <summary>
+        /// Satu baris keluaran dari server pengembangan Node.
+        ///
+        /// Pemanggilnya utas pembaca keluaran proses itu, jadi ia TIDAK ditahan:
+        /// Invoke di sini berarti setiap baris yang dicetak Vite atau Next
+        /// menunggu utas layar selesai menggambar dulu.
+        ///
+        /// Barisnya sendiri harus masuk antrian satu per satu - tidak ada yang
+        /// boleh hilang. Yang digabung penggambarannya: alat semacam ini
+        /// mencetak puluhan baris sekaligus saat menyala, dan menggambar ulang
+        /// seluruh panel untuk tiap barisnya hanya membuang kerja yang
+        /// hasilnya tidak pernah sempat terlihat.
+        /// </summary>
         void OnOutput(string folder, string baris)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 Queue<string> q;
                 if (!_log.TryGetValue(folder, out q)) _log[folder] = q = new Queue<string>();
@@ -207,19 +220,40 @@ namespace Phoron.App.Pages
                 while (q.Count > 400) q.Dequeue();
                 var a = Terpilih();
                 if (a != null && string.Equals(a.Path, folder, StringComparison.OrdinalIgnoreCase))
-                    TampilkanLog(folder);
-            });
+                    MintaGambarUlang(folder);
+            }));
         }
 
-        void OnState(string folder, bool jalan) { Dispatcher.Invoke(Isi); }
+        /// <summary>
+        /// Minta panel keluaran digambar ulang, sekali saja walau dimintai
+        /// berkali-kali sebelum sempat menggambar.
+        /// </summary>
+        void MintaGambarUlang(string folder)
+        {
+            if (System.Threading.Interlocked.Exchange(ref _keluaranTertunda, 1) == 1) return;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    System.Threading.Interlocked.Exchange(ref _keluaranTertunda, 0);
+                    // Folder yang terpilih bisa sudah berganti selagi permintaan
+                    // ini mengantre; yang digambar harus yang sedang dilihat.
+                    var a = Terpilih();
+                    if (a != null && string.Equals(a.Path, folder, StringComparison.OrdinalIgnoreCase))
+                        TampilkanLog(folder);
+                }));
+        }
+
+        void OnState(string folder, bool jalan) { Dispatcher.BeginInvoke(new Action(Isi)); }
 
         void OnUrl(string folder, string url)
         {
-            Dispatcher.Invoke(() =>
+            // Peristiwa ini datang dari utas pembaca keluaran proyek Node, sama
+            // seperti OnOutput - jadi ia juga tidak boleh ditahan.
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 _e.Say(Lang.T("Proyek {0} siap di {1}", Path.GetFileName(folder.TrimEnd('\\')), url));
                 Isi();
-            });
+            }));
         }
 
         void Daftar_Changed(object sender, SelectionChangedEventArgs e)

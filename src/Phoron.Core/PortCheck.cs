@@ -69,12 +69,18 @@ namespace Phoron.Core
             {
                 try
                 {
-                    var proc = Process.GetProcessById(u.Pid);
-                    u.ProcessName = proc.ProcessName;
-                    // Bisa gagal untuk proses milik pengguna lain atau yang
-                    // berhak lebih tinggi; namanya saja sudah cukup berguna.
-                    try { u.Jalur = proc.MainModule.FileName; }
-                    catch { }
+                    // Dibuang sesudah dipakai. Process memegang pegangan sistem,
+                    // dan pemeriksaan ini berjalan di tiap penyegaran - pegangan
+                    // yang tidak pernah dilepas hanya menunggu pemungut sampah
+                    // yang mungkin tidak pernah datang.
+                    using (var proc = Process.GetProcessById(u.Pid))
+                    {
+                        u.ProcessName = proc.ProcessName;
+                        // Bisa gagal untuk proses milik pengguna lain atau yang
+                        // berhak lebih tinggi; namanya saja sudah cukup berguna.
+                        try { u.Jalur = proc.MainModule.FileName; }
+                        catch { }
+                    }
                 }
                 catch { }
             }
@@ -87,12 +93,40 @@ namespace Phoron.Core
         /// P/Invoke GetExtendedTcpTable - jauh lebih banyak kode untuk informasi
         /// yang hanya dipakai di pesan kesalahan.
         /// </summary>
+        // Keluaran netstat yang baru saja diambil.
+        //
+        // Satu penyegaran memeriksa beberapa port sekaligus - 80, 443, 3306 -
+        // dan tanpa singgahan ini tiap port melahirkan SATU PROSES ANAK sendiri.
+        // Menjalankan netstat tiga kali dalam sekejap untuk membaca tabel yang
+        // sama persis tidak ada gunanya.
+        //
+        // Umurnya sengaja pendek. Nilai ini hanya dipakai untuk memberi tahu
+        // orang siapa pemegang port yang menghalangi, dan keterangan yang
+        // terlambat satu detik masih benar; yang tidak boleh adalah menahannya
+        // sampai sesudah proses itu ditutup.
+        static readonly object _kunciPid = new object();
+        static string _netstatTerakhir;
+        static DateTime _netstatWaktu = DateTime.MinValue;
+        static readonly TimeSpan UmurNetstat = TimeSpan.FromSeconds(2);
+
+        static string TabelNetstat()
+        {
+            lock (_kunciPid)
+            {
+                if (_netstatTerakhir != null && DateTime.UtcNow - _netstatWaktu < UmurNetstat)
+                    return _netstatTerakhir;
+                var res = Shell.Run("netstat.exe", "-ano -p tcp", Paths.Root, 10000);
+                _netstatTerakhir = res.StdOut ?? "";
+                _netstatWaktu = DateTime.UtcNow;
+                return _netstatTerakhir;
+            }
+        }
+
         static int FindPid(int port)
         {
             try
             {
-                var res = Shell.Run("netstat.exe", "-ano -p tcp", Paths.Root, 10000);
-                foreach (var line in res.StdOut.Split('\n'))
+                foreach (var line in TabelNetstat().Split('\n'))
                 {
                     var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length < 5) continue;

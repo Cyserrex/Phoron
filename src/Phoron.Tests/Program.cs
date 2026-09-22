@@ -27,6 +27,11 @@ namespace Phoron.Tests
             if (args.Length > 0 && args[0].Equals("live", StringComparison.OrdinalIgnoreCase))
                 return LiveTest.Jalankan();
 
+            // Dipanggil oleh UjiObjekAntarProses: harness ini menjalankan dirinya
+            // sendiri dengan hak Low, dan anak itu melapor lewat kode keluar.
+            if (args.Length > 0 && args[0] == ArgumenBukaEvent)
+                return CobaBukaEvent(args);
+
             // Semua uji jalan di folder sementara supaya instalasi Phoron milik
             // pengguna tidak pernah tersentuh.
             var sandbox = Path.Combine(Path.GetTempPath(), "phoron-tests-" + Guid.NewGuid().ToString("N").Substring(0, 8));
@@ -78,6 +83,10 @@ namespace Phoron.Tests
                 UjiBalapLayanan();
                 UjiUmpanAtom();
                 UjiSalinanKedua();
+                UjiObjekAntarProses();
+                UjiOpcache();
+                UjiPanelLog();
+                UjiFastCgi();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();

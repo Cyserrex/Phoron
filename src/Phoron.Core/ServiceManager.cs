@@ -311,6 +311,22 @@ namespace Phoron.Core
             // php-cgi memutar ulang dirinya setelah sekian permintaan; nilai bawaan
             // 500 membuat pekerja mati di tengah pengembangan dan Apache membalas 503.
             env["PHP_FCGI_MAX_REQUESTS"] = "0";
+            // Tanpa ini hanya ADA SATU responder, dan permintaan .php dilayani
+            // satu per satu: halaman dengan beberapa panggilan AJAX terasa
+            // tersendat tanpa sebab yang kelihatan di mana pun.
+            //
+            // Diukur di mesin pengembang, sepuluh permintaan serentak ke berkas
+            // yang tidur satu detik: 10,1 detik dengan satu responder, 3,0 detik
+            // dengan empat pekerja.
+            //
+            // Kebiasaan umum menyebut variabel ini tidak berlaku di Windows
+            // karena pekerjanya lahir lewat fork(). Itu keliru, dan sudah
+            // dibuktikan: php-cgi.exe 8.3 memang melahirkan empat proses anak,
+            // dan keempatnya benar-benar melayani bersamaan.
+            //
+            // Anak-anak itu ikut mati bersama induknya - StopFastCgi memakai
+            // KillTree, bukan Kill.
+            env["PHP_FCGI_CHILDREN"] = "4";
             var p = Spawn(exe, "-b 127.0.0.1:" + port, php.Path, env, "php-cgi");
             if (p == null) return false;
             PasangFcgi(p);

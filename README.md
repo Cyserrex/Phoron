@@ -363,10 +363,25 @@ oleh httpd VS16 — dan gagalnya berupa Apache yang mati seketika tanpa pesan ya
 menjelaskan. Phoron memasangkan otomatis berdasarkan toolset, dan memperingatkan
 kalau Anda memilih kombinasi yang berbeda.
 
+**opcache menyala secara bawaan.** Tanpa itu setiap permintaan halaman mengurai
+ulang seluruh kerangka kerja dari nol. Diukur pada satu permintaan CodeIgniter di
+mesin pengembang: 34,8 ms jadi 17,0 ms. Disetelnya `opcache.validate_timestamps=1`
+dan `opcache.revalidate_freq=0`, sehingga berkas yang Anda simpan langsung berlaku
+pada permintaan berikutnya — tanpa jeda dan tanpa menyalakan ulang apa pun. Bisa
+dimatikan di **Pengaturan**.
+
 **PHP NTS dilayani lewat FastCGI.** Build Non Thread Safe tidak punya modul Apache.
 Phoron mendeteksinya dari ada/tidaknya `php*apache2_4.dll`, lalu menjalankan
 `php-cgi.exe` sebagai proses terpisah dan mengarahkan Apache ke sana lewat
-`mod_proxy_fcgi`.
+`mod_proxy_fcgi`. Empat pekerja dijalankan sekaligus (`PHP_FCGI_CHILDREN`), jadi
+permintaan `.php` tidak mengantre satu per satu: sepuluh permintaan serentak ke
+berkas yang tidur satu detik selesai dalam 3 detik, bukan 10.
+
+Dua hal di jalur ini khas Windows, dan tanpa keduanya tidak satu pun berkas `.php`
+bisa dibuka. Alamat FastCGI-nya harus diakhiri garis miring — Apache menyambung
+jalur berkas langsung ke belakangnya, dan jalur Windows diawali `C:`, bukan `/`.
+Dan `SCRIPT_FILENAME` harus disetel sendiri lewat `ProxyFCGISetEnvIf`; kalau tidak,
+yang dikirim ke PHP justru seluruh alamat proxy itu.
 
 **httpd.conf dibangun dari salinan pristine.** Basisnya `conf\original\httpd.conf`
 milik paket Apache, bukan `conf\httpd.conf` yang mungkin sudah diacak pengelola

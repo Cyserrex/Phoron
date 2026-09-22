@@ -40,10 +40,10 @@ namespace Phoron.Core
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
                                    BinPackage mysql, BinPackage nginx, List<Site> sites,
                                    bool phpIniKeFolderPhp = false, bool logAkses = true,
-                                   bool berandaDiAkar = true)
+                                   bool berandaDiAkar = true, bool opcache = true)
         {
             var r = new Result();
-            if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp);
+            if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp, opcache);
             // Dipilah menurut web server yang DIPILIH profil, bukan menurut
             // paket mana yang kebetulan tersedia.
             //
@@ -211,6 +211,24 @@ namespace Phoron.Core
             return null;
         }
 
+        /// <summary>
+        /// ProxyFCGISetEnvIf baru ada sejak Apache 2.4.26. Menuliskannya ke
+        /// Apache yang lebih tua bukan sekadar tidak berguna - direktif yang
+        /// tidak dikenal membuat httpd MENOLAK START sama sekali, dan yang
+        /// terlihat orang cuma "Apache tidak mau nyala".
+        ///
+        /// Versi yang tidak terbaca dianggap cukup baru: Apache yang dipaketkan
+        /// Phoron sendiri jauh di atas 2.4.26, dan menolak menulisnya berarti
+        /// PHP non-thread-safe pasti tidak jalan.
+        /// </summary>
+        static bool ProxyFcgiSetEnvIfAda(BinPackage apache)
+        {
+            if (apache == null) return true;
+            var v = apache.Parsed;
+            if (v == null || v.Major == 0) return true;
+            return v >= new Version(2, 4, 26);
+        }
+
         static IEnumerable<string> ApacheModules(BinPackage php)
         {
             var mods = new List<string> { "rewrite", "deflate", "expires", "headers", "ssl", "socache_shmcb", "vhost_alias" };
@@ -248,9 +266,30 @@ namespace Phoron.Core
                 // proses terpisah di port ini.
                 r.PhpFastCgi = true;
                 sb.AppendLine("# Build PHP ini NTS (tanpa modul Apache) - dilayani lewat FastCGI.");
+                sb.AppendLine("#");
+                sb.AppendLine("# DUA HAL DI BAWAH KHAS WINDOWS, DAN TANPA KEDUANYA TIDAK SATU PUN");
+                sb.AppendLine("# BERKAS .php BISA DIBUKA.");
+                sb.AppendLine("#");
+                sb.AppendLine("# Garis miring di akhir alamat. Apache menyambung jalur berkas langsung");
+                sb.AppendLine("# ke belakang alamat itu. Di Linux jalurnya diawali \"/\" sehingga yang");
+                sb.AppendLine("# terbentuk sah; di Windows ia diawali \"C:\", jadi jadinya");
+                sb.AppendLine("# \"fcgi://127.0.0.1:9123C:/...\" dan Apache menjawab 400 dengan");
+                sb.AppendLine("# keterangan \"URI cannot be parsed\" yang tidak menyebut PHP sama sekali.");
+                sb.AppendLine("#");
+                sb.AppendLine("# SCRIPT_FILENAME yang disetel sendiri. Dengan garis miring tadi, Apache");
+                sb.AppendLine("# mengirim SELURUH alamat proxy sebagai nama berkas yang harus dijalankan");
+                sb.AppendLine("# PHP - \"proxy:fcgi://127.0.0.1:9123/C:/...\" - dan php-cgi menjawab");
+                sb.AppendLine("# \"No input file specified\" untuk setiap permintaan.");
                 sb.AppendLine("<FilesMatch \\.php$>");
-                sb.AppendLine("    SetHandler \"proxy:fcgi://127.0.0.1:" + r.FastCgiPort + "\"");
+                sb.AppendLine("    SetHandler \"proxy:fcgi://127.0.0.1:" + r.FastCgiPort + "/\"");
                 sb.AppendLine("</FilesMatch>");
+                if (ProxyFcgiSetEnvIfAda(apache))
+                    sb.AppendLine("ProxyFCGISetEnvIf \"true\" SCRIPT_FILENAME \"%{DOCUMENT_ROOT}%{REQUEST_URI}\"");
+                else
+                    r.Warnings.Add("Apache " + (apache != null ? apache.Version : "ini")
+                        + " belum mengenal ProxyFCGISetEnvIf (ada sejak 2.4.26), jadi PHP "
+                        + "non-thread-safe tidak bisa dilayani lewat FastCGI di Windows. "
+                        + "Pilih build PHP thread-safe, atau Apache yang lebih baru.");
                 if (!File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
                     r.Warnings.Add("php-cgi.exe tidak ada di " + php.Id + "; PHP tidak akan jalan lewat Apache.");
             }
@@ -403,7 +442,7 @@ namespace Phoron.Core
         /// foldernya (dipakai PHPIniDir). php.ini di dalam folder bin tidak disentuh.
         /// </summary>
         public static string WritePhpIni(Profile profile, BinPackage php, Result r,
-                                         bool keFolderPhp = false)
+                                         bool keFolderPhp = false, bool opcache = true)
         {
             var dir = keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Id);
             Directory.CreateDirectory(dir);
@@ -454,6 +493,8 @@ namespace Phoron.Core
                 set["curl.cainfo"] = "\"" + Paths.Fwd(cacert) + "\"";
                 set["openssl.cafile"] = "\"" + Paths.Fwd(cacert) + "\"";
             }
+            if (opcache && AdaOpcache(php)) foreach (var kv in SetelanOpcache) set[kv.Key] = kv.Value;
+            // Ditaruh SESUDAH setelan opcache: profil tetap berhak menimpanya.
             foreach (var kv in profile.PhpIniOverrides) set[kv.Key] = kv.Value;
 
             var applied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -567,6 +608,20 @@ namespace Phoron.Core
                     ? "zend_extension" : "extension";
                 sb.AppendLine(directive + " = " + ExtensionValue(php, ext));
             }
+
+            // opcache dimuat TERPISAH dari daftar profil. Kalau ia diperlakukan
+            // sebagai ekstensi biasa, hanya profil yang dibuat sesudah hari ini
+            // yang memuatnya - sedangkan profil yang sudah ada milik orang tetap
+            // mengurai ulang seluruh kerangka kerjanya tiap permintaan, dan tidak
+            // ada di layar yang menjelaskan kenapa.
+            bool sudahDidaftar = daftarExt.Any(x => x.Equals("opcache", StringComparison.OrdinalIgnoreCase));
+            if (opcache && !sudahDidaftar && AdaOpcache(php))
+            {
+                sb.AppendLine();
+                sb.AppendLine("; --- opcache (setelan Phoron, bukan daftar ekstensi profil) ---");
+                sb.AppendLine("zend_extension = " + ExtensionValue(php, "opcache"));
+            }
+
             WriteIfChanged(target, sb.ToString());
             return dir;
         }
@@ -674,6 +729,47 @@ namespace Phoron.Core
             if (php == null) return new List<string>();
             return EkstensiAktif(PhpIniTemplate(php));
         }
+
+        /// <summary>Apakah build PHP ini membawa php_opcache.dll.</summary>
+        public static bool AdaOpcache(BinPackage php)
+        {
+            if (php == null || string.IsNullOrEmpty(php.Path)) return false;
+            try { return File.Exists(Path.Combine(php.Path, Path.Combine("ext", "php_opcache.dll"))); }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Setelan opcache yang dipakai Phoron.
+        ///
+        /// DUA BARIS TERAKHIR ADALAH SYARATNYA, BUKAN HIASAN. Bawaan PHP
+        /// memeriksa ulang stempel waktu berkas paling sering sekali tiap dua
+        /// detik. Artinya berkas yang baru disimpan bisa belum berlaku saat
+        /// halamannya dimuat ulang - orang menyimpan, menyegarkan, dan melihat
+        /// kode lamanya. Dari situlah datangnya keluhan "opcache merusak
+        /// lingkungan ngoding saya".
+        ///
+        /// Dengan revalidate_freq = 0, PHP memeriksa stempel waktu pada SETIAP
+        /// permintaan: simpan, muat ulang, langsung berlaku. Yang dihemat tetap
+        /// utuh, sebab yang mahal bukan memeriksa tanggal satu berkas melainkan
+        /// mengurai ulang isinya.
+        ///
+        /// Menyetel salah satu dari keduanya ke nilai lain - demi angka tolok
+        /// ukur yang lebih cantik - akan menukar beberapa milidetik dengan
+        /// kebingungan yang sungguhan. Ada uji yang menjaganya.
+        /// </summary>
+        static readonly Dictionary<string, string> SetelanOpcache =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "opcache.enable", "1" },
+                // CLI dibiarkan mati: umurnya sependek satu perintah, jadi
+                // singgahannya tidak pernah sempat dipakai lagi.
+                { "opcache.enable_cli", "0" },
+                { "opcache.memory_consumption", "128" },
+                { "opcache.interned_strings_buffer", "8" },
+                { "opcache.max_accelerated_files", "10000" },
+                { "opcache.validate_timestamps", "1" },
+                { "opcache.revalidate_freq", "0" },
+            };
 
         /// <summary>
         /// Daftar baku untuk build PHP yang php.ini-nya belum mengaktifkan apa

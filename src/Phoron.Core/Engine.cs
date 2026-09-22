@@ -414,7 +414,7 @@ namespace Phoron.Core
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>(),
                                            Settings.PhpIniKeFolderPhp, Settings.LogRinci,
-                                           Settings.BerandaDiAkar);
+                                           Settings.BerandaDiAkar, Settings.Opcache);
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.
@@ -438,11 +438,19 @@ namespace Phoron.Core
                     + " ekstensi dari php.ini yang sudah ada: "
                     + string.Join(", ", Active.PhpExtensions) + ".");
             }
-            // Dipindai ulang SETELAH vhost ditulis. Pemindaian di atas terjadi
-            // sebelum berkasnya ada, jadi kolom "vhost" di halaman Situs akan
-            // menunjukkan "-" untuk semua situs padahal berkasnya baru saja dibuat.
-            RefreshSites();
             if (Settings.ManageHosts) SyncHosts(LastBuild.Warnings);
+            // Dipindai ulang SETELAH vhost ditulis DAN sesudah berkas hosts
+            // disinkronkan - sekali saja, di sini. Pemindaian sebelum Build
+            // terjadi saat kedua hal itu belum terjadi, jadi kolom "vhost" dan
+            // "hosts" di halaman Situs akan menunjukkan "-" untuk semua situs
+            // padahal keduanya baru saja ditulis.
+            //
+            // Dulu ada tiga pemindaian di satu Apply: satu sebelum Build, satu
+            // di sini, dan satu lagi di dalam SyncHosts - dua di antaranya
+            // beruntun tanpa apa pun berubah di sela. Tiap pemindaian membaca
+            // seluruh berkas hosts dan menyentuh belasan berkas per folder
+            // proyek.
+            RefreshSites();
             foreach (var w in LastBuild.Warnings) Say("Peringatan: " + w);
             Say("Konfigurasi profil \"" + Active.Name + "\" ditulis ulang.");
             return LastBuild.Warnings;
@@ -595,7 +603,8 @@ namespace Phoron.Core
                            .Where(n => !string.IsNullOrWhiteSpace(n) && n != "localhost").ToList()
                     : new List<string>();
                 HostsFile.Sync(names);
-                RefreshSites();
+                // Pemindaian ulangnya urusan Apply, yang memanggil ini: di sana
+                // ia dilakukan sekali untuk vhost dan hosts sekaligus.
             }
             catch (UnauthorizedAccessException)
             {

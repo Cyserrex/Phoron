@@ -30,10 +30,41 @@ namespace Phoron.App.Pages
             RefreshState();
         }
 
-        // Barisnya sudah dicatat Engine sebelum pendengar ini dipanggil; di
-        // sini tinggal menggambar ulang. Kotak ini untuk melihat sekilas -
-        // riwayat lengkapnya ada di halaman Log.
-        void OnLog(string text) { Dispatcher.Invoke(GambarLog); }
+        int _logTertunda;
+
+        /// <summary>
+        /// Barisnya sudah dicatat Engine sebelum pendengar ini dipanggil; di
+        /// sini tinggal menggambar ulang. Kotak ini untuk melihat sekilas -
+        /// riwayat lengkapnya ada di halaman Log.
+        ///
+        /// DUA HAL YANG DULU SALAH DI SATU BARIS INI.
+        ///
+        /// Pertama, Invoke MEMBLOKIR pemanggilnya, dan pemanggilnya adalah utas
+        /// yang membaca keluaran httpd dan mysqld. Selama panel ini menggambar,
+        /// utas itu berhenti membaca - dan kalau utas layar sedang sibuk, ia
+        /// berhenti lebih lama lagi. BeginInvoke tidak menunggu siapa pun.
+        ///
+        /// Kedua, tiap baris memicu satu penggambaran ulang penuh. mysqld
+        /// mencetak belasan baris beruntun tiap kali menyala, masing-masing
+        /// menggambar ulang dua ratus paragraf yang hampir seluruhnya sama -
+        /// dan hanya gambar yang terakhir yang sempat dilihat mata. Sekarang
+        /// permintaan yang datang selagi satu penggambaran masih mengantre
+        /// ikut menumpang padanya, jadi satu semburan cukup sekali gambar.
+        /// </summary>
+        void OnLog(string text)
+        {
+            // Sudah ada yang mengantre - biarkan ia yang menggambar.
+            if (System.Threading.Interlocked.Exchange(ref _logTertunda, 1) == 1) return;
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                new Action(() =>
+                {
+                    // Dilepas SEBELUM menggambar: baris yang datang di tengah
+                    // penggambaran harus bisa memesan giliran berikutnya, bukan
+                    // hilang diam-diam.
+                    System.Threading.Interlocked.Exchange(ref _logTertunda, 0);
+                    GambarLog();
+                }));
+        }
 
         /// <summary>
         /// Menggambar ulang seluruh panel Aktivitas dengan warna per baris.
@@ -70,22 +101,17 @@ namespace Phoron.App.Pages
                 var isi = baris.Teks;
 
                 if (jam.Length > 0)
-                    // Abu-abu nada tengah, bukan Opacity: Run memang tidak punya
-                    // Opacity, dan abu-abu ini terbaca di tema terang maupun gelap.
-                    par.Inlines.Add(new Run(jam)
-                    {
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8A, 0x8A)),
-                    });
+                    par.Inlines.Add(new Run(jam) { Foreground = KuasLog.Jam });
 
                 var run = new Run(isi);
-                var heks = LogWarna.Heks(LogWarna.Golongkan(isi));
-                if (heks.Length > 0)
+                // Kuasnya diambil dari daftar yang sudah beku, bukan dirakit
+                // ulang per baris - lihat KuasLog.
+                var jenis = LogWarna.Golongkan(isi);
+                var kuas = KuasLog.Untuk(jenis);
+                if (kuas != null)
                 {
-                    run.Foreground = new SolidColorBrush(
-                        (Color)ColorConverter.ConvertFromString(heks));
-                    // Galat juga ditebalkan: warna saja tidak cukup bagi yang
-                    // sulit membedakan merah dan hijau.
-                    if (heks == LogWarna.Heks(JenisPesan.Galat)) run.FontWeight = FontWeights.SemiBold;
+                    run.Foreground = kuas;
+                    if (KuasLog.Tebal(jenis)) run.FontWeight = FontWeights.SemiBold;
                 }
                 par.Inlines.Add(run);
                 dok.Blocks.Add(par);
