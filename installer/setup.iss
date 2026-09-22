@@ -21,7 +21,7 @@
 ; ============================================================================
 
 #define MyAppName "Phoron"
-#define MyAppVersion "1.31.0"
+#define MyAppVersion "1.32.0"
 #define MyAppExeName "Phoron.exe"
 #define MyAppPublisher "Phoron"
 
@@ -105,6 +105,15 @@ en.LanguageName=English
 jv.LanguageName=Basa Jawa
 bjn.LanguageName=Bahasa Banjar
 
+[Types]
+Name: "penuh"; Description: "{cm:PasangPenuh}"
+Name: "ringkas"; Description: "{cm:PasangRingkas}"
+Name: "pilih"; Description: "{cm:PasangPilih}"; Flags: iscustom
+
+[Components]
+Name: "inti"; Description: "{cm:KomponenInti}"; Types: penuh ringkas pilih;     Flags: fixed
+Name: "heidisql"; Description: "{cm:KomponenHeidi}"; Types: penuh
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:IkonDesktop}"; GroupDescription: "{cm:TugasTambahan}"
 ; Menulis kunci Run yang sama persis dengan yang dipakai sakelar di halaman
@@ -118,6 +127,19 @@ Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Tanpa itu, di komputer yang hanya punya 4.0-4.7 aplikasinya tetap mulai lalu
 ; gagal di tengah dengan galat yang tidak menjelaskan apa pun.
 Source: "..\dist\{#MyAppExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
+
+; HeidiSQL - pengelola basis data grafis, program TERSENDIRI berlisensi GPL-2.0.
+; Phoron menjalankannya sebagai proses lain dan tidak menautnya, jadi ini
+; penggabungan dua program, bukan karya turunan. Teks lisensinya (gpl.txt) dan
+; keterangan sumbernya (HeidiSQL-SUMBER.txt) ikut terpasang - keduanya sudah ada
+; di dalam folder yang disiapkan installermbil_heidisql.ps1.
+;
+; Dipasang ke bin\heidisql supaya berada di tempat yang sama dengan paket biner
+; lain, dan supaya ikut ditemukan pencarian yang sudah dipakai Phoron.
+;
+; uninsneveruninstall TIDAK dipakai di sini: ini bukan pekerjaan pengguna,
+; melainkan barang bawaan - kalau Phoron dicopot, ia harus ikut bersih.
+Source: "heidisql\*"; DestDir: "{app}in\heidisql";     Flags: ignoreversion recursesubdirs createallsubdirs; Components: heidisql
 
 [InstallDelete]
 ; Panduan.md pernah ikut dipasang sampai versi 1.9.1. Markdown mentah tidak
@@ -402,6 +424,11 @@ bjn.SetupAborted=Pamasangan kada tuntung.%n%nBaiki masalahnya hanyar buka pamasa
 [CustomMessages]
 
 ; --- Tugas, ikon, dan tombol jalankan ---------------------------------------
+id.PasangPenuh=Lengkap (dengan HeidiSQL)
+id.PasangRingkas=Ringkas (tanpa HeidiSQL)
+id.PasangPilih=Pilih sendiri
+id.KomponenInti=Phoron
+id.KomponenHeidi=HeidiSQL - pengelola basis data grafis (GPL-2.0, ~47 MB)
 id.TugasTambahan=Pintasan tambahan:
 id.IkonDesktop=Buat ikon di Desktop
 id.JalanSaatBoot=Jalankan Phoron saat Windows dinyalakan (mengecil ke baki sistem)
@@ -409,6 +436,11 @@ id.FolderProyek=Folder proyek (www)
 id.HapusPhoron=Hapus Phoron
 id.JalankanSekarang=Jalankan Phoron sekarang
 
+en.PasangPenuh=Full (with HeidiSQL)
+en.PasangRingkas=Compact (without HeidiSQL)
+en.PasangPilih=Choose yourself
+en.KomponenInti=Phoron
+en.KomponenHeidi=HeidiSQL - graphical database manager (GPL-2.0, ~47 MB)
 en.TugasTambahan=Additional shortcuts:
 en.IkonDesktop=Create a Desktop icon
 en.JalanSaatBoot=Start Phoron when Windows starts (minimised to the system tray)
@@ -416,6 +448,11 @@ en.FolderProyek=Project folder (www)
 en.HapusPhoron=Uninstall Phoron
 en.JalankanSekarang=Run Phoron now
 
+jv.PasangPenuh=Jangkep (karo HeidiSQL)
+jv.PasangRingkas=Ringkes (tanpa HeidiSQL)
+jv.PasangPilih=Pilih dhewe
+jv.KomponenInti=Phoron
+jv.KomponenHeidi=HeidiSQL - pangelola basis data grafis (GPL-2.0, ~47 MB)
 jv.TugasTambahan=Pintasan tambahan:
 jv.IkonDesktop=Gawe ikon ing Desktop
 jv.JalanSaatBoot=Bukak Phoron nalika Windows urip (ngalih menyang baki sistem)
@@ -423,6 +460,11 @@ jv.FolderProyek=Folder proyek (www)
 jv.HapusPhoron=Busak Phoron
 jv.JalankanSekarang=Bukak Phoron saiki
 
+bjn.PasangPenuh=Langkap (lawan HeidiSQL)
+bjn.PasangRingkas=Ringkas (kadada HeidiSQL)
+bjn.PasangPilih=Pilih surang
+bjn.KomponenInti=Phoron
+bjn.KomponenHeidi=HeidiSQL - pangalola basis data grafis (GPL-2.0, ~47 MB)
 bjn.TugasTambahan=Pintasan tambahan:
 bjn.IkonDesktop=Gawi ikon di Desktop
 bjn.JalanSaatBoot=Hidupakan Phoron wayah Windows dihidupakan (mangacil ka baki sistem)

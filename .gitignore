@@ -22,3 +22,8 @@ installer/Output/
 
 .vs/
 *.user
+
+# HeidiSQL portabel: diunduh oleh installer/ambil_heidisql.ps1 saat build,
+# bukan disimpan di riwayat git - 28 MB biner milik orang lain akan ikut
+# terbawa selamanya di setiap klon dan tidak pernah bisa disusutkan lagi.
+installer/heidisql/

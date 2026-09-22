@@ -11,7 +11,7 @@ REM ============================================================
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
-set "VERSION=1.31.0"
+set "VERSION=1.32.0"
 set "SETUP=installer\Output\Phoron-%VERSION%-Setup.exe"
 
 rem Ikon dirakit ulang dari logo lebih dulu: installer dan exe harus memakai
@@ -20,6 +20,14 @@ rem klon bersih berkasnya memang belum ada sama sekali.
 if exist "assets\phoron-logo.png" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "assets\make_icon.ps1" >nul || goto :err
 )
+
+echo.
+rem HeidiSQL diambil lebih dulu - installer merujuk folder installer\heidisql,
+rem dan Inno gagal kalau folder itu belum ada. Skripnya melewatkan unduhan
+rem kalau versi yang sama sudah tersedia di sana.
+echo.
+echo === [0/3] Menyiapkan HeidiSQL ===
+powershell -NoProfile -ExecutionPolicy Bypass -File "installermbil_heidisql.ps1" || goto :err
 
 echo.
 echo === [1/3] Membangun Phoron.exe ===

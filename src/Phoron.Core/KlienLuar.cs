@@ -8,22 +8,26 @@ using System.Text;
 namespace Phoron.Core
 {
     /// <summary>
-    /// Membuka basis data profil aktif di pengelola basis data GRAFIS milik
-    /// orang lain - HeidiSQL, dan yang sekeluarga dengannya.
+    /// Membuka basis data profil aktif di HeidiSQL - pengelola basis data
+    /// grafis yang sekarang ikut dipasang bersama Phoron.
     ///
-    /// KENAPA ADA, PADAHAL PHORON SUDAH PUNYA TAB BASIS DATA SENDIRI. Keduanya
-    /// menjawab kebutuhan yang berbeda, dan itu bukan pengulangan. Tab bawaan
-    /// untuk pekerjaan sehari-hari yang harus cepat: lihat isi tabel, ubah satu
-    /// nilai, jalankan satu kueri - tanpa berpindah jendela dan tanpa menunggu
-    /// aplikasi lain menyala. HeidiSQL untuk pekerjaan yang memang lebih berat:
-    /// menyunting struktur kolom, memindahkan data antar-server, menjalankan
-    /// dump besar, memeriksa proses yang sedang jalan.
+    /// KENAPA PENJELAJAH BAWAAN DIBUANG. Phoron sempat punya tab penjelajah
+    /// sendiri: daftar tabel, isi tabel yang bisa disunting, struktur, kotak
+    /// SQL. Semuanya bekerja, tapi semuanya juga sudah ada di HeidiSQL dalam
+    /// bentuk yang jauh lebih lengkap - dan ditulis oleh orang yang memang
+    /// mengerjakan itu saja selama belasan tahun. Memelihara dua jalan untuk
+    /// hal yang sama berarti salah satunya pasti tertinggal, dan yang tertinggal
+    /// itulah yang akan dipakai orang tanpa tahu ia kalah lengkap.
     ///
-    /// YANG TIDAK DILAKUKAN: Phoron tidak ikut mengirimkan HeidiSQL. Ia dipakai
-    /// kalau MEMANG SUDAH ADA di komputer ini - bawaan Laragon, atau pemasangan
-    /// tersendiri. Menyertakannya berarti ikut menanggung pembaruan keamanannya
-    /// dan membengkakkan installer beberapa puluh megabyte untuk sesuatu yang
-    /// bukan milik Phoron.
+    /// Yang tinggal di Phoron hanyalah yang memang tugasnya: menyambungkan
+    /// HeidiSQL ke server milik PROFIL YANG SEDANG AKTIF, tanpa orang perlu
+    /// mengetik host, port, dan pengguna sendiri tiap kali berganti profil.
+    ///
+    /// LISENSI. HeidiSQL berlisensi GPL-2.0 dan tetap program TERSENDIRI:
+    /// Phoron menjalankannya sebagai proses lain, tidak menautnya. Itu
+    /// penggabungan dua program, bukan karya turunan, jadi lisensi Phoron tidak
+    /// ikut berubah. Teks lisensi dan alamat sumbernya ikut terpasang di
+    /// bin\heidisql.
     /// </summary>
     public static class KlienLuar
     {
@@ -56,6 +60,11 @@ namespace Phoron.Core
             }
 
             var calon = new List<string>();
+            // Salinan bawaan Phoron lebih dulu: itulah yang versinya dipatok dan
+            // sidiknya diperiksa saat installer dibangun. Salinan lain di
+            // komputer ini boleh saja lebih lama atau sudah disunting orang.
+            calon.Add(Path.Combine(Paths.Bin, "heidisql", "heidisql.exe"));
+
             var akarBin = setelan != null && setelan.BinRoots != null
                 ? setelan.BinRoots : new List<string>();
             foreach (var akar in akarBin)

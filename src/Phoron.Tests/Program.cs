@@ -79,7 +79,6 @@ namespace Phoron.Tests
                 UjiUmpanAtom();
                 UjiSalinanKedua();
                 UjiHsts();
-                UjiSqlPisah();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
                 UjiSqlLepasLolos();
@@ -87,13 +86,10 @@ namespace Phoron.Tests
                 UjiRahasia();
                 UjiSetelanBasisData(sandbox);
                 UjiSambunganBasisData(sandbox);
-                UjiMyIniMengikutiProfil(sandbox);
                 UjiKamusBanjar();
+                UjiArgumenHeidi();
+                UjiPaketHeidi();
                 UjiLabelTidakBentrok();
-                UjiSuntingMenolakTanpaKunci();
-                UjiBarisJadiInsert();
-                UjiCsvBasisData();
-                UjiRangkaInsert();
             }
             catch (Exception ex)
             {

@@ -17,66 +17,6 @@ namespace Phoron.Tests
     /// </summary>
     public static partial class Program
     {
-        static void UjiSqlPisah()
-        {
-            Bagian("Memecah SQL");
-
-            var a = MySqlKlien.Pisah("SELECT 1; SELECT 2");
-            Ok("Dua perintah dipisah", a.Count == 2, string.Join(" | ", a.ToArray()));
-
-            // Inilah sebab pemisah ini ditulis sama sekali. Memecah dengan
-            // Split(';') merusak setiap SQL yang memuat titik koma di dalam teks -
-            // dan alamat, jam, serta daftar berkoma sangat sering memuatnya.
-            var b = MySqlKlien.Pisah("INSERT INTO t VALUES ('a;b'); SELECT 1");
-            Ok("Titik koma di dalam kutipan bukan pemisah", b.Count == 2,
-               b.Count + ": " + string.Join(" | ", b.ToArray()));
-            Ok("Isi kutipan tetap utuh", b.Count == 2 && b[0].Contains("'a;b'"),
-               b.Count > 0 ? b[0] : "");
-
-            var c = MySqlKlien.Pisah("SELECT 'bukan '' penutup; masih di dalam'; SELECT 2");
-            Ok("Kutip ganda di dalam kutipan tidak menutup", c.Count == 2,
-               c.Count + ": " + string.Join(" | ", c.ToArray()));
-
-            var d = MySqlKlien.Pisah("SELECT `kolom;aneh` FROM t; SELECT 2");
-            Ok("Titik koma di dalam nama berkutip-balik bukan pemisah", d.Count == 2,
-               d.Count + ": " + string.Join(" | ", d.ToArray()));
-
-            var e = MySqlKlien.Pisah("SELECT 1; -- catatan; bukan perintah\nSELECT 2");
-            Ok("Titik koma di dalam komentar baris bukan pemisah", e.Count == 2,
-               e.Count + ": " + string.Join(" | ", e.ToArray()));
-
-            var f = MySqlKlien.Pisah("SELECT 1; /* catatan; panjang */ SELECT 2");
-            Ok("Titik koma di dalam komentar blok bukan pemisah", f.Count == 2,
-               f.Count + ": " + string.Join(" | ", f.ToArray()));
-
-            // "--" baru jadi komentar bila diikuti spasi. Tanpa aturan itu,
-            // pengurangan bilangan negatif akan tertelan sebagai komentar.
-            var g = MySqlKlien.Pisah("SELECT 5--3");
-            Ok("Tanda minus ganda tanpa spasi bukan komentar",
-               g.Count == 1 && g[0].Contains("5--3"),
-               g.Count > 0 ? g[0] : "kosong");
-
-            // Dua sisi dari aturan yang sama, dan pasangan inilah yang membuatnya
-            // berarti. Di SQL, \\ adalah satu garis miring - kutipannya tertutup,
-            // jadi titik koma sesudahnya memang memisah.
-            var h1 = MySqlKlien.Pisah(@"SELECT 'c:\\'; SELECT 2");
-            Ok("Garis miring ganda menutup kutipan, jadi titik koma memisah",
-               h1.Count == 2, h1.Count + ": " + string.Join(" | ", h1.ToArray()));
-
-            // Sedangkan \' adalah tanda kutip yang diloloskan - kutipannya BELUM
-            // tertutup, jadi titik koma sesudahnya masih di dalam teks. Harapan
-            // pertama saya di sini keliru, dan pemisahnya yang benar.
-            var h2 = MySqlKlien.Pisah(@"SELECT 'c:\'; SELECT 2");
-            Ok("Kutip yang diloloskan tidak menutup, jadi tidak ada pemisahan",
-               h2.Count == 1, h2.Count + ": " + string.Join(" | ", h2.ToArray()));
-
-            Ok("Titik koma beruntun tidak jadi perintah kosong",
-               MySqlKlien.Pisah("SELECT 1;;; SELECT 2").Count == 2);
-            Ok("Teks kosong tidak menghasilkan perintah",
-               MySqlKlien.Pisah("   \n  ").Count == 0);
-            Ok("Perintah tanpa titik koma di akhir tetap terbaca",
-               MySqlKlien.Pisah("SELECT 1").Count == 1);
-        }
 
         static void UjiSqlBerbaris()
         {
@@ -263,217 +203,96 @@ namespace Phoron.Tests
         }
 
         /// <summary>
-        /// my.ini harus mengikuti profilnya, bukan tertinggal di belakangnya.
+        /// Argumen yang dikirim ke HeidiSQL.
         ///
-        /// Ini menirukan persis keadaan yang ditemukan di mesin penulis: my.ini
-        /// bertanggal enam hari lebih tua daripada berkas profilnya, dengan
-        /// basedir yang masih menunjuk pemasangan MariaDB milik XAMPP padahal
-        /// yang berjalan MySQL. Akibatnya server memuat katalog pesan galat
-        /// milik MariaDB, nomor galatnya tidak cocok, dan SETIAP kesalahan SQL
-        /// dijawab "Unknown error 1146" tanpa keterangan apa pun - persis pada
-        /// saat orang paling butuh keterangan.
+        /// Yang paling penting dijaga: SANDI TIDAK PERNAH IKUT. Di Windows, baris
+        /// perintah sebuah proses bisa dibaca proses lain di sesi yang sama -
+        /// Task Manager pun menampilkannya. Phoron sudah menolak menaruh sandi di
+        /// baris perintah mysql.exe dan memakai berkas setelan sementara sebagai
+        /// gantinya; menaruhnya di sini berarti membatalkan keputusan itu lewat
+        /// pintu belakang, dan tidak akan ada yang menyadarinya.
         /// </summary>
-        static void UjiMyIniMengikutiProfil(string sandbox)
+        static void UjiArgumenHeidi()
         {
-            Bagian("my.ini mengikuti profil");
+            Bagian("Argumen HeidiSQL");
 
-            var dir = Path.Combine(sandbox, "myini");
-            var dulu = Paths.Root;
-            try
-            {
-                Directory.CreateDirectory(dir);
-                Paths.Root = dir;
+            var arg = KlienLuar.ArgumenHeidi("PHP 8.3 + Apache", 3307, "root");
+            Ok("Alamat selalu 127.0.0.1", arg.Contains("--host=\"127.0.0.1\""), arg);
+            Ok("Port profil ikut dikirim", arg.Contains("--port=3307"), arg);
+            Ok("Pengguna ikut dikirim", arg.Contains("--user=\"root\""), arg);
 
-                var bin = Path.Combine(dir, "binpalsu");
-                BuatPaket(bin, Path.Combine("php", "php-8.3.12-Win32-vs16-x64"), "php.exe");
-                BuatPaket(bin, Path.Combine("mysql", "mysql-5.7.38-winx64"),
-                          Path.Combine("bin", "mysqld.exe"));
-                BuatPaket(bin, Path.Combine("mysql", "mariadb-10.1.38-winx64"),
-                          Path.Combine("bin", "mysqld.exe"));
+            // Nama sesi menyebut profilnya: orang yang punya beberapa profil perlu
+            // tahu server mana yang sedang dibukanya.
+            Ok("Nama sesi menyebut profilnya",
+               arg.Contains("--description=\"Phoron: PHP 8.3 + Apache\""), arg);
 
-                File.WriteAllText(Paths.SettingsFile,
-                    "[umum]" + Environment.NewLine +
-                    "bin_roots=" + bin + Environment.NewLine +
-                    "profil_aktif=kerja" + Environment.NewLine +
-                    "kelola_hosts=0" + Environment.NewLine +
-                    "auto_vhost=0" + Environment.NewLine);
+            Ok("Sandi TIDAK pernah ikut",
+               arg.IndexOf("--password", StringComparison.OrdinalIgnoreCase) < 0, arg);
 
-                Directory.CreateDirectory(Paths.Profiles);
-                var berkasProfil = Path.Combine(Paths.Profiles, "kerja.ini");
-                File.WriteAllText(berkasProfil,
-                    "[profil]" + Environment.NewLine +
-                    "nama=Kerja" + Environment.NewLine +
-                    "php=php-8.3.12-Win32-vs16-x64" + Environment.NewLine +
-                    "web_server=apache" + Environment.NewLine +
-                    "apache=" + Environment.NewLine +
-                    "mysql=mariadb-10.1.38-winx64" + Environment.NewLine +
-                    "port_mysql=3306" + Environment.NewLine);
+            // Tanda kutip di dalam nama profil akan menutup argumennya lebih awal,
+            // dan sisanya dibaca HeidiSQL sebagai argumen tersendiri.
+            var nakal = KlienLuar.ArgumenHeidi("pro\"fil", 3306, "ro\"ot");
+            Ok("Tanda kutip di dalam nama dibuang, bukan diteruskan",
+               nakal.Split('"').Length % 2 == 1, nakal);
 
-                var e = new Engine();
-                e.Reload();
-                e.Apply();
-
-                var myIni = Path.Combine(Paths.EtcMysql, "my.ini");
-                Ok("my.ini tertulis", File.Exists(myIni));
-                var isi = File.ReadAllText(myIni);
-                Ok("basedir menunjuk paket yang disebut profil",
-                   isi.Contains("mariadb-10.1.38-winx64"), BarisIni(isi, "basedir"));
-
-                // Versinya diganti, persis seperti orang mengubahnya di layar
-                // Profil. Sesudah itu my.ini TIDAK BOLEH lagi menyebut yang lama:
-                // mysqld dijalankan dari paket baru tapi membaca berkas ini, dan
-                // basedir yang menunjuk paket lain adalah sumber "Unknown error".
-                e.Active.MySqlId = "mysql-5.7.38-winx64";
-                e.Apply();
-
-                isi = File.ReadAllText(myIni);
-                Ok("basedir ikut berubah saat versinya diganti",
-                   isi.Contains("mysql-5.7.38-winx64"), BarisIni(isi, "basedir"));
-                Ok("basedir tidak lagi menyebut paket yang lama",
-                   !isi.Contains("mariadb-10.1.38-winx64"), BarisIni(isi, "basedir"));
-
-                // datadir juga: tabel sistem MySQL 5.7 dan MariaDB 10.1 tidak
-                // saling baca, jadi folder data yang tertukar berarti server
-                // menolak start - atau, lebih buruk, start dengan data asing.
-                Ok("datadir ikut paket, bukan tertinggal",
-                   isi.Contains("mysql-5.7.38-winx64") && !isi.Contains("mariadb"),
-                   BarisIni(isi, "datadir"));
-
-                // Port juga datang dari profil, dan ini yang paling sering diubah.
-                e.Active.MySqlPort = 3310;
-                e.Apply();
-                isi = File.ReadAllText(myIni);
-                Ok("port ikut berubah", isi.Contains("port=3310"));
-            }
-            finally
-            {
-                Paths.Root = dulu;
-                try { Directory.Delete(dir, true); } catch { }
-            }
+            var tanpaNama = KlienLuar.ArgumenHeidi("", 3306, null);
+            Ok("Tanpa nama profil tetap punya nama sesi",
+               tanpaNama.Contains("--description=\"Phoron\""), tanpaNama);
+            Ok("Pengguna kosong jatuh ke root",
+               tanpaNama.Contains("--user=\"root\""), tanpaNama);
         }
 
         /// <summary>
-        /// Menyunting hanya boleh terjadi kalau barisnya bisa ditunjuk DENGAN PASTI.
+        /// Penyertaan HeidiSQL ke installer tidak boleh diam-diam rusak.
         ///
-        /// Tanpa kunci utama, satu-satunya cara menunjuk baris adalah mencocokkan
-        /// seluruh nilainya - dan pada tabel yang punya baris kembar, itu akan
-        /// mengubah baris yang salah tanpa ada yang tahu. Menolak lebih jujur
-        /// daripada menebak.
+        /// Skrip pengambil menyiapkan folder, dan setup.iss merujuk folder itu.
+        /// Kalau salah satunya berubah sendiri, installer TETAP terbangun - hanya
+        /// isinya yang kurang, dan itu baru ketahuan setelah ada yang memasangnya.
         /// </summary>
-        static void UjiSuntingMenolakTanpaKunci()
+        static void UjiPaketHeidi()
         {
-            Bagian("Menyunting tanpa kunci utama");
+            Bagian("Penyertaan HeidiSQL");
 
-            var baris = new Dictionary<string, MySqlSunting.Sel>
-            {
-                { "a", new MySqlSunting.Sel { Teks = "1" } },
-            };
+            var akar = AkarRepo();
+            var skrip = Path.Combine(akar, "installer", "ambil_heidisql.ps1");
+            var iss = Path.Combine(akar, "installer", "setup.iss");
+            Ok("Skrip pengambil ada", File.Exists(skrip), skrip);
+            Ok("setup.iss ada", File.Exists(iss), iss);
+            if (!File.Exists(skrip) || !File.Exists(iss)) return;
 
-            var u = MySqlSunting.UbahSel(null, "db", "t", new List<string>(), baris, "a", "2", false);
-            Ok("Ubah tanpa kunci utama ditolak", !u.Ok && u.Galat.Length > 0, u.Galat);
-            Ok("Ubah tanpa kunci utama tidak menyusun SQL apa pun", u.Sql == "", u.Sql);
+            var isiSkrip = File.ReadAllText(skrip);
+            var isiIss = File.ReadAllText(iss);
 
-            var d = MySqlSunting.HapusBaris(null, "db", "t", null, baris);
-            Ok("Hapus tanpa kunci utama ditolak", !d.Ok && d.Galat.Length > 0, d.Galat);
-            Ok("Hapus tanpa kunci utama tidak menyusun SQL apa pun", d.Sql == "", d.Sql);
+            // Versi dipatok, bukan "yang terbaru": isi installer tidak boleh
+            // berubah tanpa ada yang memutuskannya.
+            Ok("Versi HeidiSQL dipatok",
+               System.Text.RegularExpressions.Regex.IsMatch(isiSkrip, @"\$Versi\s*=\s*'[\d.]+'"),
+               "tidak ada $Versi tetap");
 
-            // Kunci yang nilainya kosong sama saja tidak menunjuk apa-apa.
-            var kosong = new Dictionary<string, MySqlSunting.Sel>
-            {
-                { "id", new MySqlSunting.Sel { Kosong = true } },
-            };
-            var u2 = MySqlSunting.UbahSel(null, "db", "t", new List<string> { "id" }, kosong,
-                                          "a", "2", false);
-            Ok("Kunci yang nilainya kosong ditolak", !u2.Ok, u2.Galat);
-        }
+            // Sidik diperiksa: berkas yang tertukar di tengah jalan harus
+            // menggagalkan build, bukan ikut terbungkus diam-diam.
+            Ok("Sidik SHA-256 dipatok",
+               System.Text.RegularExpressions.Regex.IsMatch(isiSkrip, @"\$Sidik\s*=\s*'[a-f0-9]{64}'"),
+               "tidak ada $Sidik 64 aksara");
+            Ok("Sidik benar-benar dibandingkan",
+               isiSkrip.Contains("-ne $Sidik") && isiSkrip.Contains("throw"),
+               "sidik dipatok tapi tidak diperiksa");
 
-        static void UjiBarisJadiInsert()
-        {
-            Bagian("Baris jadi INSERT");
+            // Kewajiban GPL: teks lisensi dan alamat sumbernya ikut terpasang.
+            Ok("Keterangan sumber ikut ditulis", isiSkrip.Contains("HeidiSQL-SUMBER.txt"));
+            Ok("Alamat kode sumber disebut", isiSkrip.Contains("github.com/HeidiSQL/HeidiSQL"));
 
-            var kolom = new List<string> { "id", "nama", "catatan" };
-            var baris = new[]
-            {
-                new MySqlSunting.Sel { Teks = "7" },
-                new MySqlSunting.Sel { Teks = "d'Angelo" },
-                new MySqlSunting.Sel { Kosong = true },
-            };
+            Ok("setup.iss memasang folder heidisql",
+               isiIss.Contains("heidisql\\*") && isiIss.Contains("bin\\heidisql"));
+            Ok("Komponen heidisql terdaftar", isiIss.Contains("Name: \"heidisql\";"));
 
-            var sql = MySqlSunting.BarisJadiInsert("orang", kolom, baris);
-            Ok("Nama tabel dan kolom dikutip balik",
-               sql.Contains("`orang`") && sql.Contains("`nama`"), sql);
-            // Tanpa penggandaan ini, nilai berisi tanda kutip menutup literalnya
-            // lebih awal dan sisanya ikut dijalankan sebagai SQL.
-            Ok("Kutip di dalam nilai digandakan", sql.Contains("'d''Angelo'"), sql);
-            // Sel yang kosong harus jadi NULL, bukan menjadi teks "NULL" -
-            // pembedaan ini baru mungkin karena kekosongan dibaca sebagai fakta.
-            Ok("Sel kosong jadi NULL tanpa kutip",
-               sql.Contains(", NULL)") && !sql.Contains("'NULL'"), sql);
-        }
-
-        static void UjiCsvBasisData()
-        {
-            Bagian("CSV basis data");
-
-            var kolom = new List<string> { "id", "nama", "catatan", "kosong" };
-            var baris = new List<MySqlSunting.Sel[]>
-            {
-                new[]
-                {
-                    new MySqlSunting.Sel { Teks = "1" },
-                    new MySqlSunting.Sel { Teks = "Budi, Santoso" },
-                    new MySqlSunting.Sel { Kosong = true },
-                    new MySqlSunting.Sel { Teks = "" },
-                },
-                new[]
-                {
-                    new MySqlSunting.Sel { Teks = "2" },
-                    new MySqlSunting.Sel { Teks = "dia bilang \"halo\"" },
-                    new MySqlSunting.Sel { Teks = "baris\nkedua" },
-                    new MySqlSunting.Sel { Teks = "NULL" },
-                },
-            };
-
-            var csv = MySqlSunting.Csv(kolom, baris);
-            Ok("Judul kolom ikut tertulis", csv.StartsWith("id,nama,catatan,kosong"), csv.Substring(0, 30));
-            Ok("Koma di dalam nilai membuatnya dikutip", csv.Contains("\"Budi, Santoso\""), csv);
-            Ok("Kutip ganda di dalam nilai digandakan",
-               csv.Contains("\"dia bilang \"\"halo\"\"\""), csv);
-            Ok("Ganti baris di dalam nilai membuatnya dikutip",
-               csv.Contains("\"baris\nkedua\""), csv);
-
-            // Inilah satu-satunya cara CSV membedakan keduanya, dan pembedaan itu
-            // baru ada artinya karena kekosongan dibaca dari kolom pendamping
-            // "IS NULL", bukan dikira-kira dari tulisannya.
-            Ok("Sel kosong ditulis tanpa apa pun", csv.Contains(",,\"\""), csv);
-            Ok("Teks kosong ditulis sebagai sepasang kutip", csv.Contains("\"\""), csv);
-            Ok("Teks berisi kata NULL tetap tertulis", csv.Contains("NULL"), csv);
-        }
-
-        static void UjiRangkaInsert()
-        {
-            Bagian("Rangka INSERT");
-
-            var kolom = new List<MySqlSkema.InfoKolom>
-            {
-                new MySqlSkema.InfoKolom { Nama = "id", Jenis = "int", Ekstra = "auto_increment",
-                                           Kosong = Lang.T("tidak") },
-                new MySqlSkema.InfoKolom { Nama = "nama", Jenis = "varchar(50)", Ekstra = "",
-                                           Kosong = Lang.T("tidak") },
-                new MySqlSkema.InfoKolom { Nama = "catatan", Jenis = "text", Ekstra = "",
-                                           Kosong = Lang.T("ya") },
-            };
-
-            var sql = MySqlSunting.RangkaInsert("orang", kolom);
-            // Kolom auto_increment sengaja tidak disebut: menyebutnya memaksa orang
-            // mengarang nilai untuk sesuatu yang justru tugas server mengisinya.
-            Ok("Kolom auto_increment tidak ikut disebut", !sql.Contains("`id`"), sql);
-            Ok("Kolom biasa ikut disebut", sql.Contains("`nama`") && sql.Contains("`catatan`"), sql);
-            Ok("Kolom yang boleh kosong diberi NULL", sql.Contains("NULL"), sql);
-            Ok("Perintahnya diakhiri titik koma", sql.TrimEnd().EndsWith(";"), sql);
-
-            Ok("Tabel tanpa kolom tidak menghasilkan apa pun",
-               MySqlSunting.RangkaInsert("t", new List<MySqlSkema.InfoKolom>()) == "");
+            // Barang bawaan, bukan pekerjaan pengguna - harus ikut bersih saat
+            // Phoron dicopot.
+            var barisFiles = isiIss.Replace("\r\n", "\n").Split('\n')
+                .FirstOrDefault(b => b.Contains("heidisql\\*"));
+            Ok("Folder HeidiSQL tidak ditandai jangan-pernah-dicopot",
+               barisFiles != null && !barisFiles.Contains("uninsneveruninstall"),
+               barisFiles ?? "");
         }
 
         /// <summary>
@@ -598,14 +417,6 @@ namespace Phoron.Tests
                 dir = dir.Parent;
             }
             return AppDomain.CurrentDomain.BaseDirectory;
-        }
-
-        /// <summary>Baris my.ini yang diawali kunci tertentu - dipakai sebagai keterangan saat uji gagal.</summary>
-        static string BarisIni(string isi, string kunci)
-        {
-            foreach (var b in (isi ?? "").Split('\n'))
-                if (b.Trim().StartsWith(kunci, StringComparison.OrdinalIgnoreCase)) return b.Trim();
-            return "(tidak ada " + kunci + ")";
         }
 
         /// <summary>

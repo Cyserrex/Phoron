@@ -279,117 +279,6 @@ namespace Phoron.Core
             return "'" + (teks ?? "").Replace("\\", "\\\\").Replace("'", "''") + "'";
         }
 
-        // ------------------------------------------------------- Pemisahan perintah
-
-        /// <summary>
-        /// Pecah teks SQL jadi perintah-perintah terpisah.
-        ///
-        /// Titik koma TIDAK bisa dipakai apa adanya sebagai pemisah: ia juga
-        /// muncul di dalam teks berkutip, di dalam nama berkutip-balik, dan di
-        /// dalam komentar. Memecah tanpa memperhatikan itu adalah cara paling
-        /// terkenal merusak SQL orang - satu alamat surel di dalam tanda kutip
-        /// sudah cukup.
-        /// </summary>
-        public static List<string> Pisah(string sql)
-        {
-            var hasil = new List<string>();
-            if (string.IsNullOrEmpty(sql)) return hasil;
-
-            var kini = new StringBuilder();
-            char kutip = '\0';          // ' " atau ` bila sedang di dalam kutipan
-            bool komentarBaris = false; // -- atau #, sampai ganti baris
-            bool komentarBlok = false;  // sampai */
-
-            for (int i = 0; i < sql.Length; i++)
-            {
-                char c = sql[i];
-                char depan = i + 1 < sql.Length ? sql[i + 1] : '\0';
-
-                if (komentarBaris)
-                {
-                    if (c == '\n') { komentarBaris = false; kini.Append(c); }
-                    continue;
-                }
-                if (komentarBlok)
-                {
-                    if (c == '*' && depan == '/') { komentarBlok = false; i++; }
-                    continue;
-                }
-                if (kutip != '\0')
-                {
-                    kini.Append(c);
-                    // Garis miring terbalik meloloskan aksara berikutnya, tapi
-                    // TIDAK di dalam nama berkutip-balik: di sana ia aksara biasa.
-                    if (c == '\\' && kutip != '`' && depan != '\0') { kini.Append(depan); i++; continue; }
-                    // '' di dalam '...' berarti satu tanda kutip, bukan penutup.
-                    if (c == kutip && depan == kutip) { kini.Append(depan); i++; continue; }
-                    if (c == kutip) kutip = '\0';
-                    continue;
-                }
-
-                if (c == '\'' || c == '"' || c == '`') { kutip = c; kini.Append(c); continue; }
-                if (c == '#') { komentarBaris = true; continue; }
-                // "--" baru jadi komentar bila diikuti spasi atau akhir baris;
-                // tanpa itu ia operator, seperti pada "5--3".
-                if (c == '-' && depan == '-'
-                    && (i + 2 >= sql.Length || char.IsWhiteSpace(sql[i + 2])))
-                { komentarBaris = true; i++; continue; }
-                if (c == '/' && depan == '*') { komentarBlok = true; i++; continue; }
-
-                if (c == ';')
-                {
-                    if (kini.ToString().Trim().Length > 0) hasil.Add(kini.ToString().Trim());
-                    kini.Clear();
-                    continue;
-                }
-                kini.Append(c);
-            }
-            if (kini.ToString().Trim().Length > 0) hasil.Add(kini.ToString().Trim());
-            return hasil;
-        }
-
-        /// <summary>
-        /// Apakah perintah ini mengembalikan baris? Ditentukan dari kata
-        /// pertamanya, setelah komentar di depan dibuang.
-        /// </summary>
-        public static bool Berbaris(string sql)
-        {
-            var t = (sql ?? "").TrimStart();
-            // Komentar di depan dibuang dulu, kalau tidak "/* catatan */ SELECT"
-            // dikira perintah yang tidak mengembalikan baris.
-            while (true)
-            {
-                if (t.StartsWith("/*"))
-                {
-                    var tutup = t.IndexOf("*/", StringComparison.Ordinal);
-                    if (tutup < 0) return false;
-                    t = t.Substring(tutup + 2).TrimStart();
-                    continue;
-                }
-                if (t.StartsWith("--") || t.StartsWith("#"))
-                {
-                    var baris = t.IndexOf('\n');
-                    if (baris < 0) return false;
-                    t = t.Substring(baris + 1).TrimStart();
-                    continue;
-                }
-                break;
-            }
-            if (t.StartsWith("(")) return true;   // (SELECT ...) UNION (SELECT ...)
-
-            var kata = new string(t.TakeWhile(char.IsLetter).ToArray()).ToUpperInvariant();
-            switch (kata)
-            {
-                case "SELECT": case "SHOW": case "DESCRIBE": case "DESC":
-                case "EXPLAIN": case "WITH": case "CALL": case "ANALYZE":
-                case "CHECK": case "CHECKSUM": case "OPTIMIZE": case "REPAIR":
-                case "HELP": case "TABLE": case "VALUES":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-
         // -------------------------------------------------------- Impor dan ekspor
 
         /// <summary>
@@ -468,6 +357,54 @@ namespace Phoron.Core
             }
             catch (Exception ex) { return ex.Message; }
             finally { if (setelan != null) { try { File.Delete(setelan); } catch { } } }
+        }
+
+        // Pemisah perintah SQL dulu ada di sini, dipakai kotak SQL bawaan.
+        // Kotak itu sudah dibuang - menulis SQL sekarang di HeidiSQL, yang punya
+        // penyunting lengkap berikut penyorotan sintaksnya. Berbaris tetap
+        // tinggal: Jalankan memakainya untuk memutuskan apakah perlu menanyakan
+        // ROW_COUNT().
+
+        /// <summary>
+        /// Apakah perintah ini mengembalikan baris? Ditentukan dari kata
+        /// pertamanya, setelah komentar di depan dibuang.
+        /// </summary>
+        public static bool Berbaris(string sql)
+        {
+            var t = (sql ?? "").TrimStart();
+            // Komentar di depan dibuang dulu, kalau tidak "/* catatan */ SELECT"
+            // dikira perintah yang tidak mengembalikan baris.
+            while (true)
+            {
+                if (t.StartsWith("/*"))
+                {
+                    var tutup = t.IndexOf("*/", StringComparison.Ordinal);
+                    if (tutup < 0) return false;
+                    t = t.Substring(tutup + 2).TrimStart();
+                    continue;
+                }
+                if (t.StartsWith("--") || t.StartsWith("#"))
+                {
+                    var baris = t.IndexOf('\n');
+                    if (baris < 0) return false;
+                    t = t.Substring(baris + 1).TrimStart();
+                    continue;
+                }
+                break;
+            }
+            if (t.StartsWith("(")) return true;   // (SELECT ...) UNION (SELECT ...)
+
+            var kata = new string(t.TakeWhile(char.IsLetter).ToArray()).ToUpperInvariant();
+            switch (kata)
+            {
+                case "SELECT": case "SHOW": case "DESCRIBE": case "DESC":
+                case "EXPLAIN": case "WITH": case "CALL": case "ANALYZE":
+                case "CHECK": case "CHECKSUM": case "OPTIMIZE": case "REPAIR":
+                case "HELP": case "TABLE": case "VALUES":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         // ----------------------------------------------------------------- Galat
