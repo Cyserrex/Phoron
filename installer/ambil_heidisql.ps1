@@ -31,6 +31,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Sidik256([string]$berkas) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $aliran = [IO.File]::OpenRead($berkas)
+    try { $bait = $sha.ComputeHash($aliran) } finally { $aliran.Dispose(); $sha.Dispose() }
+    return (($bait | ForEach-Object { $_.ToString('x2') }) -join '')
+}
+
 if (-not $Tujuan) {
     $akarSkrip = $PSScriptRoot
     if (-not $akarSkrip) { $akarSkrip = Split-Path -Parent $MyInvocation.MyCommand.Path }
@@ -68,7 +75,12 @@ try {
     Invoke-WebRequest -Uri $Url -OutFile $zip -UseBasicParsing
     $ProgressPreference = $dulu
 
-    $nyata = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+    # Dihitung lewat .NET, bukan Get-FileHash. Di runner CI cmdlet itu tidak
+    # dikenali - PSModulePath sudah dicampur pwsh 7, dan pemuatan modul otomatis
+    # Windows PowerShell 5.1 jadi tidak lengkap. Bergantung pada modul yang
+    # kebetulan ada berarti build bisa gagal karena hal yang sama sekali tidak
+    # ada hubungannya dengan Phoron.
+    $nyata = Sidik256 $zip
     if ($nyata -ne $Sidik) {
         throw ("Sidik SHA-256 tidak cocok." + [Environment]::NewLine +
                "  diharapkan : $Sidik" + [Environment]::NewLine +
@@ -113,9 +125,11 @@ Berkas yang disertakan diambil dari:
     Set-Content -Path (Join-Path $Tujuan 'HeidiSQL-SUMBER.txt') -Value $catatan -Encoding UTF8
     Set-Content -Path $Penanda -Value $Versi -Encoding ASCII
 
-    $n = (Get-ChildItem $Tujuan -Recurse -File).Count
-    $mb = [math]::Round(((Get-ChildItem $Tujuan -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 1)
-    Write-Host "HeidiSQL siap di $Tujuan ($n berkas, $mb MB)."
+    $isi = [IO.Directory]::GetFiles($Tujuan, '*', [IO.SearchOption]::AllDirectories)
+    $besar = 0
+    foreach ($f in $isi) { $besar += (New-Object IO.FileInfo $f).Length }
+    Write-Host ("HeidiSQL siap di $Tujuan (" + $isi.Count + " berkas, " +
+                [math]::Round($besar / 1MB, 1) + " MB).")
 }
 finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
