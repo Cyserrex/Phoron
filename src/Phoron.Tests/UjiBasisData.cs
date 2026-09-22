@@ -243,6 +243,57 @@ namespace Phoron.Tests
         }
 
         /// <summary>
+        /// Tidak boleh ada aksara kendali nyasar di berkas sumber dan skrip.
+        ///
+        /// Penjaga ini lahir dari kesalahan yang sungguhan terjadi: jalur
+        /// "installer\ambil_heidisql.ps1" ditulis lewat perkakas yang menafsirkan
+        /// \a sebagai aksara BEL, jadi yang tersimpan "installer" + 0x07 +
+        /// "mbil_heidisql.ps1". Berkasnya tetap tampak benar di layar - aksara
+        /// 0x07 tidak menggambar apa pun - dan build baru gagal di CI.
+        ///
+        /// Aksara semacam itu tidak pernah punya alasan berada di berkas teks
+        /// kita. Memindainya murah, dan ia menangkap seluruh kelas kesalahan
+        /// yang sama, bukan satu kejadiannya saja.
+        /// </summary>
+        static void UjiTanpaAksaraKendali()
+        {
+            Bagian("Aksara kendali nyasar");
+
+            var akar = AkarRepo();
+            var pola = new[] { "*.cs", "*.xaml", "*.ps1", "*.bat", "*.iss", "*.yml", "*.csproj" };
+            var lewati = new[] { "\\bin\\", "\\obj\\", "\\.git\\", "\\dist\\", "\\heidisql\\" };
+
+            var kotor = new List<string>();
+            int diperiksa = 0;
+            foreach (var p in pola)
+            {
+                foreach (var f in Directory.GetFiles(akar, p, SearchOption.AllDirectories))
+                {
+                    if (lewati.Any(x => f.IndexOf(x, StringComparison.OrdinalIgnoreCase) >= 0))
+                        continue;
+                    diperiksa++;
+                    string isi;
+                    try { isi = File.ReadAllText(f); }
+                    catch { continue; }
+
+                    for (int i = 0; i < isi.Length; i++)
+                    {
+                        var c = isi[i];
+                        // Tab, CR, dan LF memang wajar. Sisanya di bawah 0x20 tidak.
+                        if (c >= ' ' || c == '\t' || c == '\r' || c == '\n') continue;
+                        kotor.Add(f.Substring(akar.Length).TrimStart('\\')
+                                  + " -> U+" + ((int)c).ToString("X4"));
+                        break;
+                    }
+                }
+            }
+
+            Ok("Ada berkas yang diperiksa", diperiksa > 50, diperiksa + " berkas");
+            Ok("Tidak ada aksara kendali nyasar", kotor.Count == 0,
+               string.Join(" | ", kotor.ToArray()));
+        }
+
+        /// <summary>
         /// Penyertaan HeidiSQL ke installer tidak boleh diam-diam rusak.
         ///
         /// Skrip pengambil menyiapkan folder, dan setup.iss merujuk folder itu.

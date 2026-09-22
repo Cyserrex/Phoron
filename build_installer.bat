@@ -27,7 +27,7 @@ rem dan Inno gagal kalau folder itu belum ada. Skripnya melewatkan unduhan
 rem kalau versi yang sama sudah tersedia di sana.
 echo.
 echo === [0/3] Menyiapkan HeidiSQL ===
-powershell -NoProfile -ExecutionPolicy Bypass -File "installermbil_heidisql.ps1" || goto :err
+powershell -NoProfile -ExecutionPolicy Bypass -File "installer\ambil_heidisql.ps1" || goto :err
 
 echo.
 echo === [1/3] Membangun Phoron.exe ===

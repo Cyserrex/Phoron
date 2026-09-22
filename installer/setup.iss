@@ -132,14 +132,14 @@ Source: "..\dist\{#MyAppExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
 ; Phoron menjalankannya sebagai proses lain dan tidak menautnya, jadi ini
 ; penggabungan dua program, bukan karya turunan. Teks lisensinya (gpl.txt) dan
 ; keterangan sumbernya (HeidiSQL-SUMBER.txt) ikut terpasang - keduanya sudah ada
-; di dalam folder yang disiapkan installermbil_heidisql.ps1.
+; di dalam folder yang disiapkan installer\ambil_heidisql.ps1.
 ;
 ; Dipasang ke bin\heidisql supaya berada di tempat yang sama dengan paket biner
 ; lain, dan supaya ikut ditemukan pencarian yang sudah dipakai Phoron.
 ;
 ; uninsneveruninstall TIDAK dipakai di sini: ini bukan pekerjaan pengguna,
 ; melainkan barang bawaan - kalau Phoron dicopot, ia harus ikut bersih.
-Source: "heidisql\*"; DestDir: "{app}in\heidisql";     Flags: ignoreversion recursesubdirs createallsubdirs; Components: heidisql
+Source: "heidisql\*"; DestDir: "{app}\bin\heidisql";     Flags: ignoreversion recursesubdirs createallsubdirs; Components: heidisql
 
 [InstallDelete]
 ; Panduan.md pernah ikut dipasang sampai versi 1.9.1. Markdown mentah tidak
