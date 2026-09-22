@@ -243,6 +243,54 @@ namespace Phoron.Tests
         }
 
         /// <summary>
+        /// Halaman Basis data harus tetap berlangganan perubahan status layanan.
+        ///
+        /// Keluhannya nyata: MySQL sudah dimatikan dari Beranda, tapi halaman ini
+        /// masih memperlihatkan lampu hijau dan daftar basis datanya - sampai
+        /// orang kebetulan berpindah tab dan kembali. Layar yang menampilkan
+        /// keadaan yang sudah lewat lebih buruk daripada layar yang mengatakan
+        /// tidak tahu.
+        ///
+        /// YANG DIPERIKSA DI SINI CUMA KABELNYA, bukan perilakunya - harness ini
+        /// tidak merujuk WPF dan sebaiknya tetap begitu. Perilakunya dibuktikan
+        /// terpisah dengan menyalakan peristiwa ServiceManager yang sungguhan,
+        /// dan pemeriksaan itu sudah ditunjukkan bisa gagal saat langganannya
+        /// dicabut. Penjaga ini menangkap satu hal yang tetap berharga: kabelnya
+        /// terhapus tanpa ada yang sadar.
+        /// </summary>
+        static void UjiLanggananHalamanBasisData()
+        {
+            Bagian("Langganan halaman Basis data");
+
+            var berkas = Path.Combine(AkarRepo(), "src", "Phoron.App", "Pages",
+                                      "DatabasePage.xaml.cs");
+            Ok("Berkas halaman ada", File.Exists(berkas), berkas);
+            if (!File.Exists(berkas)) return;
+
+            var isi = File.ReadAllText(berkas);
+
+            Ok("Berlangganan perubahan status layanan",
+               isi.Contains("Services.StateChanged +="), "");
+            Ok("Berlangganan pergantian profil",
+               isi.Contains("AppState.Changed +="), "");
+
+            // Melepas langganan sama pentingnya: halaman dibuat ulang tiap kali
+            // orang berpindah tab, jadi pendengar yang tidak dilepas menumpuk dan
+            // semuanya ikut menyala tiap kali layanan berubah.
+            Ok("Melepas langganan status saat halaman ditinggalkan",
+               isi.Contains("Services.StateChanged -="), "");
+            Ok("Melepas langganan profil saat halaman ditinggalkan",
+               isi.Contains("AppState.Changed -="), "");
+
+            // Peristiwanya datang dari utas layanan. Invoke yang memblokir di
+            // sini adalah setengah dari kebuntuan yang sudah pernah dijaga di
+            // MainWindow; yang benar BeginInvoke.
+            Ok("Diseberangkan ke utas layar tanpa memblokir",
+               isi.Contains("Dispatcher.BeginInvoke") && !isi.Contains("Dispatcher.Invoke("),
+               "");
+        }
+
+        /// <summary>
         /// Tidak boleh ada aksara kendali nyasar di berkas sumber dan skrip.
         ///
         /// Penjaga ini lahir dari kesalahan yang sungguhan terjadi: jalur

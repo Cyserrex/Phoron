@@ -46,6 +46,9 @@ namespace Phoron.App.Pages
         bool _sibuk;
         bool _mengisi;
 
+        /// <summary>Ada permintaan muat ulang yang datang selagi yang lain masih jalan.</summary>
+        bool _muatUlangTertunda;
+
         public DatabasePage()
         {
             InitializeComponent();
@@ -54,7 +57,49 @@ namespace Phoron.App.Pages
                                   + "Menjelajah dan menyunting isinya lewat HeidiSQL.");
             _mengisi = false;
             AturTombol();
+
+            // Halaman ini IKUT BERUBAH saat layanannya dimatikan atau dinyalakan,
+            // dan saat profilnya berganti. Tanpa ini ia membeku pada keadaan
+            // terakhir yang sempat terbaca: MySQL sudah dimatikan dari Beranda,
+            // tapi di sini lampunya masih hijau dan daftar basis datanya masih
+            // terpampang - sampai orang kebetulan berpindah tab dan kembali.
+            // Layar yang menampilkan keadaan yang sudah lewat lebih buruk
+            // daripada layar yang mengatakan tidak tahu.
+            _e.Services.StateChanged += OnLayananBerubah;
+            AppState.Changed += OnProfilBerubah;
+            Unloaded += (s, e) =>
+            {
+                _e.Services.StateChanged -= OnLayananBerubah;
+                AppState.Changed -= OnProfilBerubah;
+            };
+
             Loaded += (s, e) => MuatAsync();
+        }
+
+        /// <summary>
+        /// Peristiwanya datang dari utas layanan, bukan utas layar - jadi harus
+        /// diseberangkan. BeginInvoke, bukan Invoke: yang dikerjakan cuma
+        /// menggambar ulang, dan utas layanan tidak perlu menunggunya.
+        /// </summary>
+        void OnLayananBerubah(ServiceKind jenis, ServiceState keadaan)
+        {
+            if (jenis != ServiceKind.Db) return;
+            Dispatcher.BeginInvoke(new Action(MintaMuatUlang));
+        }
+
+        void OnProfilBerubah() { Dispatcher.BeginInvoke(new Action(MintaMuatUlang)); }
+
+        /// <summary>
+        /// Muat ulang, atau catat kalau sedang sibuk. Menyalakan MySQL menerbitkan
+        /// dua peristiwa beruntun (Menyalakan, lalu Jalan) dan yang kedua bisa
+        /// datang selagi yang pertama masih menunggu jawaban server; menjalankan
+        /// keduanya bersamaan membuat dua rangkaian kueri saling menimpa isi layar.
+        /// </summary>
+        void MintaMuatUlang()
+        {
+            if (!IsLoaded) return;
+            if (_sibuk) { _muatUlangTertunda = true; return; }
+            MuatAsync();
         }
 
         // ------------------------------------------------------------- Penghalang
@@ -494,6 +539,16 @@ namespace Phoron.App.Pages
             PanelIsi.IsEnabled = !sibuk;
             Putaran.Visibility = sibuk ? Visibility.Visible : Visibility.Collapsed;
             Mouse.OverrideCursor = sibuk ? Cursors.Wait : null;
+
+            // Permintaan yang datang selagi sibuk dikerjakan DI SINI, bukan di
+            // akhir tiap jalur pemuatan: jalur-jalur itu berakhir di banyak
+            // tempat, dan satu saja yang terlewat berarti layar diam-diam
+            // tertinggal pada keadaan lama. Setiap jalur selalu melewati sini.
+            if (!sibuk && _muatUlangTertunda)
+            {
+                _muatUlangTertunda = false;
+                Dispatcher.BeginInvoke(new Action(() => { if (IsLoaded) MuatAsync(); }));
+            }
         }
 
         void Status(string teks, bool galat = false)

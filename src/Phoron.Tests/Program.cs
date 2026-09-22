@@ -90,6 +90,7 @@ namespace Phoron.Tests
                 UjiArgumenHeidi();
                 UjiPaketHeidi();
                 UjiTanpaAksaraKendali();
+                UjiLanggananHalamanBasisData();
                 UjiLabelTidakBentrok();
             }
             catch (Exception ex)
