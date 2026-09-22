@@ -68,6 +68,17 @@ namespace Phoron.Core
         public string Terminal = "cmd";     // cmd | powershell | wt
         public string Editor = "";          // kosong = notepad
 
+        /// <summary>Pengguna MySQL yang dipakai halaman Basis data. Kosong berarti root.</summary>
+        public string DbPengguna = "root";
+
+        /// <summary>
+        /// Sandi MySQL. Di dalam memori ia teks biasa; di phoron.ini ia disimpan
+        /// tersandi lewat <see cref="Rahasia"/>, sebab berkas itu ikut tersalin
+        /// ke mana-mana. Pemasangan bawaan Phoron tidak memakai sandi sama sekali,
+        /// jadi hampir selalu kosong.
+        /// </summary>
+        public string DbSandi = "";
+
         /// <summary>Dari mana setelan ini berasal - menentukan apakah aman ditimpa.</summary>
         public enum Sumber { Baru, Terbaca, Rusak, TidakTerbaca }
 
@@ -138,6 +149,8 @@ namespace Phoron.Core
                 ? kapan : DateTime.MinValue;
             s.Terminal = ini.Get("umum", "terminal", "cmd");
             s.Editor = ini.Get("umum", "editor", "");
+            s.DbPengguna = ini.Get("basisdata", "pengguna", "root");
+            s.DbSandi = Rahasia.Buka(ini.Get("basisdata", "sandi", ""));
             return s;
         }
 
@@ -212,6 +225,9 @@ namespace Phoron.Core
                 ? "" : CekTerakhir.ToString("o", System.Globalization.CultureInfo.InvariantCulture));
             ini.Set("umum", "terminal", Terminal ?? "cmd");
             ini.Set("umum", "editor", Editor ?? "");
+            ini.Set("basisdata", "pengguna", string.IsNullOrEmpty(DbPengguna) ? "root" : DbPengguna);
+            // Tersandi, tidak pernah sebagai teks biasa - lihat Rahasia.
+            ini.Set("basisdata", "sandi", Rahasia.Tutup(DbSandi));
             ini.Save(Paths.SettingsFile,
                 "Setelan Phoron. Berkas ini juga jadi penanda akar instalasi -\njangan dipindah dari folder Phoron.");
         }

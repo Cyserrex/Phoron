@@ -75,6 +75,12 @@
                                 <TextBlock Text="{loc:T 'Situs'}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ListBoxItem>
+                        <ListBoxItem Tag="basisdata">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE968;" Style="{StaticResource NavIcon}"/>
+                                <TextBlock Text="{loc:T 'Basis data'}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </ListBoxItem>
                         <ListBoxItem Tag="node">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE756;" Style="{StaticResource NavIcon}"/>

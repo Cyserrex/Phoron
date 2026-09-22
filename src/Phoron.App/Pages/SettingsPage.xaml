@@ -89,6 +89,29 @@
             <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
                     Padding="14" Margin="0,16,0,0">
                 <StackPanel>
+                    <TextBlock Text="{loc:T 'Basis data'}" Style="{StaticResource Label}" Margin="0,0,0,2"/>
+                    <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="0,0,0,8"
+                               Text="{loc:T 'Dipakai halaman Basis data untuk menyambung ke MySQL. Pemasangan bawaan Phoron tidak memakai sandi, jadi biasanya cukup dibiarkan.'}"/>
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="{loc:T 'Pengguna'}" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                            <ui:TextBox x:Name="TxtDbPengguna" Width="180" LostFocus="Db_Lepas"/>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="{loc:T 'Sandi'}" Style="{StaticResource Label}" Margin="0,0,0,4"/>
+                            <!-- PasswordBox, bukan TextBox: sandi tidak boleh ikut
+                                 terbaca orang lain saat layar dibagikan. -->
+                            <PasswordBox x:Name="TxtDbSandi" Width="180" LostFocus="Db_Lepas"/>
+                        </StackPanel>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource SubJudul}" FontSize="11" Margin="0,8,0,0"
+                               Text="{loc:T 'Sandi disimpan tersandi dengan kunci akun Windows ini, bukan sebagai teks biasa di phoron.ini.'}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
+                    Padding="14" Margin="0,12,0,0">
+                <StackPanel>
                     <TextBlock Text="{loc:T 'Status hak akses'}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="TxtAdmin" TextWrapping="Wrap" Margin="0,0,0,10"/>
                     <ui:Button x:Name="BtnAdmin" Content="{loc:T 'Jalankan ulang sebagai Administrator'}"

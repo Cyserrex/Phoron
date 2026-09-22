@@ -6,7 +6,7 @@
     <RootNamespace>Phoron.Core</RootNamespace>
     <AssemblyName>Phoron.Core</AssemblyName>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
-    <Version>1.28.0</Version>
+    <Version>1.29.0</Version>
   </PropertyGroup>
 
   <!--
@@ -17,6 +17,10 @@
   <ItemGroup>
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <!-- ProtectedData (DPAPI), dipakai Rahasia untuk menyandi sandi basis data.
+         Ini rakitan BCL yang ikut .NET Framework, bukan paket pihak ketiga,
+         jadi aturan nol dependensi di atas tetap utuh. -->
+    <Reference Include="System.Security" />
   </ItemGroup>
 
 </Project>

@@ -15,7 +15,12 @@ namespace Phoron.App.Pages
         bool _loading;
 
         /// <summary>Profil aktif sudah berubah tapi layanan masih memakai yang lama.</summary>
-        bool _perluRestart;
+        // Dipisah web dan basis data. Sebelumnya hanya ada SATU tanda, dan
+        // tanda itu cuma menyala kalau WEB server jalan - jadi mengubah versi
+        // atau port MySQL selagi MySQL menyala tidak memunculkan apa pun, dan
+        // server tetap melayani dengan setelan lamanya tanpa ada yang tahu.
+        bool _perluRestartWeb;
+        bool _perluRestartDb;
 
         /// <summary>Baris ComboBox versi; entri kosong dipakai untuk "tidak dipakai".</summary>
         class Row
@@ -321,11 +326,28 @@ namespace Phoron.App.Pages
             Daftar.Items.Refresh();
             AppState.RaiseChanged();
 
-            // Profil yang sedang dipakai layanan: berkasnya sudah berubah, tapi
-            // Apache/MySQL masih berjalan dengan yang lama.
-            if (_e.Active != null && _e.Active.FileName == _current.FileName
-                && _e.Services.WebState == ServiceState.Jalan)
-                _perluRestart = true;
+            // Berkas profil sudah berubah. Berkas konfigurasi yang DIBANGKITKAN
+            // darinya - httpd.conf, my.ini, php.ini - harus ikut berubah sekarang,
+            // bukan menunggu ada hal lain yang kebetulan memanggil Apply.
+            //
+            // Tanpa ini, etc\mysql\my.ini bisa tertinggal berhari-hari di
+            // belakang profilnya. Di mesin penulis my.ini bertanggal enam hari
+            // lebih tua daripada profilnya, dan basedir di dalamnya masih
+            // menunjuk pemasangan MariaDB milik XAMPP - sehingga MySQL menjawab
+            // setiap galat dengan "Unknown error 1146", tanpa keterangan apa pun.
+            //
+            // Hanya untuk profil yang sedang AKTIF: menyunting profil lain tidak
+            // ada hubungannya dengan berkas yang sedang dipakai, dan membangun
+            // ulang di tiap ketukan kendali akan terasa berat tanpa guna.
+            bool profilAktif = _e.Active != null && _e.Active.FileName == _current.FileName;
+            if (profilAktif)
+            {
+                _e.Apply();
+                // Layanan membaca konfigurasinya HANYA saat start, jadi yang
+                // sedang menyala tetap memakai yang lama sampai dinyalakan ulang.
+                if (_e.Services.WebState == ServiceState.Jalan) _perluRestartWeb = true;
+                if (_e.Services.DbState == ServiceState.Jalan) _perluRestartDb = true;
+            }
 
             TxtStatusSimpan.Text = "Tersimpan " + DateTime.Now.ToString("HH:mm:ss")
                 + " ke profiles\\" + _current.FileName + ".ini";
@@ -342,11 +364,26 @@ namespace Phoron.App.Pages
 
         void SegarkanBilah()
         {
-            bool jalan = _e.Services.WebState == ServiceState.Jalan;
-            PanelRestart.Visibility = _perluRestart && jalan ? Visibility.Visible : Visibility.Collapsed;
-            if (PanelRestart.Visibility == Visibility.Visible)
-                TxtRestart.Text = "Profil yang sedang dipakai sudah berubah, tapi web server membaca "
-                    + "konfigurasinya HANYA saat start - jadi perubahan ini belum berlaku di browser.";
+            // Tanda hanya berlaku selama layanannya masih menyala. Yang sudah
+            // dimatikan sendiri oleh pengguna akan membaca konfigurasi baru
+            // begitu dinyalakan lagi, jadi tidak ada yang perlu diperingatkan.
+            bool web = _perluRestartWeb && _e.Services.WebState == ServiceState.Jalan;
+            bool db = _perluRestartDb && _e.Services.DbState == ServiceState.Jalan;
+            PanelRestart.Visibility = web || db ? Visibility.Visible : Visibility.Collapsed;
+            if (PanelRestart.Visibility != Visibility.Visible) return;
+
+            // Yang disebut hanya yang benar-benar perlu dinyalakan ulang. Kalimat
+            // yang menyebut web server padahal yang berubah MySQL membuat orang
+            // mencari akibatnya di tempat yang salah.
+            string apa = web && db ? Lang.T("web server dan MySQL")
+                       : web ? Lang.T("web server")
+                       : "MySQL";
+            TxtRestart.Text = string.Format(
+                Lang.T("Profil yang sedang dipakai sudah berubah, tapi {0} membaca konfigurasinya "
+                       + "HANYA saat start - jadi perubahan ini belum berlaku."), apa);
+            BtnRestart.Content = web && db ? Lang.T("Nyalakan ulang keduanya")
+                               : web ? Lang.T("Nyalakan ulang web server")
+                               : Lang.T("Nyalakan ulang MySQL");
         }
 
         async void BtnRestart_Click(object sender, RoutedEventArgs e)
@@ -357,10 +394,27 @@ namespace Phoron.App.Pages
             // hal yang sama sambil menghalangi jalan.
             _e.Apply();
             var main = Window.GetWindow(this) as MainWindow;
-            await _e.StopWebAsync();
-            await _e.StartWebAsync();
+            BtnRestart.IsEnabled = false;
+            try
+            {
+                // Basis data lebih dulu: aplikasi PHP menyambung ke MySQL saat
+                // halamannya dibuka, jadi web server yang menyala lebih dulu
+                // sempat melayani permintaan yang basis datanya belum ada.
+                if (_perluRestartDb && _e.Services.DbState == ServiceState.Jalan)
+                {
+                    await _e.StopDbAsync();
+                    await _e.StartDbAsync();
+                }
+                if (_perluRestartWeb && _e.Services.WebState == ServiceState.Jalan)
+                {
+                    await _e.StopWebAsync();
+                    await _e.StartWebAsync();
+                }
+            }
+            finally { BtnRestart.IsEnabled = true; }
             if (main != null) main.RefreshStatus();
-            _perluRestart = false;
+            _perluRestartWeb = false;
+            _perluRestartDb = false;
             SegarkanBilah();
         }
 
@@ -374,7 +428,8 @@ namespace Phoron.App.Pages
             AppState.RaiseChanged();
             var main = Window.GetWindow(this) as MainWindow;
             if (main != null) main.RefreshStatus();
-            _perluRestart = false;
+            _perluRestartWeb = false;
+            _perluRestartDb = false;
             SegarkanBilah();
             AppState.Info("Sekarang memakai profil \"" + target.Name + "\".");
         }

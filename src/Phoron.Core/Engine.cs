@@ -620,7 +620,15 @@ namespace Phoron.Core
                 Say("Profil \"" + Active.Name + "\" tidak memakai web server, jadi tidak ada yang dinyalakan.");
                 return Task.FromResult(false);
             }
-            if (LastBuild == null) Apply();
+            // SELALU dibangun ulang, bukan hanya saat LastBuild masih kosong.
+            // Bentuk lamanya - "bangun kalau belum pernah" - berarti konfigurasi
+            // ditulis SEKALI seumur proses. Sesudah itu, profil yang disunting
+            // tidak pernah sampai ke berkas yang benar-benar dibaca server, dan
+            // yang menyala adalah keadaan berjam-jam yang lalu. Membangun ulang
+            // memang makan waktu, tapi menyalakan layanan bukan hal yang
+            // dilakukan tiap detik - dan layanan yang menyala dengan konfigurasi
+            // yang bukan miliknya adalah kesalahan yang paling sulit dilacak.
+            Apply();
             return Services.StartWebAsync(Active, WebPackage, Php, LastBuild);
         }
 
@@ -634,7 +642,7 @@ namespace Phoron.Core
                 Say("Profil \"" + Active.Name + "\" tidak memakai MySQL, jadi tidak ada yang dinyalakan.");
                 return Task.FromResult(false);
             }
-            if (LastBuild == null) Apply();
+            Apply();   // lihat alasannya di StartWebAsync
             return Services.StartDbAsync(Active, MySql);
         }
 

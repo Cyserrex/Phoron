@@ -49,6 +49,8 @@ namespace Phoron.App.Pages
             foreach (ComboBoxItem item in CmbTerminal.Items)
                 if ((item.Tag ?? "").ToString() == s.Terminal) CmbTerminal.SelectedItem = item;
             if (CmbTerminal.SelectedItem == null) CmbTerminal.SelectedIndex = 0;
+            TxtDbPengguna.Text = string.IsNullOrEmpty(s.DbPengguna) ? "root" : s.DbPengguna;
+            TxtDbSandi.Password = s.DbSandi ?? "";
 
             bool admin = HostsFile.IsAdmin();
             TxtAdmin.Text = admin
@@ -134,6 +136,11 @@ namespace Phoron.App.Pages
 
         void CmbTerminal_Ubah(object sender, SelectionChangedEventArgs e) { SimpanSeketika(); }
 
+        // Disimpan saat fokus lepas, bukan tiap ketukan tombol: menyandi sandi
+        // dan menulis ulang phoron.ini pada setiap huruf yang diketik adalah
+        // kerja cakram yang tidak ada gunanya.
+        void Db_Lepas(object sender, RoutedEventArgs e) { SimpanSeketika(); }
+
         void SimpanSeketika(bool pindaiUlang = false)
         {
             if (_mengisi) return;
@@ -155,6 +162,9 @@ namespace Phoron.App.Pages
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
             s.Terminal = item != null ? (item.Tag ?? "cmd").ToString() : "cmd";
+            var pengguna = (TxtDbPengguna.Text ?? "").Trim();
+            s.DbPengguna = pengguna.Length > 0 ? pengguna : "root";
+            s.DbSandi = TxtDbSandi.Password ?? "";
             s.Save();
 
             // Pemindaian ulang dan penulisan konfigurasi hanya dijalankan kalau

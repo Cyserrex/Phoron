@@ -1,0 +1,150 @@
+<UserControl x:Class="Phoron.App.Pages.DatabasePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:loc="clr-namespace:Phoron.App">
+    <Grid Margin="4,8,4,4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="{loc:T 'Basis data'}" Style="{StaticResource Judul}"/>
+            <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}"/>
+        </StackPanel>
+
+        <!-- Panel penghalang. Halaman ini tidak punya apa pun untuk ditampilkan
+             selama MySQL belum menjawab, dan daftar kosong tanpa keterangan
+             membuat orang mengira basis datanya yang hilang. Isinya BUKAN
+             sekadar keluhan: ia menyebut sebabnya dan menyediakan tombol yang
+             menyelesaikannya di tempat. -->
+        <Border x:Name="PanelHalangan" Grid.Row="1" Visibility="Collapsed"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                CornerRadius="8" Padding="20" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock x:Name="TxtHalangan" TextWrapping="Wrap" FontWeight="SemiBold"/>
+                <TextBlock x:Name="TxtHalanganRinci" TextWrapping="Wrap" Opacity="0.75"
+                           Margin="0,6,0,0"/>
+                <WrapPanel Margin="0,14,0,0">
+                    <ui:Button x:Name="BtnNyalakan" Content="{loc:T 'Nyalakan MySQL'}"
+                               Appearance="Primary" Margin="0,0,8,0" Click="BtnNyalakan_Click"/>
+                    <ui:Button x:Name="BtnKeProfil" Content="{loc:T 'Buka Profil'}"
+                               Margin="0,0,8,0" Click="BtnKeProfil_Click"/>
+                    <ui:Button Content="{loc:T 'Coba lagi'}" Click="BtnMuatUlang_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <Grid x:Name="PanelIsi" Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="190" MinWidth="140"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="260" MinWidth="160"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*" MinWidth="320"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Kolom 1: basis data -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="{loc:T 'Basis data'}" Style="{StaticResource Label}"
+                           Margin="2,0,0,4"/>
+                <ListBox x:Name="DaftarDb" Grid.Row="1"
+                         SelectionChanged="DaftarDb_Pilih"/>
+                <WrapPanel Grid.Row="2" Margin="0,6,0,0">
+                    <ui:Button Content="{loc:T 'Buat...'}" Margin="0,0,6,6" Padding="10,5"
+                               Click="BtnBuatDb_Click"/>
+                    <ui:Button Content="{loc:T 'Hapus'}" Margin="0,0,6,6" Padding="10,5"
+                               Click="BtnHapusDb_Click"/>
+                    <ui:Button Content="{loc:T 'Segarkan'}" Margin="0,0,0,6" Padding="10,5"
+                               Click="BtnMuatUlang_Click"/>
+                </WrapPanel>
+            </Grid>
+
+            <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Stretch"
+                          Background="Transparent"/>
+
+            <!-- Kolom 2: tabel -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="LblTabel" Grid.Row="0" Style="{StaticResource Label}"
+                           Margin="2,0,0,4" Text="{loc:T 'Tabel'}"/>
+                <ListView x:Name="DaftarTabel" Grid.Row="1"
+                          MouseDoubleClick="DaftarTabel_KlikGanda">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="{loc:T 'Nama'}" Width="150"
+                                            DisplayMemberBinding="{Binding Nama}"/>
+                            <GridViewColumn Header="{loc:T 'Baris'}" Width="70"
+                                            DisplayMemberBinding="{Binding BarisTampil}"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+                <WrapPanel Grid.Row="2" Margin="0,6,0,0">
+                    <ui:Button Content="{loc:T 'Impor .sql...'}" Margin="0,0,6,6" Padding="10,5"
+                               Click="BtnImpor_Click"/>
+                    <ui:Button Content="{loc:T 'Ekspor .sql...'}" Margin="0,0,0,6" Padding="10,5"
+                               Click="BtnEkspor_Click"/>
+                </WrapPanel>
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Width="4" HorizontalAlignment="Stretch"
+                          Background="Transparent"/>
+
+            <!-- Kolom 3: SQL dan hasil -->
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Text="{loc:T 'SQL'}" Style="{StaticResource Label}"
+                           Margin="2,0,0,4"/>
+                <ui:TextBox x:Name="TxtSql" Grid.Row="1" Height="86" AcceptsReturn="True"
+                            FontFamily="Consolas" TextWrapping="NoWrap"
+                            VerticalContentAlignment="Top"
+                            VerticalScrollBarVisibility="Auto"
+                            HorizontalScrollBarVisibility="Auto"
+                            PreviewKeyDown="TxtSql_Tombol"/>
+
+                <WrapPanel Grid.Row="2" Margin="0,6,0,6">
+                    <ui:Button x:Name="BtnJalankan" Content="{loc:T 'Jalankan (Ctrl+Enter)'}"
+                               Appearance="Primary" Margin="0,0,8,0" Click="BtnJalankan_Click"/>
+                    <ui:Button Content="{loc:T 'Bersihkan'}" Margin="0,0,8,0"
+                               Click="BtnBersih_Click"/>
+                    <ui:Button Content="{loc:T 'Salin hasil'}" Click="BtnSalin_Click"/>
+                </WrapPanel>
+
+                <!-- IsReadOnly: halaman ini membaca, dan menyunting sel langsung di
+                     kisi akan membuat orang mengira perubahannya tersimpan. Yang
+                     mengubah data adalah kotak SQL di atas, dan itu jelas terlihat. -->
+                <DataGrid x:Name="Kisi" Grid.Row="3"
+                          AutoGenerateColumns="False" IsReadOnly="True"
+                          CanUserAddRows="False" CanUserDeleteRows="False"
+                          SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader"
+                          HeadersVisibility="All" GridLinesVisibility="All"
+                          EnableRowVirtualization="True" EnableColumnVirtualization="True"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          Background="{DynamicResource ControlFillColorDefaultBrush}"
+                          RowBackground="Transparent"
+                          AlternatingRowBackground="{DynamicResource ControlFillColorDefaultBrush}"/>
+
+                <TextBlock x:Name="TxtStatus" Grid.Row="4" Margin="2,8,0,0"
+                           TextWrapping="Wrap" Opacity="0.8"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

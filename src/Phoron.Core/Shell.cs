@@ -20,14 +20,29 @@ namespace Phoron.Core
         }
 
         /// <summary>Jalankan dan tunggu sampai selesai. Dipakai untuk perintah singkat (uji konfigurasi, init data).</summary>
+        /// <param name="stdin">
+        /// Bila diisi, teks ini disuapkan ke masukan baku proses lalu masukannya
+        /// ditutup. Inilah cara yang benar mengirim SQL ke mysql.exe: lewat
+        /// -e "..." teksnya harus lolos dari dua lapis pengutipan (cmd dan
+        /// klien), sehingga tanda kutip di dalam kueri merusak perintahnya -
+        /// dan panjang baris perintah Windows dibatasi 32767 aksara, yang
+        /// gampang terlampaui oleh satu INSERT saja.
+        /// </param>
+        /// <param name="stdinAliran">
+        /// Sumber masukan baku yang disalin apa adanya, untuk isi yang terlalu
+        /// besar untuk dipegang sebagai teks di memori - berkas .sql hasil dump
+        /// mudah mencapai ratusan megabyte. Diabaikan bila stdin juga diisi.
+        /// </param>
         public static RunResult Run(string exe, string args, string workDir = null,
-                                    int timeoutMs = 120000, IDictionary<string, string> env = null)
+                                    int timeoutMs = 120000, IDictionary<string, string> env = null,
+                                    string stdin = null, Stream stdinAliran = null)
         {
             var psi = new ProcessStartInfo(exe, args)
             {
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                RedirectStandardInput = stdin != null || stdinAliran != null,
                 CreateNoWindow = true,
                 WorkingDirectory = workDir ?? Path.GetDirectoryName(exe) ?? Paths.Root,
                 StandardOutputEncoding = Encoding.UTF8,
@@ -45,6 +60,39 @@ namespace Phoron.Core
                 p.Start();
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
+                if (stdin == null && stdinAliran != null)
+                {
+                    // Disalin sebagai byte, tanpa pernah jadi string: berkas dump
+                    // yang besar akan meledakkan memori kalau dibaca sekaligus,
+                    // dan isinya sudah UTF-8 sejak dari mysqldump.
+                    try
+                    {
+                        stdinAliran.CopyTo(p.StandardInput.BaseStream);
+                        p.StandardInput.BaseStream.Flush();
+                        p.StandardInput.Close();
+                    }
+                    catch { }
+                }
+                if (stdin != null)
+                {
+                    // Ditulis sebagai byte UTF-8 ke aliran mentah, BUKAN lewat
+                    // StandardInput.Write. Di .NET Framework penulis itu memakai
+                    // halaman kode ANSI mesin - dan tidak bisa diganti, sebab
+                    // ProcessStartInfo.StandardInputEncoding baru ada di .NET Core.
+                    // Lewat jalur itu setiap aksara di luar ASCII sampai ke MySQL
+                    // dalam keadaan rusak.
+                    //
+                    // Ditutup, bukan sekadar disiram: mysql.exe membaca sampai
+                    // akhir masukan, jadi tanpa penutupan ia menunggu selamanya.
+                    try
+                    {
+                        var bytes = new UTF8Encoding(false).GetBytes(stdin);
+                        p.StandardInput.BaseStream.Write(bytes, 0, bytes.Length);
+                        p.StandardInput.BaseStream.Flush();
+                        p.StandardInput.Close();
+                    }
+                    catch { }
+                }
                 if (!p.WaitForExit(timeoutMs))
                 {
                     result.TimedOut = true;

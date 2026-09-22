@@ -192,6 +192,7 @@ namespace Phoron.App
                 case "profil": Host.Content = new ProfilesPage(); break;
                 case "versi": Host.Content = new VersionsPage(); break;
                 case "situs": Host.Content = new SitesPage(); break;
+                case "basisdata": Host.Content = new DatabasePage(); break;
                 case "node": Host.Content = new NodePage(); break;
                 case "ekstensi": Host.Content = new ExtensionsPage(); break;
                 case "log": Host.Content = new LogPage(); break;

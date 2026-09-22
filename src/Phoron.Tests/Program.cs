@@ -17,7 +17,7 @@ namespace Phoron.Tests
     /// SUNGGUHAN memuat php.ini yang ditulis Phoron. Menirunya dengan mock hanya
     /// akan menguji tiruan itu sendiri.
     /// </summary>
-    public static class Program
+    public static partial class Program
     {
         static int _lulus, _gagal;
         static readonly List<string> _kegagalan = new List<string>();
@@ -79,6 +79,16 @@ namespace Phoron.Tests
                 UjiUmpanAtom();
                 UjiSalinanKedua();
                 UjiHsts();
+                UjiSqlPisah();
+                UjiSqlBerbaris();
+                UjiSqlUrai();
+                UjiSqlLepasLolos();
+                UjiSqlKutip();
+                UjiRahasia();
+                UjiSetelanBasisData(sandbox);
+                UjiSambunganBasisData(sandbox);
+                UjiMyIniMengikutiProfil(sandbox);
+                UjiKamusBanjar();
             }
             catch (Exception ex)
             {
@@ -2562,6 +2572,22 @@ namespace Phoron.Tests
             }
         }
 
+        /// <summary>
+        /// Kata Indonesia yang punya padanan Banjar dan karena itu tidak boleh
+        /// muncul di kalimat Banjar (nang, wan, matan, gasan, kada, atawa, amun,
+        /// samunyaan, barakas, daptar, surang, kawa, lawan, hanyar, rancak,
+        /// suah, ngaran, laman, kulihan, janis, musti).
+        ///
+        /// Dijadikan medan bersama karena dipakai dua penjaga: yang memindai
+        /// XAML, dan yang memindai seluruh kamus.
+        /// </summary>
+        static readonly string[] KataTugasIndonesia =
+        {
+            "yang", "dan", "dari", "untuk", "tidak", "atau", "kalau", "semua",
+            "berkas", "daftar", "sendiri", "bisa", "dengan", "baru", "sering",
+            "pernah", "nama", "halaman", "hasil", "jenis", "harus", "setiap",
+        };
+
         static void UjiBanjarTidakBercampur(string dirApp)
         {
             // Keluhan yang menimbulkan uji ini: bahasa Banjarnya "bercampur".
@@ -2571,12 +2597,7 @@ namespace Phoron.Tests
             // punya padanan Banjar yang wajib dipakai (nang, wan, matan, gasan,
             // kada, atawa, amun, samunyaan, barakas, daptar, surang, kawa,
             // lawan, hanyar, rancak, suah, ngaran, laman, kulihan, janis).
-            var terlarang = new[]
-            {
-                "yang", "dan", "dari", "untuk", "tidak", "atau", "kalau", "semua",
-                "berkas", "daftar", "sendiri", "bisa", "dengan", "baru", "sering",
-                "pernah", "nama", "halaman", "hasil", "jenis", "harus", "setiap",
-            };
+            var terlarang = KataTugasIndonesia;
 
             Lang.Pakai(Lang.Banjar);
             var bocor = new List<string>();
