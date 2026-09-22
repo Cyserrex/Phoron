@@ -6,10 +6,8 @@
              xmlns:dgp="clr-namespace:System.Windows.Controls.Primitives;assembly=PresentationFramework">
     <UserControl.Resources>
 
-        <!-- Kartu. Ketiga kolom memakai bingkai yang SAMA. Sebelumnya daftar
-             basis data dibiarkan telanjang sementara daftar tabel punya bingkai
-             sendiri dari gaya bawaan, dan hasilnya kolom kiri tampak seperti
-             ruang kosong yang rusak, bukan seperti daftar yang kebetulan kosong. -->
+        <!-- Kartu. Ketiga kolom memakai bingkai yang SAMA - kolom yang dibiarkan
+             telanjang tampak seperti ruang rusak, bukan seperti daftar kosong. -->
         <Style x:Key="Kartu" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}"/>
@@ -25,9 +23,6 @@
             <Setter Property="Margin" Value="2,0,0,6"/>
         </Style>
 
-        <!-- Keterangan yang menempati ruang daftar saat daftarnya kosong.
-             Daftar kosong tanpa sepatah kata pun membuat orang mengira layarnya
-             yang rusak, bukan servernya yang memang belum berisi apa-apa. -->
         <Style x:Key="Hampa" TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="TextAlignment" Value="Center"/>
@@ -47,27 +42,6 @@
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
 
-        <Style x:Key="JudulDaftar" TargetType="GridViewColumnHeader">
-            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Padding" Value="8,4"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="GridViewColumnHeader">
-                        <Border Background="{DynamicResource ControlFillColorSecondaryBrush}"
-                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                BorderThickness="0,0,1,1">
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="Center"/>
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <Style x:Key="Isian" TargetType="DataGrid">
             <Setter Property="ColumnHeaderStyle" Value="{StaticResource JudulKisi}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
@@ -78,9 +52,8 @@
             <Setter Property="IsReadOnly" Value="True"/>
             <Setter Property="CanUserAddRows" Value="False"/>
             <Setter Property="CanUserDeleteRows" Value="False"/>
-            <Setter Property="HeadersVisibility" Value="All"/>
+            <Setter Property="HeadersVisibility" Value="Column"/>
             <Setter Property="GridLinesVisibility" Value="All"/>
-            <Setter Property="SelectionUnit" Value="CellOrRowHeader"/>
             <Setter Property="ClipboardCopyMode" Value="IncludeHeader"/>
             <Setter Property="EnableRowVirtualization" Value="True"/>
             <Setter Property="EnableColumnVirtualization" Value="True"/>
@@ -105,7 +78,7 @@
         </Grid.RowDefinitions>
 
         <!-- Kepala: judul di kiri, keterangan server di kanan. Versi, port, dan
-             pengguna ditaruh permanen karena itulah tiga hal yang selalu jadi
+             pengguna ditaruh permanen - itulah tiga hal yang selalu jadi
              pertanyaan pertama saat sesuatu tidak jalan. -->
         <Grid Grid.Row="0" Margin="0,0,0,10">
             <Grid.ColumnDefinitions>
@@ -114,21 +87,28 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0">
                 <TextBlock Text="{loc:T 'Basis data'}" Style="{StaticResource Judul}"/>
-                <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}" Margin="0,0,0,0"/>
+                <TextBlock x:Name="TxtInfo" Style="{StaticResource SubJudul}" Margin="0,0,8,0"/>
             </StackPanel>
-            <Border Grid.Column="1" x:Name="KartuServer" VerticalAlignment="Center"
-                    Visibility="Collapsed" Style="{StaticResource Kartu}" Padding="10,6">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse Width="8" Height="8" Fill="#2FBF4F" VerticalAlignment="Center"
-                             Margin="0,0,8,0"/>
-                    <TextBlock x:Name="TxtServer" FontSize="12" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Tombol ke HeidiSQL hanya muncul kalau HeidiSQL memang ada di
+                     komputer ini. Tombol yang selalu terlihat lalu mengeluh
+                     "tidak ditemukan" saat ditekan cuma memindahkan kekecewaan
+                     ke belakang. -->
+                <ui:Button x:Name="BtnHeidi" Visibility="Collapsed" Margin="0,0,8,0"
+                           Style="{StaticResource Mungil}" Click="BtnHeidi_Click"
+                           Content="{loc:T 'Buka di HeidiSQL'}"
+                           ToolTip="{loc:T 'Buka basis data profil ini di HeidiSQL'}"/>
+                <Border x:Name="KartuServer" Visibility="Collapsed"
+                        Style="{StaticResource Kartu}" Padding="10,6">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="#2FBF4F" VerticalAlignment="Center"
+                                 Margin="0,0,8,0"/>
+                        <TextBlock x:Name="TxtServer" FontSize="12" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
         </Grid>
 
-        <!-- Panel penghalang. Halaman ini tidak punya apa pun untuk ditampilkan
-             selama MySQL belum menjawab. Isinya bukan sekadar keluhan: ia
-             menyebut sebabnya dan menyediakan tombol yang menyelesaikannya. -->
         <Border x:Name="PanelHalangan" Grid.Row="1" Visibility="Collapsed"
                 Style="{StaticResource Kartu}" Padding="22" VerticalAlignment="Top">
             <StackPanel>
@@ -146,13 +126,17 @@
             </StackPanel>
         </Border>
 
+        <!-- Lebar minimum ketiga kolom SENGAJA dijaga kecil. Pada jendela yang
+             sedikit lebih sempit dari mesin pengembang, jumlah minimum yang
+             terlalu besar mendorong kolom kanan keluar tepi jendela - tombol
+             halamannya terpotong, dan tidak ada gulungan yang mengembalikannya. -->
         <Grid x:Name="PanelIsi" Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="232" MinWidth="180"/>
+                <ColumnDefinition Width="196" MinWidth="130"/>
                 <ColumnDefinition Width="6"/>
-                <ColumnDefinition Width="320" MinWidth="240"/>
+                <ColumnDefinition Width="264" MinWidth="150"/>
                 <ColumnDefinition Width="6"/>
-                <ColumnDefinition Width="*" MinWidth="360"/>
+                <ColumnDefinition Width="*" MinWidth="280"/>
             </Grid.ColumnDefinitions>
 
             <!-- Kolom 1: basis data -->
@@ -224,35 +208,37 @@
                                 PlaceholderText="{loc:T 'Cari...'}"
                                 TextChanged="TxtCariTabel_Ubah"/>
 
+                    <!-- Kisi, bukan daftar berkolom tetap: lebar tetap selalu salah
+                         di salah satu ukuran - meluber saat kolomnya disempitkan,
+                         menyisakan ruang kosong saat dilebarkan. -->
                     <Grid Grid.Row="2">
-                        <ListView x:Name="DaftarTabel" BorderThickness="0" Background="Transparent"
-                                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                        <DataGrid x:Name="DaftarTabel" Style="{StaticResource Isian}"
+                                  SelectionMode="Single" SelectionUnit="FullRow"
                                   SelectionChanged="DaftarTabel_Pilih"
                                   MouseDoubleClick="DaftarTabel_KlikGanda">
-                            <ListView.View>
-                                <GridView ColumnHeaderContainerStyle="{StaticResource JudulDaftar}">
-                                    <GridViewColumn Header="{loc:T 'Nama'}" Width="128"
-                                                    DisplayMemberBinding="{Binding Nama}"/>
-                                    <GridViewColumn Header="{loc:T 'Baris'}" Width="84"
-                                                    DisplayMemberBinding="{Binding BarisTampil}"/>
-                                    <GridViewColumn Header="{loc:T 'Ukuran'}" Width="74"
-                                                    DisplayMemberBinding="{Binding Ukuran}"/>
-                                </GridView>
-                            </ListView.View>
-                        </ListView>
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{loc:T 'Nama'}" Width="*"
+                                                    Binding="{Binding Nama}"/>
+                                <DataGridTextColumn Header="{loc:T 'Baris'}" Width="Auto"
+                                                    Binding="{Binding BarisTampil}"/>
+                                <DataGridTextColumn Header="{loc:T 'Ukuran'}" Width="Auto"
+                                                    Binding="{Binding Ukuran}"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
                         <TextBlock x:Name="TxtTabelHampa" Style="{StaticResource Hampa}"
                                    Visibility="Collapsed"/>
                     </Grid>
 
-                    <WrapPanel Grid.Row="3" Margin="0,8,0,0">
+                    <WrapPanel Grid.Row="3" Margin="0,8,0,-6">
                         <ui:Button x:Name="BtnKosongkan" Content="{loc:T 'Kosongkan tabel'}"
-                                   Style="{StaticResource Mungil}" Margin="0,0,6,0"
+                                   Style="{StaticResource Mungil}" Margin="0,0,6,6"
                                    Click="BtnKosongkan_Click"/>
                         <ui:Button x:Name="BtnHapusTabel" Content="{loc:T 'Hapus tabel'}"
-                                   Style="{StaticResource Mungil}" Margin="0,0,6,0"
+                                   Style="{StaticResource Mungil}" Margin="0,0,6,6"
                                    Click="BtnHapusTabel_Click"/>
                         <ui:Button x:Name="BtnStruktur" Content="{loc:T 'Struktur'}"
-                                   Style="{StaticResource Mungil}" Click="BtnStruktur_Click"/>
+                                   Style="{StaticResource Mungil}" Margin="0,0,0,6"
+                                   Click="BtnStruktur_Click"/>
                     </WrapPanel>
                 </Grid>
             </Border>
@@ -260,11 +246,7 @@
             <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch"
                           Background="Transparent"/>
 
-            <!-- Kolom 3: Jelajah / Struktur / SQL.
-                 Dipisah jadi tab, mengikuti pembagian yang sudah dikenal orang
-                 dari phpMyAdmin. Sebelumnya kotak SQL dan hasilnya berdesakan di
-                 satu kolom sempit: kotaknya hanya muat tiga baris, dan kisinya
-                 hanya kebagian sisa ruang. -->
+            <!-- Kolom 3: Jelajah / Struktur / SQL -->
             <Border Grid.Column="4" Style="{StaticResource Kartu}" Padding="6">
                 <TabControl x:Name="Tab" BorderThickness="0" Background="Transparent"
                             SelectionChanged="Tab_Ubah">
@@ -273,24 +255,74 @@
                         <Grid Margin="4,8,4,4">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Row="0" x:Name="LblJelajah"
-                                       Style="{StaticResource JudulKartu}" Margin="2,0,0,6"/>
+                            <Grid Grid.Row="0" Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" x:Name="LblJelajah"
+                                           Style="{StaticResource JudulKartu}" Margin="2,0,8,0"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="1" x:Name="LblSunting" FontSize="11"
+                                           Opacity="0.65" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="280"/>
+                            </Grid>
 
-                            <Grid Grid.Row="1">
+                            <!-- Saringan cepat. Yang diketik masuk apa adanya ke WHERE,
+                                 jadi ia SQL sungguhan - itulah maksudnya: menyaring
+                                 tanpa menulis ulang seluruh kueri. -->
+                            <Grid Grid.Row="1" Margin="0,0,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="WHERE" FontFamily="Consolas"
+                                           FontSize="12" Opacity="0.7" VerticalAlignment="Center"
+                                           Margin="2,0,8,0"/>
+                                <ui:TextBox Grid.Column="1" x:Name="TxtSaring" FontFamily="Consolas"
+                                            PlaceholderText="{loc:T 'saring, mis. tarif = 2 AND aktif = 1'}"
+                                            KeyDown="TxtSaring_Tombol"/>
+                                <ui:Button Grid.Column="2" Content="{loc:T 'Terapkan'}"
+                                           Style="{StaticResource Mungil}" Margin="8,0,0,0"
+                                           Click="BtnSaring_Click"/>
+                            </Grid>
+
+                            <Grid Grid.Row="2">
                                 <DataGrid x:Name="Kisi" Style="{StaticResource Isian}"
-                                          CanUserSortColumns="True" Sorting="Kisi_Urut"/>
+                                          CanUserSortColumns="True" Sorting="Kisi_Urut"
+                                          SelectionUnit="CellOrRowHeader"
+                                          BeginningEdit="Kisi_MulaiSunting"
+                                          CellEditEnding="Kisi_SelesaiSunting"/>
                                 <TextBlock x:Name="TxtKisiHampa" Style="{StaticResource Hampa}"
                                            Visibility="Collapsed"/>
                             </Grid>
 
-                            <!-- Bilah halaman. Batas 500 yang dulu dipasang mati
-                                 berarti baris ke-501 tidak pernah bisa dilihat
-                                 sama sekali. -->
-                            <Grid Grid.Row="2" Margin="0,8,0,0">
+                            <WrapPanel Grid.Row="3" Margin="0,8,0,-6">
+                                <ui:Button x:Name="BtnTambahBaris" Content="{loc:T 'Tambah baris'}"
+                                           Style="{StaticResource Mungil}" Margin="0,0,6,6"
+                                           Click="BtnTambahBaris_Click"/>
+                                <ui:Button x:Name="BtnHapusBaris" Content="{loc:T 'Hapus baris'}"
+                                           Style="{StaticResource Mungil}" Margin="0,0,6,6"
+                                           Click="BtnHapusBaris_Click"/>
+                                <ui:Button x:Name="BtnNull" Content="{loc:T 'Jadikan NULL'}"
+                                           Style="{StaticResource Mungil}" Margin="0,0,6,6"
+                                           Click="BtnNull_Click"/>
+                                <ui:Button x:Name="BtnSalinInsert" Content="{loc:T 'Salin sebagai INSERT'}"
+                                           Style="{StaticResource Mungil}" Margin="0,0,6,6"
+                                           Click="BtnSalinInsert_Click"/>
+                                <ui:Button x:Name="BtnCsv" Content="{loc:T 'Ekspor CSV...'}"
+                                           Style="{StaticResource Mungil}" Margin="0,0,0,6"
+                                           Click="BtnCsv_Click"/>
+                            </WrapPanel>
+
+                            <Grid Grid.Row="4" Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
@@ -305,22 +337,19 @@
                                                FontFamily="Segoe MDL2 Assets" Style="{StaticResource Mungil}"
                                                Margin="0,0,8,0" Click="BtnMundur_Click"/>
                                     <TextBlock x:Name="TxtHalaman" VerticalAlignment="Center"
-                                               FontSize="12" Opacity="0.8" MinWidth="150"/>
+                                               FontSize="12" Opacity="0.8"/>
                                     <ui:Button x:Name="BtnMaju" Content="&#xE76C;"
                                                FontFamily="Segoe MDL2 Assets" Style="{StaticResource Mungil}"
                                                Margin="8,0,0,0" Click="BtnMaju_Click"/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                    <TextBlock Text="{loc:T 'Baris per halaman'}" FontSize="12"
-                                               Opacity="0.7" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                    <ComboBox x:Name="CmbPerHalaman" Width="80"
-                                              SelectionChanged="CmbPerHalaman_Ubah">
-                                        <ComboBoxItem Content="50"/>
-                                        <ComboBoxItem Content="100" IsSelected="True"/>
-                                        <ComboBoxItem Content="500"/>
-                                        <ComboBoxItem Content="1000"/>
-                                    </ComboBox>
-                                </StackPanel>
+                                <ComboBox Grid.Column="2" x:Name="CmbPerHalaman" Width="78"
+                                          ToolTip="{loc:T 'Baris per halaman'}"
+                                          SelectionChanged="CmbPerHalaman_Ubah">
+                                    <ComboBoxItem Content="50"/>
+                                    <ComboBoxItem Content="100" IsSelected="True"/>
+                                    <ComboBoxItem Content="500"/>
+                                    <ComboBoxItem Content="1000"/>
+                                </ComboBox>
                             </Grid>
                         </Grid>
                     </TabItem>
@@ -328,9 +357,11 @@
                     <TabItem Header="{loc:T 'Struktur'}">
                         <Grid Margin="4,8,4,4">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="*" MinHeight="90"/>
+                                <RowDefinition Height="2*" MinHeight="70"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto" MinHeight="90"/>
+                                <RowDefinition Height="1*" MinHeight="50"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="1*" MinHeight="50"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
@@ -361,8 +392,7 @@
 
                             <TextBlock Grid.Row="1" Text="{loc:T 'Indeks'}"
                                        Style="{StaticResource JudulKartu}" Margin="2,10,0,6"/>
-                            <DataGrid Grid.Row="2" x:Name="KisiIndeks" Style="{StaticResource Isian}"
-                                      MaxHeight="150">
+                            <DataGrid Grid.Row="2" x:Name="KisiIndeks" Style="{StaticResource Isian}">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="{loc:T 'Nama'}" Width="1.5*"
                                                         Binding="{Binding Nama}"/>
@@ -375,7 +405,27 @@
                                 </DataGrid.Columns>
                             </DataGrid>
 
-                            <WrapPanel Grid.Row="3" Margin="0,10,0,0">
+                            <TextBlock Grid.Row="3" Text="{loc:T 'Relasi'}"
+                                       Style="{StaticResource JudulKartu}" Margin="2,10,0,6"/>
+                            <Grid Grid.Row="4">
+                                <DataGrid x:Name="KisiRelasi" Style="{StaticResource Isian}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="{loc:T 'Kolom'}" Width="1.4*"
+                                                            Binding="{Binding Kolom}"/>
+                                        <DataGridTextColumn Header="{loc:T 'Menunjuk ke'}" Width="1.8*"
+                                                            Binding="{Binding Tujuan}"/>
+                                        <DataGridTextColumn Header="{loc:T 'Saat dihapus'}" Width="Auto"
+                                                            Binding="{Binding SaatHapus}"/>
+                                        <DataGridTextColumn Header="{loc:T 'Saat diubah'}" Width="Auto"
+                                                            Binding="{Binding SaatUbah}"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                                <TextBlock x:Name="TxtRelasiHampa" Style="{StaticResource Hampa}"
+                                           Visibility="Collapsed"
+                                           Text="{loc:T 'Tabel ini tidak menunjuk tabel lain.'}"/>
+                            </Grid>
+
+                            <WrapPanel Grid.Row="5" Margin="0,10,0,0">
                                 <ui:Button Content="{loc:T 'Lihat CREATE TABLE'}"
                                            Style="{StaticResource Mungil}" Margin="0,0,6,0"
                                            Click="BtnCreateTable_Click"/>
@@ -389,9 +439,10 @@
                         <Grid Margin="4,8,4,4">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="140" MinHeight="70"/>
+                                <RowDefinition Height="2*" MinHeight="60"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*" MinHeight="80"/>
+                                <RowDefinition Height="3*" MinHeight="60"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Grid Grid.Row="0" Margin="0,0,0,6">
@@ -400,8 +451,10 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" x:Name="LblSql"
-                                           Style="{StaticResource JudulKartu}" Margin="2,0,0,0"/>
-                                <ComboBox Grid.Column="1" x:Name="CmbRiwayat" Width="220"
+                                           Style="{StaticResource JudulKartu}" Margin="2,0,8,0"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <ComboBox Grid.Column="1" x:Name="CmbRiwayat" Width="190"
+                                          ToolTip="{loc:T 'Kueri yang pernah dijalankan'}"
                                           SelectionChanged="CmbRiwayat_Pilih"/>
                             </Grid>
 
@@ -412,12 +465,17 @@
                                         HorizontalScrollBarVisibility="Auto"
                                         PreviewKeyDown="TxtSql_Tombol"/>
 
-                            <WrapPanel Grid.Row="2" Margin="0,8,0,8">
+                            <WrapPanel Grid.Row="2" Margin="0,8,0,2">
                                 <ui:Button x:Name="BtnJalankan" Content="{loc:T 'Jalankan (Ctrl+Enter)'}"
-                                           Appearance="Primary" Margin="0,0,8,0" Click="BtnJalankan_Click"/>
-                                <ui:Button Content="{loc:T 'Bersihkan'}" Margin="0,0,8,0"
-                                           Click="BtnBersih_Click"/>
-                                <ui:Button Content="{loc:T 'Salin hasil'}" Click="BtnSalin_Click"/>
+                                           Appearance="Primary" Margin="0,0,8,6" Click="BtnJalankan_Click"/>
+                                <ui:Button Content="{loc:T 'Bersihkan'}" Style="{StaticResource Mungil}"
+                                           Margin="0,0,6,6" Click="BtnBersih_Click"/>
+                                <ui:Button Content="{loc:T 'Salin hasil'}" Style="{StaticResource Mungil}"
+                                           Margin="0,0,6,6" Click="BtnSalin_Click"/>
+                                <ui:Button Content="{loc:T 'Buka .sql...'}" Style="{StaticResource Mungil}"
+                                           Margin="0,0,6,6" Click="BtnBukaSql_Click"/>
+                                <ui:Button Content="{loc:T 'Simpan .sql...'}" Style="{StaticResource Mungil}"
+                                           Margin="0,0,0,6" Click="BtnSimpanSql_Click"/>
                             </WrapPanel>
 
                             <Grid Grid.Row="3">
@@ -425,14 +483,23 @@
                                 <TextBlock x:Name="TxtSqlHampa" Style="{StaticResource Hampa}"
                                            Visibility="Collapsed"/>
                             </Grid>
+
+                            <!-- Catatan per perintah. Teks berisi lima perintah yang
+                                 berhenti di perintah ketiga dulu hanya menampilkan satu
+                                 pesan galat, tanpa menyebut mana yang sudah terlanjur
+                                 jalan - padahal itulah yang perlu diketahui. -->
+                            <ui:TextBox Grid.Row="4" x:Name="TxtLogSql" Height="58" Margin="0,8,0,0"
+                                        IsReadOnly="True" AcceptsReturn="True" FontFamily="Consolas"
+                                        FontSize="11" TextWrapping="NoWrap"
+                                        VerticalScrollBarVisibility="Auto"
+                                        HorizontalScrollBarVisibility="Auto"
+                                        Visibility="Collapsed"/>
                         </Grid>
                     </TabItem>
                 </TabControl>
             </Border>
         </Grid>
 
-        <!-- Bilah status. Satu tempat tetap untuk hasil perbuatan terakhir,
-             supaya pesan tidak muncul bergantian di sudut yang berpindah-pindah. -->
         <Border Grid.Row="2" Margin="0,8,0,0" Padding="10,6" CornerRadius="6"
                 Background="{DynamicResource ControlFillColorDefaultBrush}">
             <Grid>

@@ -72,6 +72,14 @@ namespace Phoron.Core
         public string DbPengguna = "root";
 
         /// <summary>
+        /// Jalur heidisql.exe, bila orang ingin memakai salinan tertentu.
+        /// Kosong berarti Phoron mencarinya sendiri - di folder bin yang sudah
+        /// dikenalnya (di situlah salinan bawaan Laragon berada) lalu di
+        /// Program Files.
+        /// </summary>
+        public string HeidiSql = "";
+
+        /// <summary>
         /// Sandi MySQL. Di dalam memori ia teks biasa; di phoron.ini ia disimpan
         /// tersandi lewat <see cref="Rahasia"/>, sebab berkas itu ikut tersalin
         /// ke mana-mana. Pemasangan bawaan Phoron tidak memakai sandi sama sekali,
@@ -150,6 +158,7 @@ namespace Phoron.Core
             s.Terminal = ini.Get("umum", "terminal", "cmd");
             s.Editor = ini.Get("umum", "editor", "");
             s.DbPengguna = ini.Get("basisdata", "pengguna", "root");
+            s.HeidiSql = ini.Get("basisdata", "heidisql", "");
             s.DbSandi = Rahasia.Buka(ini.Get("basisdata", "sandi", ""));
             return s;
         }
@@ -226,6 +235,7 @@ namespace Phoron.Core
             ini.Set("umum", "terminal", Terminal ?? "cmd");
             ini.Set("umum", "editor", Editor ?? "");
             ini.Set("basisdata", "pengguna", string.IsNullOrEmpty(DbPengguna) ? "root" : DbPengguna);
+            ini.Set("basisdata", "heidisql", HeidiSql ?? "");
             // Tersandi, tidak pernah sebagai teks biasa - lihat Rahasia.
             ini.Set("basisdata", "sandi", Rahasia.Tutup(DbSandi));
             ini.Save(Paths.SettingsFile,

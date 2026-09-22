@@ -90,6 +90,10 @@ namespace Phoron.Tests
                 UjiMyIniMengikutiProfil(sandbox);
                 UjiKamusBanjar();
                 UjiLabelTidakBentrok();
+                UjiSuntingMenolakTanpaKunci();
+                UjiBarisJadiInsert();
+                UjiCsvBasisData();
+                UjiRangkaInsert();
             }
             catch (Exception ex)
             {

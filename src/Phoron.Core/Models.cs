@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.30.0";
+        public const string Version = "1.31.0";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.

@@ -353,6 +353,130 @@ namespace Phoron.Tests
         }
 
         /// <summary>
+        /// Menyunting hanya boleh terjadi kalau barisnya bisa ditunjuk DENGAN PASTI.
+        ///
+        /// Tanpa kunci utama, satu-satunya cara menunjuk baris adalah mencocokkan
+        /// seluruh nilainya - dan pada tabel yang punya baris kembar, itu akan
+        /// mengubah baris yang salah tanpa ada yang tahu. Menolak lebih jujur
+        /// daripada menebak.
+        /// </summary>
+        static void UjiSuntingMenolakTanpaKunci()
+        {
+            Bagian("Menyunting tanpa kunci utama");
+
+            var baris = new Dictionary<string, MySqlSunting.Sel>
+            {
+                { "a", new MySqlSunting.Sel { Teks = "1" } },
+            };
+
+            var u = MySqlSunting.UbahSel(null, "db", "t", new List<string>(), baris, "a", "2", false);
+            Ok("Ubah tanpa kunci utama ditolak", !u.Ok && u.Galat.Length > 0, u.Galat);
+            Ok("Ubah tanpa kunci utama tidak menyusun SQL apa pun", u.Sql == "", u.Sql);
+
+            var d = MySqlSunting.HapusBaris(null, "db", "t", null, baris);
+            Ok("Hapus tanpa kunci utama ditolak", !d.Ok && d.Galat.Length > 0, d.Galat);
+            Ok("Hapus tanpa kunci utama tidak menyusun SQL apa pun", d.Sql == "", d.Sql);
+
+            // Kunci yang nilainya kosong sama saja tidak menunjuk apa-apa.
+            var kosong = new Dictionary<string, MySqlSunting.Sel>
+            {
+                { "id", new MySqlSunting.Sel { Kosong = true } },
+            };
+            var u2 = MySqlSunting.UbahSel(null, "db", "t", new List<string> { "id" }, kosong,
+                                          "a", "2", false);
+            Ok("Kunci yang nilainya kosong ditolak", !u2.Ok, u2.Galat);
+        }
+
+        static void UjiBarisJadiInsert()
+        {
+            Bagian("Baris jadi INSERT");
+
+            var kolom = new List<string> { "id", "nama", "catatan" };
+            var baris = new[]
+            {
+                new MySqlSunting.Sel { Teks = "7" },
+                new MySqlSunting.Sel { Teks = "d'Angelo" },
+                new MySqlSunting.Sel { Kosong = true },
+            };
+
+            var sql = MySqlSunting.BarisJadiInsert("orang", kolom, baris);
+            Ok("Nama tabel dan kolom dikutip balik",
+               sql.Contains("`orang`") && sql.Contains("`nama`"), sql);
+            // Tanpa penggandaan ini, nilai berisi tanda kutip menutup literalnya
+            // lebih awal dan sisanya ikut dijalankan sebagai SQL.
+            Ok("Kutip di dalam nilai digandakan", sql.Contains("'d''Angelo'"), sql);
+            // Sel yang kosong harus jadi NULL, bukan menjadi teks "NULL" -
+            // pembedaan ini baru mungkin karena kekosongan dibaca sebagai fakta.
+            Ok("Sel kosong jadi NULL tanpa kutip",
+               sql.Contains(", NULL)") && !sql.Contains("'NULL'"), sql);
+        }
+
+        static void UjiCsvBasisData()
+        {
+            Bagian("CSV basis data");
+
+            var kolom = new List<string> { "id", "nama", "catatan", "kosong" };
+            var baris = new List<MySqlSunting.Sel[]>
+            {
+                new[]
+                {
+                    new MySqlSunting.Sel { Teks = "1" },
+                    new MySqlSunting.Sel { Teks = "Budi, Santoso" },
+                    new MySqlSunting.Sel { Kosong = true },
+                    new MySqlSunting.Sel { Teks = "" },
+                },
+                new[]
+                {
+                    new MySqlSunting.Sel { Teks = "2" },
+                    new MySqlSunting.Sel { Teks = "dia bilang \"halo\"" },
+                    new MySqlSunting.Sel { Teks = "baris\nkedua" },
+                    new MySqlSunting.Sel { Teks = "NULL" },
+                },
+            };
+
+            var csv = MySqlSunting.Csv(kolom, baris);
+            Ok("Judul kolom ikut tertulis", csv.StartsWith("id,nama,catatan,kosong"), csv.Substring(0, 30));
+            Ok("Koma di dalam nilai membuatnya dikutip", csv.Contains("\"Budi, Santoso\""), csv);
+            Ok("Kutip ganda di dalam nilai digandakan",
+               csv.Contains("\"dia bilang \"\"halo\"\"\""), csv);
+            Ok("Ganti baris di dalam nilai membuatnya dikutip",
+               csv.Contains("\"baris\nkedua\""), csv);
+
+            // Inilah satu-satunya cara CSV membedakan keduanya, dan pembedaan itu
+            // baru ada artinya karena kekosongan dibaca dari kolom pendamping
+            // "IS NULL", bukan dikira-kira dari tulisannya.
+            Ok("Sel kosong ditulis tanpa apa pun", csv.Contains(",,\"\""), csv);
+            Ok("Teks kosong ditulis sebagai sepasang kutip", csv.Contains("\"\""), csv);
+            Ok("Teks berisi kata NULL tetap tertulis", csv.Contains("NULL"), csv);
+        }
+
+        static void UjiRangkaInsert()
+        {
+            Bagian("Rangka INSERT");
+
+            var kolom = new List<MySqlSkema.InfoKolom>
+            {
+                new MySqlSkema.InfoKolom { Nama = "id", Jenis = "int", Ekstra = "auto_increment",
+                                           Kosong = Lang.T("tidak") },
+                new MySqlSkema.InfoKolom { Nama = "nama", Jenis = "varchar(50)", Ekstra = "",
+                                           Kosong = Lang.T("tidak") },
+                new MySqlSkema.InfoKolom { Nama = "catatan", Jenis = "text", Ekstra = "",
+                                           Kosong = Lang.T("ya") },
+            };
+
+            var sql = MySqlSunting.RangkaInsert("orang", kolom);
+            // Kolom auto_increment sengaja tidak disebut: menyebutnya memaksa orang
+            // mengarang nilai untuk sesuatu yang justru tugas server mengisinya.
+            Ok("Kolom auto_increment tidak ikut disebut", !sql.Contains("`id`"), sql);
+            Ok("Kolom biasa ikut disebut", sql.Contains("`nama`") && sql.Contains("`catatan`"), sql);
+            Ok("Kolom yang boleh kosong diberi NULL", sql.Contains("NULL"), sql);
+            Ok("Perintahnya diakhiri titik koma", sql.TrimEnd().EndsWith(";"), sql);
+
+            Ok("Tabel tanpa kolom tidak menghasilkan apa pun",
+               MySqlSunting.RangkaInsert("t", new List<MySqlSkema.InfoKolom>()) == "");
+        }
+
+        /// <summary>
         /// Tombol yang MERUSAK tidak boleh berbagi label dengan tombol yang tidak.
         ///
         /// Ditemukan saat memandangi tangkapan layar tema gelap: tombol yang
