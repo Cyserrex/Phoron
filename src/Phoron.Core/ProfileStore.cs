@@ -80,6 +80,11 @@ namespace Phoron.Core
                                  .Select(x => x.Trim().ToLowerInvariant())
                                  .Where(x => x.Length > 0).Distinct().ToList();
             foreach (var kv in ini.Items("php.ini")) p.PhpIniOverrides[kv.Key] = kv.Value;
+            // Versi PHP per situs. Nilai kosong berarti "ikut profil" dan tidak
+            // disimpan sebagai entri sama sekali.
+            foreach (var kv in ini.Items("php_situs"))
+                if (!string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                    p.PhpPerSitus[kv.Key.Trim()] = kv.Value.Trim();
             return p;
         }
 
@@ -102,6 +107,8 @@ namespace Phoron.Core
             ini.Set("profil", "catatan", (p.Notes ?? "").Replace("\r", " ").Replace("\n", " "));
             ini.Set("php", "ekstensi", string.Join(",", p.PhpExtensions));
             foreach (var kv in p.PhpIniOverrides) ini.Set("php.ini", kv.Key, kv.Value);
+            foreach (var kv in p.PhpPerSitus)
+                if (!string.IsNullOrWhiteSpace(kv.Value)) ini.Set("php_situs", kv.Key, kv.Value);
             ini.Save(path, "Profil Phoron - boleh disunting tangan.\nNama folder versi harus persis seperti di folder bin.");
         }
 

@@ -22,7 +22,19 @@ namespace Phoron.App.Pages
             public string DocRoot { get; set; }
             public string Hosts { get; set; }
             public string Vhost { get; set; }
+            public List<PilihanPhp> PilihanPhp { get; set; }
+            public PilihanPhp PhpTerpilih { get; set; }
+            /// <summary>php.ini yang dipakai situs ini - tooltip kotak PHP.</summary>
+            public string KeteranganPhp { get; set; }
             public Site Situs;
+        }
+
+        /// <summary>Satu pilihan di kotak PHP. Id kosong = ikut PHP profil.</summary>
+        public class PilihanPhp
+        {
+            public string Id { get; set; }
+            public string Teks { get; set; }
+            public override string ToString() { return Teks; }
         }
 
         public SitesPage()
@@ -72,6 +84,7 @@ namespace Phoron.App.Pages
                 Vhost = s.HasVhost ? "ada" : "-",
                 Situs = s,
             }).ToList();
+            foreach (Baris b in (List<Baris>)Daftar.ItemsSource) IsiPilihanPhp(b);
 
             TampilkanInfo();
         }
@@ -80,6 +93,122 @@ namespace Phoron.App.Pages
         /// Keterangan tentang daftar situs, ditempel di halaman - bukan
         /// dimunculkan sebagai kotak dialog yang menghalangi.
         /// </summary>
+        /// <summary>
+        /// Pilihan PHP untuk satu situs: "Ikut profil", lalu setiap versi yang
+        /// terpasang. Versi yang dicatat profil tapi tidak ada di komputer ini
+        /// tetap muncul - dan terpilih - dengan ID aslinya, supaya pilihannya
+        /// tidak hilang diam-diam; pola yang sama dengan halaman Profil.
+        /// </summary>
+        void IsiPilihanPhp(Baris b)
+        {
+            var profil = _e.Php;
+            var daftar = new List<PilihanPhp>
+            {
+                new PilihanPhp
+                {
+                    Id = "",
+                    Teks = Lang.T("Ikut profil") + (profil != null ? " (" + profil.Version + ")" : ""),
+                },
+            };
+            var semua = _e.Of(BinKind.Php).OrderByDescending(x => x.Parsed).ToList();
+            foreach (var p in semua)
+                daftar.Add(new PilihanPhp { Id = p.Id, Teks = LabelPhp(p, semua) });
+
+            string simpan = null;
+            if (_e.Active != null && b.Situs != null) _e.Active.PhpPerSitus.TryGetValue(b.Situs.Path, out simpan);
+            var pilih = string.IsNullOrEmpty(simpan) ? daftar[0]
+                      : daftar.FirstOrDefault(x => string.Equals(x.Id, simpan, StringComparison.OrdinalIgnoreCase));
+            if (pilih == null)
+            {
+                pilih = new PilihanPhp { Id = simpan, Teks = Lang.T("{0} - tidak ada di komputer ini", simpan) };
+                daftar.Insert(1, pilih);
+            }
+            b.PilihanPhp = daftar;
+            b.PhpTerpilih = pilih;
+
+            var dipakai = _e.PhpUntuk(b.Situs);
+            b.KeteranganPhp = dipakai == null ? ""
+                : "PHP " + dipakai.Version + " - php.ini: "
+                  + Path.Combine(ConfigWriter.FolderPhpIni(dipakai,
+                        _e.Php != null && dipakai.Id == _e.Php.Id && _e.Settings.PhpIniKeFolderPhp), "php.ini");
+        }
+
+        /// <summary>
+        /// "8.3.12 · x64". Toolset dan TS/NTS sengaja tidak ditulis: situs yang
+        /// memilih versi sendiri dilayani php-cgi sebagai proses terpisah, jadi
+        /// keduanya tidak berpengaruh - dan label panjang terpotong di kolomnya.
+        /// Nama folder baru ditambahkan bila dua paket akan tampak sama.
+        /// </summary>
+        static string LabelPhp(BinPackage p, List<BinPackage> semua)
+        {
+            var teks = p.Version + (string.IsNullOrEmpty(p.Arch) ? "" : " · " + p.Arch);
+            bool kembar = semua.Count(x => x.Version == p.Version && x.Arch == p.Arch) > 1;
+            return kembar ? teks + " · " + p.Id : teks;
+        }
+
+        /// <summary>
+        /// Versi PHP sebuah situs diganti.
+        ///
+        /// SelectionChanged juga menyala saat kotaknya pertama kali digambar -
+        /// karena itu pilihan dibandingkan dulu dengan yang tersimpan, dan hanya
+        /// perubahan sungguhan yang menulis profil dan konfigurasi.
+        /// </summary>
+        void CmbPhpSitus_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            var cmb = sender as ComboBox;
+            var b = cmb != null ? cmb.DataContext as Baris : null;
+            var pilih = cmb != null ? cmb.SelectedItem as PilihanPhp : null;
+            if (b == null || b.Situs == null || pilih == null || _e.Active == null) return;
+
+            string lama;
+            _e.Active.PhpPerSitus.TryGetValue(b.Situs.Path, out lama);
+            if (string.Equals(lama ?? "", pilih.Id ?? "", StringComparison.OrdinalIgnoreCase)) return;
+
+            if (string.IsNullOrEmpty(pilih.Id)) _e.Active.PhpPerSitus.Remove(b.Situs.Path);
+            else _e.Active.PhpPerSitus[b.Situs.Path] = pilih.Id;
+            b.PhpTerpilih = pilih;
+            ProfileStore.Save(_e.Active);
+            _e.Apply();
+
+            var dipakai = _e.PhpUntuk(b.Situs);
+            _e.Say("Situs " + b.Situs.Folder + " kini memakai PHP "
+                   + (dipakai != null ? dipakai.Version : "profil") + ".");
+
+            // php_value dan php_flag di .htaccess hanya dimengerti mod_php. Di
+            // bawah FastCGI keduanya diabaikan TANPA SUARA - setelan yang selama
+            // ini dipakai aplikasi lenyap begitu saja.
+            bool lewatKolam = dipakai != null && (_e.Php == null || dipakai.Id != _e.Php.Id);
+            if (lewatKolam)
+            {
+                var berkas = PhpValueDiHtaccess(b.Situs);
+                if (berkas != null)
+                    AppState.Warn(".htaccess di " + b.Situs.Folder + " memakai php_value atau php_flag ("
+                                  + berkas + "). Di PHP " + dipakai.Version
+                                  + " situs ini dilayani lewat FastCGI, dan baris semacam itu diabaikan. "
+                                  + "Pindahkan setelannya ke .user.ini di folder yang sama.");
+            }
+            IsiPilihanPhp(b);
+        }
+
+        /// <summary>Berkas .htaccess situs yang memuat php_value/php_flag, atau null.</summary>
+        static string PhpValueDiHtaccess(Site s)
+        {
+            foreach (var folder in new[] { s.Path, s.DocRoot })
+            {
+                if (string.IsNullOrEmpty(folder)) continue;
+                var f = Path.Combine(folder, ".htaccess");
+                try
+                {
+                    if (File.Exists(f) && File.ReadAllLines(f).Any(l =>
+                            System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s*php_(value|flag|admin_value|admin_flag)\b",
+                                System.Text.RegularExpressions.RegexOptions.IgnoreCase)))
+                        return f;
+                }
+                catch { }
+            }
+            return null;
+        }
+
         void TampilkanInfo()
         {
             var pesan = new List<string>(_e.SiteWarnings ?? new List<string>());
@@ -188,8 +317,10 @@ namespace Phoron.App.Pages
         void BtnTerminal_Click(object sender, RoutedEventArgs e)
         {
             var s = Terpilih();
+            // PHP milik SITUS ini yang ada di PATH - php artisan dan composer
+            // untuk proyek Laravel butuh PHP 8.x walau profilnya PHP 5.6.
             Shell.OpenTerminal(_e.Settings.Terminal,
-                s != null ? s.Path : SiteScanner.DocumentRoot(_e.Active), _e.ToolEnv());
+                s != null ? s.Path : SiteScanner.DocumentRoot(_e.Active), _e.ToolEnv(s));
         }
 
         void BtnSegarkan_Click(object sender, RoutedEventArgs e)

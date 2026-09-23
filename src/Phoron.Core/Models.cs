@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.34.0";
+        public const string Version = "1.35.0";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
@@ -161,6 +161,17 @@ namespace Phoron.Core
         public List<string> PhpExtensions = new List<string>();
         /// <summary>Penimpaan php.ini: kunci -> nilai (memory_limit, dst).</summary>
         public Dictionary<string, string> PhpIniOverrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Versi PHP khusus untuk situs tertentu: jalur folder situs -> Id paket
+        /// PHP. Situs yang tidak disebut di sini ikut PHP profil.
+        ///
+        /// Kuncinya jalur lengkap, bukan nama folder: dua folder proyek boleh
+        /// berisi situs bernama sama, dan keduanya bisa butuh versi berbeda.
+        /// Situs yang disebut di sini dilayani php-cgi versinya lewat FastCGI,
+        /// berdampingan dengan PHP profil - CodeIgniter 2 di PHP 5.6 dan Laravel
+        /// di PHP 8.3, dalam satu Apache yang sama, tanpa berganti profil.
+        /// </summary>
+        public Dictionary<string, string> PhpPerSitus = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public string Notes = "";
 
         public Profile() { Name = "Baru"; }
@@ -185,6 +196,7 @@ namespace Phoron.Core
                 SiteSuffix = SiteSuffix,
                 PhpExtensions = new List<string>(PhpExtensions),
                 PhpIniOverrides = new Dictionary<string, string>(PhpIniOverrides, StringComparer.OrdinalIgnoreCase),
+                PhpPerSitus = new Dictionary<string, string>(PhpPerSitus, StringComparer.OrdinalIgnoreCase),
                 Notes = Notes,
             };
         }

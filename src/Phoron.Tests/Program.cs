@@ -90,6 +90,7 @@ namespace Phoron.Tests
                 UjiFastCgi();
                 UjiHostsTanpaUbah();
                 UjiLayananBertabrakan();
+                UjiPhpPerSitus();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();

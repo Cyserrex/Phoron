@@ -20,6 +20,10 @@ Windows hosts file — is rewritten for that profile, and the services restart.
   web server and its version, the MySQL version, all three ports, the enabled
   PHP extensions, `php.ini` overrides, and the project folders. Keep as many
   profiles as you like and switch between them as a unit.
+- **Different PHP versions per site, at the same time.** Keep a CodeIgniter 2 app
+  on PHP 5.6 and a Laravel app on PHP 8.3 open side by side — no profile switch,
+  no restart in between. Sites that pick their own version are served by that
+  version's `php-cgi` over FastCGI; everything else keeps the profile's PHP.
 - **Never picks a combination that can't start.** Phoron pairs PHP with an Apache
   built by the same compiler toolset (VC11, VC15, VS16…) and the same
   architecture. A VC11 PHP module inside a VS16 Apache — or 32-bit PHP from
@@ -64,6 +68,7 @@ Windows hosts file — is rewritten for that profile, and the services restart.
 |---|---|---|---|---|
 | Switch PHP version | yes | yes | reinstall | yes |
 | Switch web server version together with PHP | **automatic, per profile** | separately | reinstall | separately |
+| Different PHP versions per site, simultaneously | **yes** | – | – | yes (FCGI per VirtualHost) |
 | Named, saved stack combinations | **unlimited profiles** | – | – | – |
 | Different ports per stack | **yes** | one global setting | one global setting | one global setting |
 | PHP extensions & `php.ini` overrides per stack | **yes** | per PHP folder | one `php.ini` | per PHP folder |
@@ -166,6 +171,40 @@ still works at `http://localhost/project/`. Turn on **Settings → Virtual Host:
 every project folder its own address**, then
 press **Register site names once** — the entries persist, so Phoron never needs
 admin rights for this again.
+
+### PHP version per site
+
+In **Sites**, each site has a **PHP** box: **Follow profile**, or any PHP
+version installed on the machine. A CodeIgniter 2 project can stay on PHP 5.6
+while a Laravel project next to it runs on PHP 8.3 — both at
+`http://localhost/<folder>/` and at `<folder>.test`, at the same time. **Terminal
+here** puts that site's PHP first on `PATH`, so `php artisan` and
+`composer` get PHP 8.3 even when the profile is on 5.6.
+
+How it works: the profile's PHP keeps running as an Apache module. Each *other*
+PHP version in use gets one `php-cgi` pool on its own port (one pool per version,
+not per site), and each site that picked it gets a `<Directory>` block routing its
+`.php` files there. The same works with Nginx.
+
+What it costs, measured on the developer's machine: **no extra CPU** while idle
+(0 ms of CPU time over 30 seconds), about **76 MB of RAM per extra PHP version**
+(one supervisor and two workers), and about 0.3 ms more per request than
+`mod_php`. If no site picks its own version, nothing is added at all — the
+generated configuration is identical.
+
+Things to know:
+
+- A site on another version uses **that version's `php.ini`**, not the profile's.
+  Its extension list comes from a profile that uses that PHP as its main version,
+  or a sensible default. Hovering the PHP box shows which `php.ini` it is.
+- `php_value` / `php_flag` lines in `.htaccess` are **ignored under FastCGI**.
+  Phoron warns you when you move a site that has them; use `.user.ini` instead.
+- The `Authorization` header is passed through (`CGIPassAuth On`), so APIs with
+  Bearer tokens keep working.
+- For Oracle, each pool gets an Instant Client whose version matches its `oci8`
+  extension (`oci8_19` needs client 19 or newer) placed first on its `PATH`.
+- Needs Apache 2.4.26 or newer. On older Apache the choice is kept but not
+  applied, and Phoron tells you why.
 
 ### Project folders anywhere
 
@@ -273,7 +312,7 @@ sqlite3, zip) filtered to the DLLs the build actually contains.
 - **Profiles** — versions, ports, project folders, site suffix.
 - **Versions** — everything installed; add bin folders; download new PHP builds
   straight from windows.php.net, or Apache/MySQL/Nginx from `etc\catalog.ini`.
-- **Sites** — sites, new project, hosts & vhost status.
+- **Sites** — sites, PHP version per site, new project, hosts & vhost status.
 - **Databases** — see above.
 - **Node / TS** — see above.
 - **PHP extensions** — per-profile extensions and common `php.ini` settings.
@@ -441,7 +480,7 @@ Windows 10/11).
 ```
 build.bat              Release build -> dist\Phoron.exe (single file, ~3 MB)
 build.bat run          Debug build, then run it
-build.bat test         test harness (631 tests)
+build.bat test         test harness (657 tests)
 build.bat live         end-to-end: starts real Apache & MySQL
 build.bat clean
 build_installer.bat    exe + installer (needs Inno Setup 6; downloads HeidiSQL)

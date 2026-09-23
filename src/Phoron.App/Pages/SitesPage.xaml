@@ -65,8 +65,22 @@
                 <GridView>
                     <GridViewColumn Header="{loc:T 'Alamat'}" Width="215" DisplayMemberBinding="{Binding Alamat}"/>
                     <GridViewColumn Header="{loc:T 'Folder'}" Width="150" DisplayMemberBinding="{Binding Folder}"/>
-                    <GridViewColumn Header="{loc:T 'Folder proyek'}" Width="185" DisplayMemberBinding="{Binding Root}"/>
-                    <GridViewColumn Header="{loc:T 'Document root'}" Width="150" DisplayMemberBinding="{Binding DocRoot}"/>
+                    <!-- Versi PHP per situs. SelectedItem diikat ke PROPERTI
+                         (PhpTerpilih) - pengikatan ke medan gagal tanpa suara.
+                         Perubahannya ditangani CmbPhpSitus_Changed, yang
+                         membandingkan dengan pilihan tersimpan dulu: SelectionChanged
+                         juga menyala saat kotaknya pertama kali digambar. -->
+                    <GridViewColumn Header="{loc:T 'PHP'}" Width="185">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox ItemsSource="{Binding PilihanPhp}" SelectedItem="{Binding PhpTerpilih}"
+                                          ToolTip="{Binding KeteranganPhp}" MinWidth="165"
+                                          SelectionChanged="CmbPhpSitus_Changed"/>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn Header="{loc:T 'Folder proyek'}" Width="160" DisplayMemberBinding="{Binding Root}"/>
+                    <GridViewColumn Header="{loc:T 'Document root'}" Width="130" DisplayMemberBinding="{Binding DocRoot}"/>
                     <GridViewColumn Header="{loc:T 'hosts'}" Width="70" DisplayMemberBinding="{Binding Hosts}"/>
                     <GridViewColumn Header="{loc:T 'vhost'}" Width="70" DisplayMemberBinding="{Binding Vhost}"/>
                 </GridView>

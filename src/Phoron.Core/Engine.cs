@@ -374,7 +374,87 @@ namespace Phoron.Core
             if (Active.WebServer == "nginx") periksa(BinKind.Nginx, Active.NginxId, "Versi Nginx");
             else periksa(BinKind.Apache, Active.ApacheId, "Versi Apache");
             periksa(BinKind.MySql, Active.MySqlId, "Versi MySQL");
+
+            // Versi PHP per situs yang tidak ada di komputer ini. Pilihannya
+            // TIDAK dihapus dari profil - dibawa pulang ke komputer asalnya,
+            // situs itu harus kembali ke versinya sendiri.
+            foreach (var kv in Active.PhpPerSitus)
+                if (Find(BinKind.Php, kv.Value) == null)
+                    pesan.Add("Situs " + Path.GetFileName(kv.Key.TrimEnd('\\')) + " memakai PHP \""
+                              + kv.Value + "\", yang tidak ada di komputer ini; sementara ia "
+                              + "dilayani PHP profil.");
             return pesan;
+        }
+
+        static bool SamaJalur(string a, string b)
+        {
+            return string.Equals((a ?? "").TrimEnd('\\'), (b ?? "").TrimEnd('\\'),
+                                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Paket PHP yang sungguh melayani situs ini: pilihannya sendiri bila ada
+        /// dan terpasang, selain itu PHP profil.
+        /// </summary>
+        public BinPackage PhpUntuk(Site s)
+        {
+            if (s != null && Active != null)
+                foreach (var kv in Active.PhpPerSitus)
+                    if (SamaJalur(kv.Key, s.Path))
+                    {
+                        var p = Find(BinKind.Php, kv.Value);
+                        if (p != null) return p;
+                    }
+            return Php;
+        }
+
+        /// <summary>
+        /// Kolam php-cgi untuk situs yang memakai versi PHP sendiri - satu kolam
+        /// per VERSI, bukan per situs.
+        ///
+        /// Daftar ekstensi kolam diambil dari profil yang memakai versi itu
+        /// sebagai PHP utamanya, bukan dari profil aktif: oci8_11g milik PHP 5.6
+        /// tidak ada di PHP 8.3, yang membawa oci8_19. Tanpa profil semacam itu,
+        /// dipakai daftar yang disarankan untuk build tersebut.
+        /// </summary>
+        List<ConfigWriter.Kolam> SusunKolam()
+        {
+            var hasil = new List<ConfigWriter.Kolam>();
+            if (Active == null || Active.PhpPerSitus.Count == 0) return hasil;
+            var perVersi = new Dictionary<string, ConfigWriter.Kolam>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in Active.PhpPerSitus)
+            {
+                // Folder yang sudah dihapus atau berada di luar folder proyek
+                // profil ini: tidak ada yang perlu dilayani.
+                var situs = Sites.FirstOrDefault(s => SamaJalur(s.Path, kv.Key));
+                if (situs == null) continue;
+                var php = Find(BinKind.Php, kv.Value);
+                if (php == null) continue;   // dilaporkan Penyesuaian()
+                // Sama dengan PHP profil: mod_php-nya sudah melayani.
+                if (Php != null && string.Equals(php.Id, Php.Id, StringComparison.OrdinalIgnoreCase)) continue;
+
+                ConfigWriter.Kolam k;
+                if (!perVersi.TryGetValue(php.Id, out k))
+                {
+                    var sumber = Profiles.FirstOrDefault(p =>
+                        string.Equals(p.PhpId, php.Id, StringComparison.OrdinalIgnoreCase)
+                        && p.PhpExtensions.Count > 0);
+                    k = new ConfigWriter.Kolam
+                    {
+                        Php = php,
+                        Ekstensi = sumber != null
+                            ? new List<string>(sumber.PhpExtensions)
+                            : ConfigWriter.EkstensiDisarankan(php),
+                        Timpa = sumber != null
+                            ? new Dictionary<string, string>(sumber.PhpIniOverrides, StringComparer.OrdinalIgnoreCase)
+                            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    };
+                    perVersi[php.Id] = k;
+                    hasil.Add(k);
+                }
+                k.Situs.Add(situs);
+            }
+            return hasil;
         }
         public BinPackage WebPackage
         {
@@ -424,7 +504,8 @@ namespace Phoron.Core
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>(),
                                            Settings.PhpIniKeFolderPhp, Settings.LogRinci,
-                                           Settings.BerandaDiAkar, Settings.Opcache);
+                                           Settings.BerandaDiAkar, Settings.Opcache,
+                                           SusunKolam());
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.
@@ -735,10 +816,20 @@ namespace Phoron.Core
         // ------------------------------------------------------------- Kemudahan
 
         /// <summary>Variabel lingkungan untuk terminal/komposer: PHP dan MySQL profil aktif di depan PATH.</summary>
-        public IDictionary<string, string> ToolEnv()
+        /// <summary>
+        /// Lingkungan untuk terminal yang dibuka Phoron.
+        ///
+        /// Dengan situs: PHP yang melayani SITUS ITU yang ada di PATH, bukan PHP
+        /// profil. Proyek Laravel yang butuh PHP 8.2 tetap bisa menjalankan
+        /// php artisan dan composer walau profilnya PHP 5.6.
+        /// </summary>
+        public IDictionary<string, string> ToolEnv(Site situs = null)
         {
+            var php = situs != null ? PhpUntuk(situs) : Php;
+            bool milikProfil = php != null && Php != null
+                               && string.Equals(php.Id, Php.Id, StringComparison.OrdinalIgnoreCase);
             var parts = new List<string>();
-            if (Php != null) parts.Add(Php.Path);
+            if (php != null) parts.Add(php.Path);
             if (MySql != null) parts.Add(Path.Combine(MySql.Path, "bin"));
             var composer = Path.Combine(Paths.Bin, "composer");
             if (Directory.Exists(composer)) parts.Add(composer);
@@ -746,7 +837,10 @@ namespace Phoron.Core
             {
                 { "PATH", string.Join(";", parts) + ";" + Environment.GetEnvironmentVariable("PATH") },
             };
-            if (Php != null) env["PHPRC"] = ConfigWriter.FolderPhpIni(Php, Settings.PhpIniKeFolderPhp);
+            // php.ini kolam selalu di etc\php\<versi>, apa pun sakelar "tulis ke
+            // folder PHP" - sakelar itu hanya berlaku untuk PHP profil.
+            if (php != null)
+                env["PHPRC"] = ConfigWriter.FolderPhpIni(php, milikProfil && Settings.PhpIniKeFolderPhp);
             return env;
         }
 

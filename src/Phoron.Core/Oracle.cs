@@ -42,6 +42,52 @@ namespace Phoron.Core
             public string Pesan = "";
         }
 
+        /// <summary>
+        /// Folder Instant Client yang harus ditaruh PALING DEPAN di PATH untuk
+        /// PHP ini dan daftar ekstensinya - atau null bila tidak ada yang perlu
+        /// diatur.
+        ///
+        /// Periksa() hanya menjamin arsitekturnya sepadan, dan itu cukup selama
+        /// satu PHP memakai satu client. Kolam PHP per situs mengubahnya: di
+        /// mesin pengembang PATH berisi Instant Client 12.1 LEBIH DULU daripada
+        /// 19.24. PHP 5.6 (oci8_11g) puas dengan 12.1; php_oci8_19.dll milik
+        /// PHP 8.3 butuh client 19 ke atas. Tanpa pengaturan ini, kolam 8.3 akan
+        /// memuat client yang terlalu tua. Dibuktikan: dengan folder 19.24 di
+        /// depan, oci_client_version() di php-cgi 8.3 menjawab 19.24.0.0.0.
+        /// </summary>
+        public static string FolderUntuk(BinPackage php, IEnumerable<string> ekstensi, string path = null)
+        {
+            if (php == null || ekstensi == null) return null;
+            int perlu = 0;
+            foreach (var e in ekstensi)
+            {
+                var n = (e ?? "").ToLowerInvariant();
+                if (n == "oci8_19") perlu = Math.Max(perlu, 19);
+                else if (n == "oci8_12c") perlu = Math.Max(perlu, 12);
+                else if (n == "oci8_11g") perlu = Math.Max(perlu, 11);
+            }
+            if (perlu == 0) return null;
+
+            var archPhp = string.IsNullOrEmpty(php.Arch) ? BinProbe.Arsitektur(php.MainExe) : php.Arch;
+            var daftarPath = path ?? Environment.GetEnvironmentVariable("PATH") ?? "";
+            foreach (var d in daftarPath.Split(';'))
+            {
+                if (string.IsNullOrWhiteSpace(d)) continue;
+                string calon;
+                try { calon = Path.Combine(d.Trim(), "oci.dll"); }
+                catch { continue; }
+                if (!File.Exists(calon)) continue;
+                if (!ProfileStore.ArsitekturSepadan(BinProbe.Arsitektur(calon), archPhp)) continue;
+                int mayor;
+                try { mayor = System.Diagnostics.FileVersionInfo.GetVersionInfo(calon).FileMajorPart; }
+                catch { continue; }
+                // Client yang lebih baru boleh; yang lebih tua dari yang dibutuhkan
+                // ekstensinya tidak.
+                if (mayor >= perlu) return d.Trim();
+            }
+            return null;
+        }
+
         public static bool AdalahEkstensiOracle(string nama)
         {
             return Ekstensi.Any(x => string.Equals(x, nama, StringComparison.OrdinalIgnoreCase));

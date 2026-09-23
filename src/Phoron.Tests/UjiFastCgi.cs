@@ -85,9 +85,14 @@ namespace Phoron.Tests
                !isi.Contains("%{DOCUMENT_ROOT}%{REQUEST_URI}"),
                "beranda /phoron akan menjawab \"No input file specified\"");
             Ok("SCRIPT_FILENAME dikupas dari jalur yang sudah dipetakan Apache",
-               isi.Contains(ConfigWriter.SetelNamaBerkasFcgi(r.FastCgiPort)), isi);
-            Ok("Titik alamat IP diloloskan di ungkapan regulernya",
-               isi.Contains(@"127\.0\.0\.1:" + r.FastCgiPort + "/(.*)$#"), "");
+               isi.Contains(ConfigWriter.SetelNamaBerkasFcgi()), isi);
+            // Satu ungkapan untuk port APA PUN: php-cgi profil dan setiap kolam
+            // PHP per situs dilayani baris yang sama.
+            Ok("Titik alamat IP diloloskan, dan port apa pun cocok",
+               isi.Contains(@"127\.0\.0\.1:\d+/(.*)$#"), "");
+            Ok("ProxyFCGISetEnvIf ditulis sekali saja",
+               System.Text.RegularExpressions.Regex.Matches(isi, "ProxyFCGISetEnvIf").Count == 1,
+               System.Text.RegularExpressions.Regex.Matches(isi, "ProxyFCGISetEnvIf").Count + " kali");
 
             // mod_proxy dan mod_proxy_fcgi harus ikut dimuat, kalau tidak
             // direktifnya tidak dikenal dan Apache menolak start.

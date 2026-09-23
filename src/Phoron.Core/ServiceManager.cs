@@ -315,6 +315,11 @@ namespace Phoron.Core
                 if (!fcgi) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             }
 
+            // Kolam PHP per situs, SEBELUM httpd: permintaan pertama ke situs
+            // ber-PHP 8.3 tidak boleh sampai lebih dulu daripada php-cgi-nya.
+            await MulaiKolamAsync(cfg);
+            if (Batal(ServiceKind.Web, g)) { StopFastCgi(); return false; }
+
             var p = Spawn(httpd, args, apache.Path, EnvFor(php, cfg.PhpIniDir), "apache");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             PasangWeb(p);
@@ -378,6 +383,8 @@ namespace Phoron.Core
                 if (Batal(ServiceKind.Web, g)) { StopFastCgi(); return false; }
                 if (!fcgi) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             }
+            await MulaiKolamAsync(cfg);
+            if (Batal(ServiceKind.Web, g)) { StopFastCgi(); return false; }
             var p = Spawn(exe, args, nginx.Path, EnvFor(php, cfg.PhpIniDir), "nginx");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             PasangWeb(p);
@@ -468,9 +475,90 @@ namespace Phoron.Core
 
         void StopFastCgi()
         {
+            // Kolam PHP per situs ikut di sini, bukan di tempat terpisah: SEMUA
+            // jalur yang mematikan php-cgi profil - stop, start yang dibatalkan,
+            // web server yang mati sendiri - otomatis ikut mematikan kolamnya.
+            // Dilepas dulu sebelum dibunuh, sama seperti rujukan lain.
+            List<Process> kolam;
+            lock (_lock) { kolam = new List<Process>(_kolam); _kolam.Clear(); _nama.Clear(); }
+            foreach (var k in kolam)
+                try { if (!k.HasExited) Shell.KillTree(k.Id); } catch { }
+
             var proc = AmbilLepasFcgi();   // dilepas dulu, lihat catatan di StopWebAsync
             if (proc == null) return;
             try { if (!proc.HasExited) Shell.KillTree(proc.Id); } catch { }
+        }
+
+        // ----------------------------------------------------- Kolam PHP per situs
+
+        // Proses php-cgi tiap kolam, dan keterangan untuk pesan bila ia mati
+        // sendiri: "PHP 8.3.12 (api-bacameter, bbs)". Dijaga _lock.
+        readonly List<Process> _kolam = new List<Process>();
+        readonly Dictionary<Process, string> _nama = new Dictionary<Process, string>();
+
+        bool LepasKolamJika(Process p, out string nama)
+        {
+            lock (_lock)
+            {
+                nama = null;
+                if (!_kolam.Remove(p)) return false;
+                _nama.TryGetValue(p, out nama);
+                _nama.Remove(p);
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Nyalakan satu php-cgi untuk tiap kolam PHP per situs.
+        ///
+        /// Kolam yang gagal TIDAK menggagalkan web server: situs-situs lain tetap
+        /// harus jalan. Yang gagal disebut beserta situs yang kena, supaya "503 di
+        /// api-bacameter" tidak jadi teka-teki.
+        ///
+        /// Dua pekerja per kolam, bukan empat seperti php-cgi profil. Diukur di
+        /// mesin pengembang: satu kolam (1 induk + 2 pekerja) 76 MB menganggur,
+        /// 0 ms waktu CPU dalam 30 detik.
+        /// </summary>
+        async Task MulaiKolamAsync(ConfigWriter.Result cfg)
+        {
+            if (cfg == null || cfg.Kolam.Count == 0) return;
+            var lahir = new List<KeyValuePair<Process, ConfigWriter.Kolam>>();
+            foreach (var k in cfg.Kolam)
+            {
+                var nama = "PHP " + k.Php.Version + " (" + string.Join(", ", k.Situs.Select(s => s.Folder)) + ")";
+                if (!PortCheck.IsFree(k.Port))
+                {
+                    Say(nama + " tidak dinyalakan: port " + k.Port + " sudah dipakai proses lain. "
+                        + "Situs itu akan membalas 503.");
+                    continue;
+                }
+                var env = EnvFor(k.Php, k.FolderIni);
+                env["PHP_FCGI_MAX_REQUESTS"] = "0";
+                env["PHP_FCGI_CHILDREN"] = "2";
+                // Instant Client yang VERSINYA cocok dengan oci8 kolam ini, di
+                // depan PATH - lihat Oracle.FolderUntuk.
+                var ic = Oracle.FolderUntuk(k.Php, k.Ekstensi, env["PATH"]);
+                if (ic != null) env["PATH"] = ic + ";" + env["PATH"];
+
+                var p = Spawn(Path.Combine(k.Php.Path, "php-cgi.exe"), "-b 127.0.0.1:" + k.Port,
+                              k.Php.Path, env, "php-cgi " + k.Php.Version);
+                if (p == null) { Say(nama + " tidak bisa dinyalakan."); continue; }
+                lock (_lock) { _kolam.Add(p); _nama[p] = nama; }
+                lahir.Add(new KeyValuePair<Process, ConfigWriter.Kolam>(p, k));
+            }
+            if (lahir.Count == 0) return;
+
+            // Satu jeda untuk semua kolam, bukan satu per kolam.
+            await Task.Delay(600);
+            foreach (var kv in lahir)
+            {
+                string nama;
+                if (kv.Key.HasExited && LepasKolamJika(kv.Key, out nama))
+                    Say(nama + " berhenti seketika - situs itu akan membalas 503.");
+                else if (!kv.Key.HasExited)
+                    Say("PHP " + kv.Value.Php.Version + " jalan di 127.0.0.1:" + kv.Value.Port
+                        + " untuk " + string.Join(", ", kv.Value.Situs.Select(s => s.Folder)) + ".");
+            }
         }
 
         // ------------------------------------------------------------------ MySQL
@@ -727,6 +815,7 @@ namespace Phoron.Core
         /// </summary>
         void ProsesMati(Process p, string tag)
         {
+            string namaKolam;
             int kode;
             try { kode = p.ExitCode; } catch { kode = -1; }
 
@@ -744,6 +833,12 @@ namespace Phoron.Core
             {
                 Say("MySQL berhenti sendiri (kode " + kode + "). Lihat logs\\mysql-error.log.");
                 SetState(ServiceKind.Db, ServiceState.Gagal);
+            }
+            else if (LepasKolamJika(p, out namaKolam))
+            {
+                if (WebState == ServiceState.Jalan)
+                    Say((namaKolam ?? "php-cgi") + " berhenti sendiri (kode " + kode
+                        + ") - situs itu akan membalas 503 sampai web server dinyalakan ulang.");
             }
             else if (LepasFcgiJika(p))
             {
@@ -782,14 +877,17 @@ namespace Phoron.Core
             NaikkanGiliran(ServiceKind.Web);
             NaikkanGiliran(ServiceKind.Db);
             Process w, f, d;
+            List<Process> kolam;
             lock (_lock)
             {
                 w = _web; f = _fcgi; d = _db;
                 _web = _fcgi = _db = null;
+                kolam = new List<Process>(_kolam);
+                _kolam.Clear(); _nama.Clear();
             }
-            // Web server dan php-cgi aman dibunuh: tidak ada yang mereka tulis
-            // setengah jalan.
-            foreach (var p in new[] { w, f }.Where(x => x != null))
+            // Web server dan php-cgi - termasuk kolam PHP per situs - aman
+            // dibunuh: tidak ada yang mereka tulis setengah jalan.
+            foreach (var p in new[] { w, f }.Concat(kolam).Where(x => x != null))
             {
                 try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
             }

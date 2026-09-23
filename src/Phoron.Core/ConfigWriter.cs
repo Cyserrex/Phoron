@@ -35,15 +35,49 @@ namespace Phoron.Core
             /// belum punya daftar sendiri. Null bila tidak ada pengambilalihan.
             /// </summary>
             public List<string> AdoptedExtensions;
+            /// <summary>
+            /// Kolam php-cgi untuk situs yang memakai versi PHP sendiri - yang
+            /// benar-benar ditulis ke konfigurasi, dengan port dan folder
+            /// php.ini-nya. Kosong bila tidak ada penimpaan, atau bila web
+            /// server-nya tidak sanggup (Apache di bawah 2.4.26).
+            /// </summary>
+            public readonly List<Kolam> Kolam = new List<Kolam>();
+        }
+
+        /// <summary>
+        /// Satu versi PHP tambahan yang melayani sebagian situs lewat FastCGI,
+        /// berdampingan dengan PHP profil.
+        ///
+        /// SATU kolam per VERSI, bukan per situs: enam proyek Laravel di PHP 8.3
+        /// dilayani satu kolam yang sama. Tiap kolam adalah satu php-cgi dengan
+        /// dua pekerja - diukur di mesin pengembang, 76 MB menganggur dan 0 ms
+        /// waktu CPU dalam 30 detik.
+        /// </summary>
+        public class Kolam
+        {
+            public BinPackage Php;
+            /// <summary>Ekstensi untuk php.ini kolam - daftar milik versi ITU, bukan milik profil.</summary>
+            public List<string> Ekstensi = new List<string>();
+            public Dictionary<string, string> Timpa = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            public List<Site> Situs = new List<Site>();
+            /// <summary>Diisi Build.</summary>
+            public int Port;
+            /// <summary>Diisi Build: folder php.ini kolam, untuk PHPRC.</summary>
+            public string FolderIni;
         }
 
         public static Result Build(Profile profile, BinPackage php, BinPackage apache,
                                    BinPackage mysql, BinPackage nginx, List<Site> sites,
                                    bool phpIniKeFolderPhp = false, bool logAkses = true,
-                                   bool berandaDiAkar = true, bool opcache = true)
+                                   bool berandaDiAkar = true, bool opcache = true,
+                                   List<Kolam> kolam = null)
         {
             var r = new Result();
             if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp, opcache);
+            // SEBELUM web server ditulis: modul proxy Apache dan blok server
+            // Nginx bergantung pada kolam mana yang benar-benar jadi.
+            if (kolam != null && kolam.Count > 0 && profile.PakaiWeb)
+                SiapkanKolam(profile, kolam, apache, r, opcache);
             // Dipilah menurut web server yang DIPILIH profil, bukan menurut
             // paket mana yang kebetulan tersedia.
             //
@@ -71,7 +105,14 @@ namespace Phoron.Core
                                     + "dan tidak ada Apache lain sebagai gantinya.");
             }
             if (mysql != null) r.MyIni = WriteMyIni(profile, mysql, r);
-            Beranda.Tulis(profile, sites, php, apache ?? nginx, mysql);
+            Beranda.Tulis(profile, sites, php, apache ?? nginx, mysql, s =>
+            {
+                foreach (var k in r.Kolam)
+                    foreach (var x in k.Situs)
+                        if (string.Equals(x.Path, s.Path, StringComparison.OrdinalIgnoreCase))
+                            return k.Php.Version;
+                return php != null ? php.Version : "";
+            });
             return r;
         }
 
@@ -133,7 +174,7 @@ namespace Phoron.Core
             sb.AppendLine("# Blok ini ditambahkan di akhir dengan sengaja: direktif Apache yang");
             sb.AppendLine("# muncul belakangan menimpa yang di atasnya, jadi bawaan vendor tidak");
             sb.AppendLine("# perlu diobrak-abrik sama sekali.");
-            foreach (var mod in ApacheModules(php))
+            foreach (var mod in ApacheModules(php, r.Kolam.Count > 0))
             {
                 var so = Path.Combine(apache.Path, "modules", "mod_" + mod + ".so");
                 // LoadModule untuk berkas yang tidak ada = Apache gagal start total,
@@ -253,21 +294,112 @@ namespace Phoron.Core
         /// Baris ProxyFCGISetEnvIf yang membuang awalan "proxy:fcgi://host:port/"
         /// dari SCRIPT_FILENAME, menyisakan jalur berkas yang sudah dipetakan
         /// Apache - termasuk hasil Alias.
+        ///
+        /// Port apa pun (\d+): satu baris melayani php-cgi profil DAN setiap
+        /// kolam PHP per situs sekaligus.
         /// </summary>
-        public static string SetelNamaBerkasFcgi(int port)
+        public static string SetelNamaBerkasFcgi()
         {
             // String verbatim: titik di alamat IP harus sampai ke Apache sebagai
             // "\." - titik mentah di ungkapan reguler cocok dengan aksara apa pun.
-            return @"ProxyFCGISetEnvIf ""reqenv('SCRIPT_FILENAME') =~ m#^proxy:fcgi://127\.0\.0\.1:"
-                   + port + @"/(.*)$#"" SCRIPT_FILENAME ""$1""";
+            return @"ProxyFCGISetEnvIf ""reqenv('SCRIPT_FILENAME') =~ m#^proxy:fcgi://127\.0\.0\.1:\d+/(.*)$#"" SCRIPT_FILENAME ""$1""";
         }
 
-        static IEnumerable<string> ApacheModules(BinPackage php)
+        /// <summary>
+        /// Tulis php.ini tiap kolam, beri port, dan simpan yang jadi ke r.Kolam.
+        ///
+        /// Tiap kolam memakai Result-nya SENDIRI untuk WritePhpIni. Result milik
+        /// profil tidak boleh dipakai: WritePhpIni menaruh daftar ekstensi yang
+        /// diambil alih ke Result.AdoptedExtensions, dan Engine menyimpannya ke
+        /// PROFIL AKTIF - jadi daftar ekstensi PHP 8.3 akan masuk ke profil 5.6.
+        /// </summary>
+        static void SiapkanKolam(Profile profile, List<Kolam> kolam, BinPackage apache,
+                                 Result r, bool opcache)
+        {
+            if (profile.WebServer != "nginx" && !ProxyFcgiSetEnvIfAda(apache))
+            {
+                r.Warnings.Add("Versi PHP per situs butuh Apache 2.4.26 ke atas; Apache "
+                               + (apache != null ? apache.Version : "ini")
+                               + " belum mengenal ProxyFCGISetEnvIf. Semua situs memakai PHP profil.");
+                return;
+            }
+            int port = r.FastCgiPort + 1;
+            foreach (var k in kolam)
+            {
+                if (k == null || k.Php == null || k.Situs.Count == 0) continue;
+                if (!File.Exists(Path.Combine(k.Php.Path, "php-cgi.exe")))
+                {
+                    r.Warnings.Add("php-cgi.exe tidak ada di " + k.Php.Id + ", jadi "
+                                   + string.Join(", ", k.Situs.Select(s => s.Folder))
+                                   + " memakai PHP profil.");
+                    continue;
+                }
+                var pk = new Profile
+                {
+                    Name = profile.Name + " - PHP " + k.Php.Version + " per situs",
+                    PhpId = k.Php.Id,
+                    PhpExtensions = new List<string>(k.Ekstensi),
+                    PhpIniOverrides = new Dictionary<string, string>(k.Timpa, StringComparer.OrdinalIgnoreCase),
+                };
+                var rk = new Result();
+                k.FolderIni = WritePhpIni(pk, k.Php, rk, false, opcache);
+                foreach (var w in rk.Warnings) r.Warnings.Add("PHP " + k.Php.Version + " (per situs): " + w);
+                k.Port = port++;
+                r.Kolam.Add(k);
+            }
+        }
+
+        /// <summary>Port kolam yang melayani situs ini, atau 0 bila ia ikut PHP profil.</summary>
+        static int PortKolam(Result r, Site s)
+        {
+            if (s == null || s.Path == null) return 0;
+            foreach (var k in r.Kolam)
+                foreach (var x in k.Situs)
+                    if (string.Equals(x.Path, s.Path, StringComparison.OrdinalIgnoreCase)) return k.Port;
+            return 0;
+        }
+
+        /// <summary>
+        /// Blok Apache untuk tiap situs yang dilayani kolam.
+        ///
+        /// Satu Directory per situs, di konteks server - jadi berlaku untuk akses
+        /// lewat jalur (localhost/proyek/) dan diwarisi vhost proyek.test. SetHandler
+        /// di dalamnya mengalahkan AddType milik mod_php; dibuktikan pada Apache
+        /// 2.4.38 dengan PHP 5.6 sebagai modul dan php-cgi 8.3 di satu folder.
+        ///
+        /// CGIPassAuth: tanpa ini Apache TIDAK meneruskan header Authorization ke
+        /// FastCGI, dan API dengan token Bearer menolak setiap permintaan. Lima
+        /// dari enam proyek Laravel di mesin pengembang menanganinya sendiri di
+        /// .htaccess; yang keenam tidak.
+        /// </summary>
+        static void TulisKolamApache(StringBuilder sb, Result r, bool setelSudahAda)
+        {
+            if (r.Kolam.Count == 0) return;
+            sb.AppendLine();
+            sb.AppendLine("# --- Versi PHP per situs (FastCGI), berdampingan dengan PHP profil ---");
+            foreach (var k in r.Kolam)
+            {
+                foreach (var s in k.Situs)
+                {
+                    sb.AppendLine("# " + s.Folder + " -> PHP " + k.Php.Version);
+                    sb.AppendLine("<Directory \"" + Paths.Fwd(s.Path) + "\">");
+                    sb.AppendLine("    CGIPassAuth On");
+                    sb.AppendLine("    <FilesMatch \\.php$>");
+                    sb.AppendLine("        SetHandler \"proxy:fcgi://127.0.0.1:" + k.Port + "/\"");
+                    sb.AppendLine("    </FilesMatch>");
+                    sb.AppendLine("</Directory>");
+                }
+            }
+            if (!setelSudahAda) sb.AppendLine(SetelNamaBerkasFcgi());
+        }
+
+        static IEnumerable<string> ApacheModules(BinPackage php, bool adaKolam = false)
         {
             var mods = new List<string> { "rewrite", "deflate", "expires", "headers", "ssl", "socache_shmcb", "vhost_alias" };
             // FastCGI butuh mod_proxy + mod_proxy_fcgi. Syaratnya HARUS sama
-            // persis dengan yang dipakai WriteModPhp - lihat PakaiFastCgi.
-            if (PakaiFastCgi(php)) { mods.Add("proxy"); mods.Add("proxy_fcgi"); }
+            // persis dengan yang dipakai WriteModPhp - lihat PakaiFastCgi. Kolam
+            // PHP per situs juga FastCGI, walau PHP profilnya mod_php.
+            if (PakaiFastCgi(php) || adaKolam) { mods.Add("proxy"); mods.Add("proxy_fcgi"); }
             return mods;
         }
 
@@ -279,10 +411,12 @@ namespace Phoron.Core
             if (php == null)
             {
                 sb.AppendLine("# Profil ini tidak memakai PHP.");
+                TulisKolamApache(sb, r, false);
                 WriteIfChanged(path, sb.ToString());
                 return;
             }
 
+            bool setelSudahAda = false;
             if (!PakaiFastCgi(php))
             {
                 sb.AppendLine("LoadModule " + BinScanner.ApacheModuleName(php)
@@ -323,7 +457,10 @@ namespace Phoron.Core
                 sb.AppendLine("    SetHandler \"proxy:fcgi://127.0.0.1:" + r.FastCgiPort + "/\"");
                 sb.AppendLine("</FilesMatch>");
                 if (ProxyFcgiSetEnvIfAda(apache))
-                    sb.AppendLine(SetelNamaBerkasFcgi(r.FastCgiPort));
+                {
+                    sb.AppendLine(SetelNamaBerkasFcgi());
+                    setelSudahAda = true;
+                }
                 else
                     r.Warnings.Add("Apache " + (apache != null ? apache.Version : "ini")
                         + " belum mengenal ProxyFCGISetEnvIf (ada sejak 2.4.26), jadi PHP "
@@ -332,6 +469,7 @@ namespace Phoron.Core
                 if (!File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
                     r.Warnings.Add("php-cgi.exe tidak ada di " + php.Id + "; PHP tidak akan jalan lewat Apache.");
             }
+            TulisKolamApache(sb, r, setelSudahAda);
             WriteIfChanged(path, sb.ToString());
         }
 
@@ -1052,17 +1190,48 @@ namespace Phoron.Core
             // Beranda di akar hanya untuk server bawaan, sama seperti Apache yang
             // hanya menaruhnya di vhost _default_: situs .test milik proyek
             // tetap menampilkan index-nya sendiri.
-            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams, berandaDiAkar));
+            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams, berandaDiAkar,
+                                  LokasiKolamNginx(r, SiteScanner.DocumentRoot(profile), fcgiParams)));
             foreach (var s in sites ?? new List<Site>())
-                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort, fcgiParams, false));
+            {
+                // Situs yang memakai versi PHP sendiri diarahkan ke kolamnya.
+                var portSitus = PortKolam(r, s);
+                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path),
+                                      portSitus > 0 ? portSitus : r.FastCgiPort, fcgiParams, false));
+            }
             sb.AppendLine("}");
             var path = Path.Combine(dir, "nginx.conf");
             WriteIfChanged(path, sb.ToString());
             return path;
         }
 
+        /// <summary>
+        /// Untuk akses lewat jalur (localhost/proyek/): situs di folder proyek
+        /// UTAMA yang memakai kolam dapat location-nya sendiri. Situs di folder
+        /// proyek lain memang tidak terjangkau lewat jalur, jadi tidak diberi.
+        /// </summary>
+        static string LokasiKolamNginx(Result r, string akarUtama, string fcgiParams)
+        {
+            if (r.Kolam.Count == 0) return "";
+            var sb = new StringBuilder();
+            foreach (var k in r.Kolam)
+                foreach (var s in k.Situs)
+                {
+                    if (!string.Equals((s.Root ?? "").TrimEnd('\\'), (akarUtama ?? "").TrimEnd('\\'),
+                                       StringComparison.OrdinalIgnoreCase)) continue;
+                    sb.AppendLine("        location ^~ /" + s.Folder + "/ {   # PHP " + k.Php.Version);
+                    sb.AppendLine("            location ~ \\.php$ {");
+                    sb.AppendLine("                fastcgi_pass   127.0.0.1:" + k.Port + ";");
+                    sb.AppendLine("                fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;");
+                    sb.AppendLine("                include        \"" + fcgiParams + "\";");
+                    sb.AppendLine("            }");
+                    sb.AppendLine("        }");
+                }
+            return sb.ToString();
+        }
+
         static string NginxServer(int port, string name, string root, int fcgiPort, string fcgiParams,
-                                  bool berandaDiAkar = false)
+                                  bool berandaDiAkar = false, string lokasiTambahan = "")
         {
             var sb = new StringBuilder();
             sb.AppendLine("    server {");
@@ -1076,6 +1245,9 @@ namespace Phoron.Core
                 // tidak tersentuh. "last" mengulang pencarian location dengan
                 // alamat baru, jadi yang melayaninya blok beranda di bawah.
                 sb.AppendLine("        location = / { rewrite ^ " + Beranda.Alias + "/index.php last; }");
+            // Prefiks ^~ didahulukan di atas "location ~ \.php$" di bawah, jadi
+            // berkas PHP situs itu pergi ke kolamnya, bukan ke PHP profil.
+            if (!string.IsNullOrEmpty(lokasiTambahan)) sb.Append(lokasiTambahan);
             sb.AppendLine("        location / { try_files $uri $uri/ /index.php?$query_string; }");
             // Setara Alias di Apache - lihat catatan di sana.
             sb.AppendLine("        location " + Beranda.Alias + "/ {");

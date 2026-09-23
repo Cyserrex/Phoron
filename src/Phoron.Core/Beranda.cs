@@ -26,11 +26,12 @@ namespace Phoron.Core
         public const string Alias = "/phoron";
 
         public static void Tulis(Profile profile, List<Site> sites, BinPackage php,
-                                 BinPackage web, BinPackage mysql)
+                                 BinPackage web, BinPackage mysql,
+                                 Func<Site, string> versiPhp = null)
         {
             Directory.CreateDirectory(Folder);
             ConfigWriter.WriteIfChanged(Path.Combine(Folder, "index.php"),
-                Halaman(profile, sites, php, web, mysql));
+                Halaman(profile, sites, php, web, mysql, versiPhp));
         }
 
         /// <summary>
@@ -44,7 +45,7 @@ namespace Phoron.Core
         }
 
         static string Halaman(Profile profile, List<Site> sites, BinPackage php,
-                              BinPackage web, BinPackage mysql)
+                              BinPackage web, BinPackage mysql, Func<Site, string> versiPhp = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("<?php");
@@ -62,9 +63,13 @@ namespace Phoron.Core
             foreach (var s in sites ?? new List<Site>())
             {
                 var port = profile != null && profile.HttpPort != 80 ? ":" + profile.HttpPort : "";
+                // Versi PHP yang BENAR-BENAR melayani situs ini - bisa berbeda
+                // dari PHP profil bila situsnya memilih versi sendiri.
+                var vPhp = versiPhp != null ? versiPhp(s) : (php != null ? php.Version : "");
                 sb.AppendLine("    array('nama' => " + Q(s.Folder)
                               + ", 'url' => " + Q("http://" + s.HostName + port + "/")
-                              + ", 'folder' => " + Q(s.Path) + "),");
+                              + ", 'folder' => " + Q(s.Path)
+                              + ", 'php' => " + Q(vPhp ?? "") + "),");
             }
             sb.AppendLine("  ),");
             sb.AppendLine(");");
@@ -171,7 +176,7 @@ namespace Phoron.Core
 "      <?php foreach ($phoron['situs'] as $s): ?>\n" +
 "        <li>\n" +
 "          <a href=\"<?= htmlspecialchars($s['url']) ?>\"><?= htmlspecialchars($s['nama']) ?></a>\n" +
-"          <div class=\"kecil\"><?= htmlspecialchars($s['folder']) ?></div>\n" +
+"          <div class=\"kecil\"><?php if ($s['php'] !== ''): ?>PHP <?= htmlspecialchars($s['php']) ?> &middot; <?php endif; ?><?= htmlspecialchars($s['folder']) ?></div>\n" +
 "        </li>\n" +
 "      <?php endforeach; ?>\n" +
 "    </ul>\n" +
