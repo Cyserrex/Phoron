@@ -241,12 +241,12 @@ reachable only through their `.test` name, so they need virtual hosts turned on.
 Reordering the list changes which folder is the main one.
 
 **Projects with the same name** in different folders are all kept; nothing is
-dropped or overwritten. With `A	estaaa` and `B	estaaa`, and A listed first:
+dropped or overwritten. With `A\testaaa` and `B\testaaa`, and A listed first:
 
 | | `http://localhost/testaaa/` | `.test` name (virtual hosts on) |
 |---|---|---|
-| `A	estaaa` | this one | `testaaa.test` |
-| `B	estaaa` | not reachable this way | `testaaa-2.test` |
+| `A\testaaa` | this one | `testaaa.test` |
+| `B\testaaa` | not reachable this way | `testaaa-2.test` |
 
 The first one — by folder order, then alphabetically inside a folder — keeps the
 plain name; later ones get a number, and the **Sites** page says which ones
