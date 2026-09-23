@@ -5,7 +5,7 @@ namespace Phoron.Tests
     public static partial class Program
     {
         /// <summary>
-        /// Penjaga untuk 1.35.2: dropdown yang "tergulir kembali ke asal".
+        /// Penjaga untuk 1.35.2 dan 1.35.3: dropdown yang "tergulir kembali ke asal".
         ///
         /// Gaya ComboBox WPF UI menyembunyikan scrollbar daftarnya
         /// (VerticalScrollBarVisibility=Hidden). Tanpa scrollbar, pengguna
@@ -22,10 +22,13 @@ namespace Phoron.Tests
             var app = BacaSumber("Phoron.App", "App.xaml");
             if (app == null) return;
             var gaya = Regex.Match(app,
-                @"<Style\s+TargetType=""ComboBox""\s+BasedOn=""\{StaticResource \{x:Type ComboBox\}\}""\s*>(.*?)</Style>",
+                @"<Style\s+TargetType=""ComboBox""\s+BasedOn=""\{StaticResource DefaultComboBoxStyle\}""\s*>(.*?)</Style>",
                 RegexOptions.Singleline);
-            Ok("Gaya implisit ComboBox dibangun di atas gaya WPF UI", gaya.Success,
-               "tanpa BasedOn semua dropdown kehilangan tampilan Fluent; tanpa gaya ini scrollbarnya tersembunyi");
+            // BasedOn="{StaticResource {x:Type ComboBox}}" terurai menjadi null di
+            // App.xaml - dibuktikan dengan membaca Style.BasedOn saat aplikasi
+            // berjalan - dan semua dropdown jatuh ke tampilan klasik Windows (1.35.2).
+            Ok("Gaya implisit ComboBox dibangun di atas DefaultComboBoxStyle milik WPF UI", gaya.Success,
+               "BasedOn {x:Type ComboBox} terurai null: dropdown tampil klasik; tanpa gaya ini scrollbarnya tersembunyi");
             Ok("Scrollbar daftar dropdown tidak disembunyikan",
                gaya.Success && Regex.IsMatch(gaya.Groups[1].Value,
                    @"Property=""ScrollViewer\.VerticalScrollBarVisibility""\s+Value=""(Auto|Visible)"""),

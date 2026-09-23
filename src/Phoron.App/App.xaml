@@ -16,8 +16,11 @@
                  scrollbar, satu-satunya cara menggulir dengan klik adalah
                  menekan lalu menyeret isi daftar - dan ComboBox WPF menjawab
                  seretan yang keluar dari tepi atas dengan melompat ke item
-                 paling atas, lalu MEMILIHNYA saat tombol dilepas. -->
-            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                 paling atas, lalu MEMILIHNYA saat tombol dilepas.
+                 BasedOn HARUS menyebut kunci gaya WPF UI dengan namanya:
+                 {x:Type ComboBox} di sini terurai menjadi null, dan dropdown
+                 jatuh ke tampilan klasik Windows (1.35.2). -->
+            <Style TargetType="ComboBox" BasedOn="{StaticResource DefaultComboBoxStyle}">
                 <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
             </Style>
 
