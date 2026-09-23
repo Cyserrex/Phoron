@@ -29,6 +29,18 @@ namespace Phoron.Tests
 
             // Dipanggil oleh UjiObjekAntarProses: harness ini menjalankan dirinya
             // sendiri dengan hak Low, dan anak itu melapor lewat kode keluar.
+            // Dipanggil oleh UjiEksporImpor: salinan harness ini bernama mysqldump.exe / mysql.exe.
+            if (args.Length > 0 && args[0] == "--no-defaults")
+                return DumpTiruan(args);
+
+            // Dipanggil oleh UjiKolamBangkit: salinan harness ini bernama php-cgi.exe.
+            if (args.Length > 1 && args[0] == "-b")
+                return PhpCgiTiruan(args);
+
+            // Dipanggil oleh UjiMysqlLambatSiap: salinan harness ini bernama mysqld.exe.
+            if (args.Length > 0 && args[0].StartsWith("--defaults-file=", StringComparison.Ordinal))
+                return MysqldTiruan(args);
+
             if (args.Length > 0 && args[0] == ArgumenBukaEvent)
                 return CobaBukaEvent(args);
 
@@ -93,6 +105,11 @@ namespace Phoron.Tests
                 UjiPhpPerSitus();
                 UjiPaketKembar();
                 UjiDropdown();
+                UjiFolderDataPindah();
+                UjiMysqlLambatSiap();
+                UjiKolamBangkit();
+                UjiEksporImpor();
+                UjiUnduhanUtuh();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();

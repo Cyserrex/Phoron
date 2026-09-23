@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Phoron.Core
 {
@@ -15,8 +17,10 @@ namespace Phoron.Core
             public string StdOut = "";
             public string StdErr = "";
             public bool TimedOut;
+            /// <summary>Dihentikan karena pengguna membatalkannya.</summary>
+            public bool Dibatalkan;
             public string All { get { return (StdOut + "\n" + StdErr).Trim(); } }
-            public bool Ok { get { return ExitCode == 0 && !TimedOut; } }
+            public bool Ok { get { return ExitCode == 0 && !TimedOut && !Dibatalkan; } }
         }
 
         /// <summary>Jalankan dan tunggu sampai selesai. Dipakai untuk perintah singkat (uji konfigurasi, init data).</summary>
@@ -33,9 +37,13 @@ namespace Phoron.Core
         /// besar untuk dipegang sebagai teks di memori - berkas .sql hasil dump
         /// mudah mencapai ratusan megabyte. Diabaikan bila stdin juga diisi.
         /// </param>
+        /// <param name="timeoutMs">0 atau kurang: tanpa batas waktu - untuk kerja yang
+        /// memang bisa panjang (dump besar) dan boleh dibatalkan lewat <paramref name="batal"/>.</param>
+        /// <param name="batal">Pembatalan oleh pengguna: prosesnya dimatikan beserta anaknya.</param>
         public static RunResult Run(string exe, string args, string workDir = null,
                                     int timeoutMs = 120000, IDictionary<string, string> env = null,
-                                    string stdin = null, Stream stdinAliran = null)
+                                    string stdin = null, Stream stdinAliran = null,
+                                    CancellationToken batal = default(CancellationToken))
         {
             var psi = new ProcessStartInfo(exe, args)
             {
@@ -60,18 +68,27 @@ namespace Phoron.Core
                 p.Start();
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
+                Task salin = null;
                 if (stdin == null && stdinAliran != null)
                 {
                     // Disalin sebagai byte, tanpa pernah jadi string: berkas dump
                     // yang besar akan meledakkan memori kalau dibaca sekaligus,
                     // dan isinya sudah UTF-8 sejak dari mysqldump.
-                    try
+                    //
+                    // Di latar, bukan di utas ini: penyalinan itulah yang memakan
+                    // hampir seluruh waktu impor, dan pembatalan harus bisa
+                    // menyela di tengahnya. Mematikan prosesnya membuat
+                    // penulisan berikutnya gagal, dan penyalinan berhenti.
+                    salin = Task.Run(() =>
                     {
-                        stdinAliran.CopyTo(p.StandardInput.BaseStream);
-                        p.StandardInput.BaseStream.Flush();
-                        p.StandardInput.Close();
-                    }
-                    catch { }
+                        try
+                        {
+                            stdinAliran.CopyTo(p.StandardInput.BaseStream);
+                            p.StandardInput.BaseStream.Flush();
+                            p.StandardInput.Close();
+                        }
+                        catch { }
+                    });
                 }
                 if (stdin != null)
                 {
@@ -93,10 +110,19 @@ namespace Phoron.Core
                     }
                     catch { }
                 }
-                if (!p.WaitForExit(timeoutMs))
+                var sejak = Stopwatch.StartNew();
+                bool selesai;
+                while (true)
                 {
-                    result.TimedOut = true;
+                    long sisa = timeoutMs > 0 ? timeoutMs - sejak.ElapsedMilliseconds : 200;
+                    if (sisa <= 0) { selesai = false; result.TimedOut = true; break; }
+                    if (p.WaitForExit((int)Math.Min(200, sisa))) { selesai = true; break; }
+                    if (batal.IsCancellationRequested) { selesai = false; result.Dibatalkan = true; break; }
+                }
+                if (!selesai)
+                {
                     KillTree(p.Id);
+                    try { if (salin != null) salin.Wait(5000); } catch { }
                 }
                 else
                 {
@@ -104,6 +130,7 @@ namespace Phoron.Core
                     // pembaca stdout/stderr asinkron sudah menguras seluruh keluaran.
                     p.WaitForExit();
                     result.ExitCode = p.ExitCode;
+                    try { if (salin != null) salin.Wait(5000); } catch { }
                 }
             }
             result.StdOut = so.ToString();

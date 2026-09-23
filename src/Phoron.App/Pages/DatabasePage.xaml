@@ -251,11 +251,16 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" x:Name="TxtStatus" TextTrimming="CharacterEllipsis"
                            FontSize="12" VerticalAlignment="Center"/>
                 <ui:ProgressRing Grid.Column="1" x:Name="Putaran" Width="16" Height="16"
                                  IsIndeterminate="True" Visibility="Collapsed"/>
+                <!-- Hanya selama ekspor/impor: keduanya tidak lagi punya batas
+                     waktu, jadi penggunalah yang memutuskan kapan cukup. -->
+                <ui:Button Grid.Column="2" x:Name="BtnBatal" Content="{loc:T 'Batal'}" Margin="10,0,0,0"
+                           Padding="10,2" Visibility="Collapsed" Click="BtnBatal_Click"/>
             </Grid>
         </Border>
     </Grid>

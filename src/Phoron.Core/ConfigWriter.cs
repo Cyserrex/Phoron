@@ -1077,6 +1077,14 @@ namespace Phoron.Core
         ///   3. kalau folder kuncinya ternyata milik paket lain (urutan folder bin
         ///      berubah), folder bertanda asal yang hanya bisa jadi miliknya.
         /// Tidak ada data yang dipindah atau dihapus.
+        ///
+        /// Paket yang PINDAH TEMPAT (folder bin dipindah, huruf drive berubah,
+        /// Phoron dibawa ke komputer lain) tetap memakai folder lamanya. Dulu
+        /// penanda berjalur lama membuat folder itu dianggap milik paket lain,
+        /// dan mysqld dinyalakan di atas folder baru yang kosong: seluruh basis
+        /// data tampak hilang. Pengambilalihan itu hanya untuk paket yang namanya
+        /// UNIK - di antara paket kembar, jalur lama yang hilang tidak
+        /// menjelaskan kembaran yang mana yang pindah.
         /// </summary>
         public static string MySqlDataDir(BinPackage mysql)
         {
@@ -1084,6 +1092,12 @@ namespace Phoron.Core
             var bertanda = Path.Combine(Paths.Data, mysql.Id + "@" + BinScanner.TandaAsal(mysql.SourceRoot));
             foreach (var d in new[] { polos, bertanda })
                 if (SamaJalur(PemilikData(d), mysql.Path)) return d;
+            if (!mysql.Kembar)
+            {
+                // Folder bertanda asal hanya bisa milik paket dari folder bin ini.
+                if (Directory.Exists(Path.Combine(bertanda, "mysql"))) return bertanda;
+                if (PemilikPindah(PemilikData(polos))) return polos;
+            }
             var kunci = Path.Combine(Paths.Data, mysql.Kunci);
             if (PemilikData(kunci) == null) return kunci;
             return bertanda;
@@ -1115,15 +1129,66 @@ namespace Phoron.Core
             {
                 if (mysql == null || !Directory.Exists(folderData)) return;
                 var f = Path.Combine(folderData, BerkasPemilik);
-                if (!File.Exists(f)) File.WriteAllText(f, mysql.Path);
+                var lama = PemilikData(folderData);
+                // Ditulis sekali; diperbarui hanya bila paket unik ini pindah
+                // tempat - lihat MySqlDataDir.
+                if (lama == null || (!mysql.Kembar && !SamaJalur(lama, mysql.Path) && PemilikPindah(lama)))
+                    File.WriteAllText(f, mysql.Path);
             }
             catch { /* penanda penjaga, bukan syarat jalan */ }
         }
 
+        /// <summary>Pemilik tercatat sudah tidak ada di disk (paketnya dipindah atau dihapus).</summary>
+        static bool PemilikPindah(string pemilik)
+        {
+            if (pemilik == null) return true;
+            try { return !Directory.Exists(pemilik); } catch { return true; }
+        }
+
+        /// <summary>
+        /// Dua jalur menunjuk folder yang sama, apa pun penulisannya: "/" atau
+        /// "\", huruf besar atau kecil, garis miring di ujung, atau nama pendek
+        /// 8.3 (C:\PROGRA~1). Penanda .phoron-pemilik ditulis dengan jalur
+        /// sebagaimana bin_roots mengejanya, jadi ejaan lain untuk folder yang
+        /// sama tidak boleh dianggap paket lain.
+        /// </summary>
         static bool SamaJalur(string a, string b)
         {
             if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
-            return string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+            return string.Equals(Normalkan(a), Normalkan(b), StringComparison.OrdinalIgnoreCase);
+        }
+
+        static string Normalkan(string jalur)
+        {
+            var j = jalur.Trim().Replace('/', '\\');
+            try { j = Path.GetFullPath(j); } catch { }
+            j = j.TrimEnd('\\');
+            try
+            {
+                if (Directory.Exists(j))
+                {
+                    var sb = new StringBuilder(1024);
+                    if (GetLongPathName(j, sb, sb.Capacity) > 0) j = sb.ToString().TrimEnd('\\');
+                }
+            }
+            catch { }
+            return j;
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int GetShortPathName(string panjang, StringBuilder pendek, int ukuran);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int GetLongPathName(string pendek, StringBuilder panjang, int ukuran);
+
+        /// <summary>Nama pendek 8.3 dari jalur yang ada, atau null.</summary>
+        public static string NamaPendek(string jalur)
+        {
+            try
+            {
+                var sb = new StringBuilder(1024);
+                return GetShortPathName(jalur, sb, sb.Capacity) > 0 ? sb.ToString() : null;
+            }
+            catch { return null; }
         }
 
         // ---------------------------------------------------------------- Nginx

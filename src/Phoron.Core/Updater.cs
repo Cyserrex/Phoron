@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -280,6 +281,7 @@ namespace Phoron.Core
                 return null;
             }
             var tujuan = Path.Combine(Paths.Tmp, "Phoron-" + hasil.Versi + "-Setup.exe");
+            long daftarUkuran = -1;
             try
             {
                 var req = Siapkan(hasil.UrlInstaller);
@@ -300,6 +302,19 @@ namespace Phoron.Core
                         if (kemajuan != null)
                             kemajuan.Report(new KemajuanUnduh { Sudah = sudah, Total = total });
                     }
+                    daftarUkuran = total;
+                }
+
+                // Diperiksa SEBELUM dijalankan: unduhan yang terputus, atau yang
+                // isinya tidak sama dengan yang diterbitkan CI, tidak boleh
+                // sampai ke penanya "pasang?".
+                var daftarHash = await AmbilDaftarHashAsync(hasil.UrlInstaller);
+                var salah = PeriksaBerkas(tujuan, daftarUkuran, daftarHash, NamaDariUrl(hasil.UrlInstaller));
+                if (salah != null)
+                {
+                    try { File.Delete(tujuan); } catch { }
+                    if (galat != null) galat(salah);
+                    return null;
                 }
                 return tujuan;
             }
@@ -317,6 +332,78 @@ namespace Phoron.Core
                 if (galat != null) galat("Gagal mengunduh: " + ex.Message);
                 return null;
             }
+        }
+    
+        static string NamaDariUrl(string url)
+        {
+            var u = url ?? "";
+            var q = u.IndexOf('?');
+            if (q >= 0) u = u.Substring(0, q);
+            return u.Substring(u.LastIndexOf('/') + 1);
+        }
+
+        /// <summary>
+        /// SHA256SUMS.txt dari rilis yang sama dengan installernya, atau null
+        /// bila rilis itu tidak menyertakannya (rilis lama).
+        /// </summary>
+        static async Task<string> AmbilDaftarHashAsync(string urlInstaller)
+        {
+            var u = urlInstaller.Substring(0, urlInstaller.LastIndexOf('/') + 1) + "SHA256SUMS.txt";
+            try
+            {
+                var req = Siapkan(u);
+                req.AllowAutoRedirect = true;
+                req.Timeout = 30000;
+                using (var resp = await req.GetResponseAsync())
+                using (var r = new StreamReader(resp.GetResponseStream()))
+                    return await r.ReadToEndAsync();
+            }
+            catch (WebException ex)
+            {
+                var resp = ex.Response as HttpWebResponse;
+                if (resp != null && (int)resp.StatusCode == 404) return null;
+                // Daftarnya ADA tapi tidak terbaca: jangan dianggap tidak ada.
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Periksa installer yang sudah diunduh. Null bila utuh, selain itu
+        /// alasan penolakannya.
+        ///   - ukurannya harus sama dengan Content-Length (bila diketahui);
+        ///   - bila rilisnya menyertakan SHA256SUMS.txt, hash-nya harus cocok
+        ///     dengan baris untuk berkas ini. Daftar yang tidak memuat berkas ini
+        ///     (atau tidak bisa dibaca) ditolak - bukan dilewati.
+        /// daftarHash null = rilis lama tanpa daftar: hanya ukuran yang diperiksa.
+        /// </summary>
+        public static string PeriksaBerkas(string berkas, long total, string daftarHash, string namaBerkas)
+        {
+            long ukuran;
+            try { ukuran = new FileInfo(berkas).Length; }
+            catch (Exception ex) { return "Berkas unduhan tidak bisa dibaca: " + ex.Message; }
+            if (total > 0 && ukuran != total)
+                return "Unduhan terputus: " + KemajuanUnduh.Ukuran(ukuran) + " dari " + KemajuanUnduh.Ukuran(total)
+                       + ". Coba unduh lagi.";
+            if (daftarHash == null) return null;
+
+            string harap = null;
+            foreach (var baris in daftarHash.TrimStart('﻿').Split('\n'))
+            {
+                var b = baris.Trim();
+                var sp = b.IndexOf(' ');
+                if (sp <= 0) continue;
+                var nama = b.Substring(sp).Trim().TrimStart('*');
+                if (string.Equals(nama, namaBerkas, StringComparison.OrdinalIgnoreCase)) { harap = b.Substring(0, sp).ToLowerInvariant(); break; }
+            }
+            if (harap == null)
+                return "Keaslian installer tidak bisa dipastikan: " + namaBerkas + " tidak tercantum di SHA256SUMS.txt rilisnya.";
+
+            string nyata;
+            using (var sha = SHA256.Create())
+            using (var f = File.OpenRead(berkas))
+                nyata = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant();
+            return nyata == harap ? null
+                : "Installer yang diunduh tidak sama dengan yang diterbitkan (SHA256 tidak cocok). Coba unduh lagi.";
         }
     }
 }

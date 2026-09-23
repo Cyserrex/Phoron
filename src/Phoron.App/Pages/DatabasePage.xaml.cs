@@ -451,7 +451,9 @@ namespace Phoron.App.Pages
             var db = _dbTerpilih;
             var tujuan = dlg.FileName;
             string galat = null;
-            await Task.Run(() => galat = MySqlKlien.Ekspor(s, db, tujuan));
+            var batal = MulaiBisaDibatalkan();
+            try { await Task.Run(() => galat = MySqlKlien.Ekspor(s, db, tujuan, batal)); }
+            finally { SelesaiBisaDibatalkan(); }
             Sibuk(false);
 
             if (galat != null) { AppState.Warn(galat, Lang.T("Ekspor basis data")); Status(galat, true); return; }
@@ -491,7 +493,9 @@ namespace Phoron.App.Pages
             var db = _dbTerpilih;
             var sumber = dlg.FileName;
             string galat = null;
-            await Task.Run(() => galat = MySqlKlien.Impor(s, db, sumber));
+            var batal = MulaiBisaDibatalkan();
+            try { await Task.Run(() => galat = MySqlKlien.Impor(s, db, sumber, batal)); }
+            finally { SelesaiBisaDibatalkan(); }
             Sibuk(false);
 
             if (galat != null) { AppState.Warn(galat, Lang.T("Impor berkas SQL")); Status(galat, true); return; }
@@ -531,6 +535,30 @@ namespace Phoron.App.Pages
             BtnHapusDb.IsEnabled = adaDb;
             BtnImpor.IsEnabled = adaDb;
             BtnEkspor.IsEnabled = adaDb;
+        }
+
+        // Pembatalan ekspor/impor yang sedang berjalan.
+        System.Threading.CancellationTokenSource _batal;
+
+        System.Threading.CancellationToken MulaiBisaDibatalkan()
+        {
+            _batal = new System.Threading.CancellationTokenSource();
+            BtnBatal.IsEnabled = true;
+            BtnBatal.Visibility = Visibility.Visible;
+            return _batal.Token;
+        }
+
+        void SelesaiBisaDibatalkan()
+        {
+            BtnBatal.Visibility = Visibility.Collapsed;
+            if (_batal != null) { _batal.Dispose(); _batal = null; }
+        }
+
+        void BtnBatal_Click(object sender, RoutedEventArgs e)
+        {
+            if (_batal == null) return;
+            BtnBatal.IsEnabled = false;
+            _batal.Cancel();
         }
 
         void Sibuk(bool sibuk)

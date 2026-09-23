@@ -462,6 +462,9 @@ namespace Phoron.Core
             var p = Spawn(exe, "-b 127.0.0.1:" + port, php.Path, env, "php-cgi");
             if (p == null) return false;
             PasangFcgi(p);
+            lock (_lock)
+                _resep[p] = new Resep { Exe = exe, Args = "-b 127.0.0.1:" + port, KerjaDi = php.Path, Env = env,
+                                        Tag = "php-cgi", Nama = "php-cgi", Port = port, Kolam = false };
             await Task.Delay(600);
             if (p.HasExited)
             {
@@ -480,7 +483,7 @@ namespace Phoron.Core
             // web server yang mati sendiri - otomatis ikut mematikan kolamnya.
             // Dilepas dulu sebelum dibunuh, sama seperti rujukan lain.
             List<Process> kolam;
-            lock (_lock) { kolam = new List<Process>(_kolam); _kolam.Clear(); _nama.Clear(); }
+            lock (_lock) { kolam = new List<Process>(_kolam); _kolam.Clear(); _nama.Clear(); _resep.Clear(); _bangkit.Clear(); }
             foreach (var k in kolam)
                 try { if (!k.HasExited) Shell.KillTree(k.Id); } catch { }
 
@@ -495,6 +498,89 @@ namespace Phoron.Core
         // sendiri: "PHP 8.3.12 (api-bacameter, bbs)". Dijaga _lock.
         readonly List<Process> _kolam = new List<Process>();
         readonly Dictionary<Process, string> _nama = new Dictionary<Process, string>();
+
+        /// <summary>Cara menyalakan ulang sebuah php-cgi (kolam atau milik profil).</summary>
+        class Resep
+        {
+            public string Exe, Args, KerjaDi, Tag, Nama;
+            public IDictionary<string, string> Env;
+            public int Port;
+            public bool Kolam;
+        }
+
+        // Resep tiap php-cgi yang hidup, dan kapan saja php-cgi di tiap port
+        // dinyalakan ulang dalam semenit terakhir. Dijaga _lock.
+        readonly Dictionary<Process, Resep> _resep = new Dictionary<Process, Resep>();
+        readonly Dictionary<int, List<DateTime>> _bangkit = new Dictionary<int, List<DateTime>>();
+        const int BangkitMaksPerMenit = 3;
+
+        Resep AmbilResep(Process p)
+        {
+            lock (_lock)
+            {
+                Resep r;
+                if (!_resep.TryGetValue(p, out r)) return null;
+                _resep.Remove(p);
+                return r;
+            }
+        }
+
+        /// <summary>
+        /// Nyalakan ulang php-cgi yang mati sendiri, di port yang sama.
+        ///
+        /// Dulu cukup satu baris log, dan situsnya membalas 503 sampai web
+        /// server dinyalakan ulang - sementara lampu Apache tetap hijau. Paling
+        /// banyak tiga kali per menit per port: php-cgi yang langsung mati lagi
+        /// (ekstensi rusak) tidak boleh diputar tanpa akhir.
+        /// </summary>
+        void Bangkitkan(Resep r, int kode)
+        {
+            int g = Giliran(ServiceKind.Web);
+            bool boleh;
+            lock (_lock)
+            {
+                List<DateTime> kapan;
+                if (!_bangkit.TryGetValue(r.Port, out kapan)) _bangkit[r.Port] = kapan = new List<DateTime>();
+                kapan.RemoveAll(t => (DateTime.UtcNow - t).TotalSeconds > 60);
+                boleh = kapan.Count < BangkitMaksPerMenit;
+                if (boleh) kapan.Add(DateTime.UtcNow);
+            }
+            if (!boleh)
+            {
+                Say(r.Nama + " berhenti sendiri berulang kali (kode " + kode + ") - tidak dinyalakan ulang lagi. "
+                    + (r.Kolam ? "Situs itu" : "Halaman PHP") + " akan membalas 503. Lihat logs\\php_errors.log, "
+                    + "lalu nyalakan ulang web server.");
+                return;
+            }
+            Say(r.Nama + " berhenti sendiri (kode " + kode + ") - dinyalakan ulang.");
+
+            Task.Run(async () =>
+            {
+                // Port milik proses yang mati dilepas Windows sesaat kemudian.
+                for (int i = 0; i < 20 && !PortCheck.IsFree(r.Port); i++) await Task.Delay(100);
+                if (Batal(ServiceKind.Web, g) || WebState != ServiceState.Jalan) return;
+
+                var baru = Spawn(r.Exe, r.Args, r.KerjaDi, r.Env, r.Tag);
+                if (baru == null) { Say(r.Nama + " tidak bisa dinyalakan ulang."); return; }
+                bool simpan;
+                lock (_lock)
+                {
+                    // Web server dimatikan selagi kebangkitan ini berjalan: yang
+                    // baru lahir tidak boleh tertinggal tanpa pemilik.
+                    simpan = !Batal(ServiceKind.Web, g) && WebState == ServiceState.Jalan;
+                    if (simpan)
+                    {
+                        if (r.Kolam) { _kolam.Add(baru); _nama[baru] = r.Nama; }
+                        else _fcgi = baru;
+                        _resep[baru] = r;
+                    }
+                }
+                if (!simpan) { try { if (!baru.HasExited) Shell.KillTree(baru.Id); } catch { } return; }
+                // Mati sebelum sempat dicatat: pengawas Exited-nya tidak
+                // menemukannya, jadi diperiksa di sini.
+                if (baru.HasExited) ProsesMati(baru, r.Tag);
+            });
+        }
 
         bool LepasKolamJika(Process p, out string nama)
         {
@@ -540,10 +626,15 @@ namespace Phoron.Core
                 var ic = Oracle.FolderUntuk(k.Php, k.Ekstensi, env["PATH"]);
                 if (ic != null) env["PATH"] = ic + ";" + env["PATH"];
 
-                var p = Spawn(Path.Combine(k.Php.Path, "php-cgi.exe"), "-b 127.0.0.1:" + k.Port,
-                              k.Php.Path, env, "php-cgi " + k.Php.Version);
+                var exe = Path.Combine(k.Php.Path, "php-cgi.exe");
+                var p = Spawn(exe, "-b 127.0.0.1:" + k.Port, k.Php.Path, env, "php-cgi " + k.Php.Version);
                 if (p == null) { Say(nama + " tidak bisa dinyalakan."); continue; }
-                lock (_lock) { _kolam.Add(p); _nama[p] = nama; }
+                lock (_lock)
+                {
+                    _kolam.Add(p); _nama[p] = nama;
+                    _resep[p] = new Resep { Exe = exe, Args = "-b 127.0.0.1:" + k.Port, KerjaDi = k.Php.Path, Env = env,
+                                            Tag = "php-cgi " + k.Php.Version, Nama = nama, Port = k.Port, Kolam = true };
+                }
                 lahir.Add(new KeyValuePair<Process, ConfigWriter.Kolam>(p, k));
             }
             if (lahir.Count == 0) return;
@@ -593,6 +684,16 @@ namespace Phoron.Core
             if (!IsInitialized(dataDir))
             {
                 Say("Folder data " + mysql.Id + " belum ada - menyiapkan basis data awal...");
+                // Folder data baru selagi folder lama bernama sama berisi basis
+                // data: basis data yang dikenal pengguna TIDAK akan kelihatan.
+                // Disebut terang-terangan, supaya "semua basis data saya hilang"
+                // punya jawaban yang bisa ditemukan.
+                var lama = Path.Combine(Paths.Data, mysql.Id);
+                if (!string.Equals(lama.TrimEnd('\\'), dataDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)
+                    && IsInitialized(lama))
+                    Say("Catatan: basis data lama ada di " + lama + " dan tercatat milik MySQL lain ("
+                        + (ConfigWriter.PemilikData(lama) ?? "?") + "). Paket ini memakai " + dataDir
+                        + " - tidak ada yang dipindah atau dihapus.");
                 var init = await Task.Run(() => Initialize(mysql, myIni, dataDir));
                 if (Batal(ServiceKind.Db, g)) return false;
                 if (!init) { SetState(ServiceKind.Db, ServiceState.Gagal); return false; }
@@ -608,15 +709,30 @@ namespace Phoron.Core
 
             // mysqld butuh waktu memulihkan InnoDB; port-nya dijadikan tanda siap
             // karena log-nya berbeda-beda antarversi.
-            for (int i = 0; i < 40; i++)
+            //
+            // Ditunggu selama mysqld masih hidup, sampai BatasSiapDbDetik - bukan
+            // 20 detik seperti dulu. Pemulihan sesudah komputer mati mendadak,
+            // dengan basis data besar di HDD, bisa lebih lama dari itu; dulu
+            // mysqld lalu DIBUNUH di tengah pemulihan, start berikutnya
+            // memulihkan lagi dan dibunuh lagi, dan MySQL tidak pernah nyala.
+            var sejak = DateTime.UtcNow;
+            bool sudahBilang = false;
+            while ((DateTime.UtcNow - sejak).TotalSeconds < BatasSiapDbDetik)
             {
                 // Stop datang selagi InnoDB masih memulihkan diri. Kalau Stop itu
                 // datang sebelum mysqld ini sempat dipasang, ia tidak menemukannya
-                // - jadi yang membereskannya start ini sendiri.
+                // - jadi yang membereskannya start ini sendiri, dengan rapi.
                 if (Batal(ServiceKind.Db, g))
                 {
-                    if (LepasDbJika(p)) try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
+                    if (LepasDbJika(p)) await Task.Run(() => MatikanMysqlRapi(p, mysql, profile.MySqlPort));
                     return false;
+                }
+                if (!sudahBilang && (DateTime.UtcNow - sejak).TotalSeconds >= 20)
+                {
+                    sudahBilang = true;
+                    Say("MySQL belum siap setelah 20 detik - biasanya sedang memulihkan basis data sesudah "
+                        + "komputer mati mendadak. Ditunggu sampai " + (BatasSiapDbDetik / 60) + " menit; "
+                        + "tekan Stop untuk membatalkan. Jangan matikan paksa lewat Task Manager.");
                 }
                 // Mati sendiri di tengah start. ProsesMati sudah melaporkannya dan
                 // menyetel Gagal; menambahkan "gagal siap dalam 20 detik" lalu
@@ -634,11 +750,24 @@ namespace Phoron.Core
                 }
                 await Task.Delay(500);
             }
-            Say("MySQL gagal siap dalam 20 detik. Lihat logs\\mysql-error.log.");
-            await StopDbAsync();
+            Say("MySQL gagal siap dalam " + (BatasSiapDbDetik / 60 > 0 ? BatasSiapDbDetik / 60 + " menit" : BatasSiapDbDetik + " detik")
+                + ". Lihat logs\\mysql-error.log.");
+            // Dihentikan dengan RAPI: bisa jadi ia masih menulis hasil pemulihannya.
+            if (LepasDbJika(p))
+            {
+                var rapi = await Task.Run(() => MatikanMysqlRapi(p, mysql, profile.MySqlPort));
+                if (!rapi) Say("MySQL tidak mau berhenti dengan rapi - dimatikan paksa.");
+            }
+            Say("MySQL dimatikan.");
             SetState(ServiceKind.Db, ServiceState.Gagal);
             return false;
         }
+
+        /// <summary>
+        /// Berapa lama start MySQL menunggu mysqld membuka port-nya. Longgar
+        /// dengan sengaja: yang ditunggu bisa jadi pemulihan InnoDB.
+        /// </summary>
+        public int BatasSiapDbDetik = 300;
 
         public async Task StopDbAsync()
         {
@@ -840,17 +969,21 @@ namespace Phoron.Core
             }
             else if (LepasKolamJika(p, out namaKolam))
             {
-                if (WebState == ServiceState.Jalan)
-                    Say((namaKolam ?? "php-cgi") + " berhenti sendiri (kode " + kode
-                        + ") - situs itu akan membalas 503 sampai web server dinyalakan ulang.");
+                var r = AmbilResep(p);
+                if (WebState != ServiceState.Jalan) { }
+                else if (r != null) Bangkitkan(r, kode);
+                else Say((namaKolam ?? "php-cgi") + " berhenti sendiri (kode " + kode
+                         + ") - situs itu akan membalas 503 sampai web server dinyalakan ulang.");
             }
             else if (LepasFcgiJika(p))
             {
                 // Rujukannya dikosongkan lebih dulu, baru keadaannya diperiksa:
                 // kalau urutannya terbalik, php-cgi yang mati saat web server
                 // sudah berhenti akan tertinggal sebagai rujukan basi.
-                if (WebState == ServiceState.Jalan)
-                    Say("php-cgi berhenti sendiri (kode " + kode + ") - halaman PHP akan membalas 503.");
+                var r = AmbilResep(p);
+                if (WebState != ServiceState.Jalan) { }
+                else if (r != null) Bangkitkan(r, kode);
+                else Say("php-cgi berhenti sendiri (kode " + kode + ") - halaman PHP akan membalas 503.");
             }
         }
 

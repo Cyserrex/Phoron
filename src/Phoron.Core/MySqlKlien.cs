@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 
 namespace Phoron.Core
 {
@@ -289,14 +290,21 @@ namespace Phoron.Core
         /// kerja gampang mencapai ratusan megabyte, dan menampungnya sebagai
         /// string di memori lebih dulu adalah cara yang pasti gagal justru pada
         /// basis data yang paling perlu dicadangkan.
+        ///
+        /// mysqldump menulis ke berkas SEMENTARA di folder yang sama, yang baru
+        /// menggantikan tujuannya bila ekspornya berhasil. Dulu ia menulis
+        /// langsung ke tujuan: ekspor yang gagal di tengah meninggalkan berkas
+        /// setengah jadi bernama cadangan - dan bila pengguna menimpa cadangan
+        /// lama, cadangan lama itu ikut hancur.
         /// </summary>
-        public static string Ekspor(Sambungan s, string db, string berkasTujuan)
+        public static string Ekspor(Sambungan s, string db, string berkasTujuan,
+                                    CancellationToken batal = default(CancellationToken))
         {
             if (s == null) return Lang.T("Profil ini tidak memakai basis data.");
             if (string.IsNullOrEmpty(s.Dump))
                 return Lang.T("mysqldump tidak ada di paket MySQL profil ini.");
 
-            string setelan = null;
+            string setelan = null, sementara = null;
             try
             {
                 setelan = TulisBerkasSetelan(s);
@@ -309,15 +317,26 @@ namespace Phoron.Core
                 // --single-transaction: cadangan yang konsisten TANPA mengunci tabel,
                 // jadi situs yang sedang dibuka tidak ikut membeku selama ekspor.
                 arg.Append("--single-transaction --quick --routines --events ");
-                arg.Append("--result-file=\"").Append(berkasTujuan).Append("\" ");
+                sementara = berkasTujuan + ".phoron-tmp";
+                arg.Append("--result-file=\"").Append(sementara).Append("\" ");
                 arg.Append(Kutip(db).Replace("`", ""));
 
-                var r = Shell.Run(s.Dump, arg.ToString(), s.KerjaDi, 30 * 60 * 1000);
-                if (r.TimedOut) return Lang.T("Ekspor dihentikan karena sudah lewat batas waktu.");
-                return r.Ok ? null : RapikanGalat(r.StdErr, r.StdOut);
+                // Tanpa batas waktu: dump basis data besar memang bisa lama, dan
+                // pengguna bisa membatalkannya sendiri.
+                var r = Shell.Run(s.Dump, arg.ToString(), s.KerjaDi, 0, null, null, null, batal);
+                if (r.Dibatalkan) return Lang.T("Ekspor dibatalkan. Berkas tujuan tidak diubah.");
+                if (!r.Ok) return RapikanGalat(r.StdErr, r.StdOut);
+
+                if (File.Exists(berkasTujuan)) File.Replace(sementara, berkasTujuan, null);
+                else File.Move(sementara, berkasTujuan);
+                return null;
             }
             catch (Exception ex) { return ex.Message; }
-            finally { if (setelan != null) { try { File.Delete(setelan); } catch { } } }
+            finally
+            {
+                if (setelan != null) { try { File.Delete(setelan); } catch { } }
+                if (sementara != null) { try { if (File.Exists(sementara)) File.Delete(sementara); } catch { } }
+            }
         }
 
         /// <summary>
@@ -328,8 +347,13 @@ namespace Phoron.Core
         /// dipecah Phoron - mysql.exe sendiri yang menguraikannya, termasuk
         /// DELIMITER dan definisi prosedur yang tidak dimengerti pemisah mana pun
         /// yang lebih sederhana.
+        ///
+        /// Tanpa batas waktu keras. Dulu impor dibunuh pada menit ke-30, dan
+        /// impor yang terbunuh menyisakan basis data setengah terisi; kini
+        /// hanya pengguna yang bisa menghentikannya, lewat pembatalan.
         /// </summary>
-        public static string Impor(Sambungan s, string db, string berkasSumber)
+        public static string Impor(Sambungan s, string db, string berkasSumber,
+                                   CancellationToken batal = default(CancellationToken))
         {
             if (s == null) return Lang.T("Profil ini tidak memakai basis data.");
             if (!File.Exists(berkasSumber)) return Lang.T("Berkasnya tidak ada.");
@@ -349,9 +373,9 @@ namespace Phoron.Core
 
                 using (var aliran = File.OpenRead(berkasSumber))
                 {
-                    var r = Shell.Run(s.Klien, arg.ToString(), s.KerjaDi,
-                                      30 * 60 * 1000, null, null, aliran);
-                    if (r.TimedOut) return Lang.T("Impor dihentikan karena sudah lewat batas waktu.");
+                    var r = Shell.Run(s.Klien, arg.ToString(), s.KerjaDi, 0, null, null, aliran, batal);
+                    if (r.Dibatalkan)
+                        return Lang.T("Impor dibatalkan. Basis data mungkin baru terisi sebagian.");
                     return r.Ok ? null : RapikanGalat(r.StdErr, r.StdOut);
                 }
             }
