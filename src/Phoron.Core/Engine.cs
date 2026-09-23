@@ -609,7 +609,7 @@ namespace Phoron.Core
             catch (UnauthorizedAccessException)
             {
                 warnings.Add("Berkas hosts tidak bisa ditulis - jalankan Phoron sebagai Administrator "
-                             + "atau matikan opsi 'kelola hosts'.");
+                             + "atau matikan \"Sinkronkan berkas hosts Windows\" di Pengaturan.");
             }
             catch (Exception ex) { warnings.Add("Gagal menyunting hosts: " + ex.Message); }
         }

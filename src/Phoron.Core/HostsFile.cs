@@ -136,7 +136,28 @@ namespace Phoron.Core
                 }
                 lines.Add(End);
             }
+
+            // Tidak ada yang berubah - jangan menyentuh berkasnya sama sekali.
+            //
+            // Tanpa ini, Phoron yang Virtual Host-nya mati dan hosts-nya bersih
+            // tetap mencoba menulis ulang berkas yang isinya sama persis. Tanpa
+            // hak Administrator percobaan itu ditolak, dan yang muncul di tiap
+            // Apply adalah peringatan "berkas hosts tidak bisa ditulis" - tentang
+            // penulisan yang sejak awal tidak dibutuhkan siapa pun.
+            //
+            // Ekor baris kosong diabaikan saat membandingkan: itu satu-satunya
+            // yang dirapikan di atas, dan bukan alasan untuk menulis.
+            if (SamaIsinya(lines, awal)) return;
+
             WriteAll(lines, awal);
+        }
+
+        static bool SamaIsinya(List<string> baru, string[] awal)
+        {
+            var lama = awal.ToList();
+            while (lama.Count > 0 && lama[lama.Count - 1].Trim().Length == 0)
+                lama.RemoveAt(lama.Count - 1);
+            return lama.SequenceEqual(baru, StringComparer.Ordinal);
         }
 
         static void WriteAll(List<string> baru, string[] awal)

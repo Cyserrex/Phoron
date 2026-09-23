@@ -87,6 +87,7 @@ namespace Phoron.Tests
                 UjiOpcache();
                 UjiPanelLog();
                 UjiFastCgi();
+                UjiHostsTanpaUbah();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
@@ -2129,9 +2130,14 @@ namespace Phoron.Tests
 
                 // Sinkron kedua MEMANG mencadangkan: keadaan awalnya sudah
                 // berbeda, sebab kini memuat blok Phoron. Itu keadaan baru yang
-                // pantas disimpan.
+                // pantas disimpan sebelum ditimpa.
+                //
+                // Nama kedua ditambahkan supaya memang ADA yang ditimpa. Sinkron
+                // dengan daftar yang sama persis tidak lagi menulis apa pun -
+                // lihat UjiHostsTanpaUbah - jadi tidak ada pula yang perlu
+                // dicadangkan.
                 var sesudahSatu = HostsFile.DaftarCadangan().Count;
-                HostsFile.Sync(new[] { "toko.test" });
+                HostsFile.Sync(new[] { "toko.test", "kedai.test" });
                 Ok("Keadaan yang berubah ikut tercadang",
                    HostsFile.DaftarCadangan().Count == sesudahSatu + 1,
                    sesudahSatu + " -> " + HostsFile.DaftarCadangan().Count);
@@ -2140,8 +2146,8 @@ namespace Phoron.Tests
                 // profil, jadi sinkron yang tidak mengubah apa pun tidak boleh
                 // menumpuk berkas kembar.
                 var sebelum = HostsFile.DaftarCadangan().Count;
-                HostsFile.Sync(new[] { "toko.test" });
-                HostsFile.Sync(new[] { "toko.test" });
+                HostsFile.Sync(new[] { "toko.test", "kedai.test" });
+                HostsFile.Sync(new[] { "toko.test", "kedai.test" });
                 Ok("Sinkron berulang tanpa perubahan tidak menumpuk cadangan",
                    HostsFile.DaftarCadangan().Count == sebelum,
                    sebelum + " -> " + HostsFile.DaftarCadangan().Count);
