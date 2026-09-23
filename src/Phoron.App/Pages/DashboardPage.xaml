@@ -94,7 +94,15 @@
             <Border x:Name="PanelPeringatan" Style="{StaticResource Kartu}" Visibility="Collapsed"
                     Background="#33E0A020">
                 <StackPanel>
-                    <TextBlock Text="{loc:T 'Perhatian'}" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                    <Grid Margin="0,0,0,4">
+                        <TextBlock Text="{loc:T 'Perhatian'}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <!-- Menutup catatan yang SEDANG tampil. Catatan itu muncul
+                             lagi bila keadaannya berubah - lihat CatatanDitutup. -->
+                        <ui:Button HorizontalAlignment="Right" Appearance="Transparent" Padding="8,4" Margin="0,-6,-8,0"
+                                   ToolTip="{loc:T 'Sembunyikan catatan ini'}" Click="BtnTutupPeringatan_Click">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"/>
+                        </ui:Button>
+                    </Grid>
                     <TextBlock x:Name="TxtPeringatan" TextWrapping="Wrap"/>
                     <!-- Tombolnya ditaruh tepat di bawah keluhannya. Menyebut
                          masalah tanpa menyediakan jalan keluarnya di tempat yang

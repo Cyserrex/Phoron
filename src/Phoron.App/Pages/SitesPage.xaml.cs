@@ -208,6 +208,7 @@ namespace Phoron.App.Pages
                                   + "Pindahkan setelannya ke .user.ini di folder yang sama.");
             }
             IsiPilihanPhp(b);
+            TampilkanPerluRestart();
         }
 
         /// <summary>Berkas .htaccess situs yang memuat php_value/php_flag, atau null.</summary>
@@ -229,15 +230,42 @@ namespace Phoron.App.Pages
             return null;
         }
 
+        List<string> _infoTampil = new List<string>();
+
         void TampilkanInfo()
         {
-            var pesan = new List<string>(_e.SiteWarnings ?? new List<string>());
+            TampilkanPerluRestart();
+            // Catatan yang sudah ditutup (X) tidak ditampilkan lagi selama masih sama.
+            var pesan = CatatanDitutup.Saring("situs", _e.SiteWarnings ?? new List<string>());
+            _infoTampil = pesan;
             PanelInfo.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (pesan.Count == 0) return;
             LblInfo.Text = pesan.Count == 1
                 ? "1 catatan tentang daftar situs"
                 : pesan.Count + " catatan tentang daftar situs";
             TxtInfoSitus.Text = string.Join(Environment.NewLine + Environment.NewLine, pesan.ToArray());
+        }
+
+        void BtnTutupInfo_Click(object sender, RoutedEventArgs e)
+        {
+            CatatanDitutup.Tutup("situs", _infoTampil);
+            PanelInfo.Visibility = Visibility.Collapsed;
+        }
+
+        void TampilkanPerluRestart()
+        {
+            PanelRestart.Visibility = _e.Services.WebState == ServiceState.Jalan && _e.PerluRestartWeb
+                ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        async void BtnRestartWeb_Click(object sender, RoutedEventArgs e)
+        {
+            BtnRestartWeb.IsEnabled = false;
+            try { await _e.StopWebAsync(); await _e.StartWebAsync(); }
+            finally { BtnRestartWeb.IsEnabled = true; }
+            var main = Window.GetWindow(this) as MainWindow;
+            if (main != null) main.RefreshStatus();
+            TampilkanPerluRestart();
         }
 
         Site Terpilih()

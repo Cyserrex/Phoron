@@ -200,6 +200,55 @@ namespace Phoron.App
                 case "tentang": Host.Content = new AboutPage(); break;
                 default: Host.Content = new DashboardPage(); break;
             }
+            _tagAktif = (item.Tag ?? "beranda").ToString();
+            // Panel yang sedang terbuka ikut berganti ke bantuan tab baru -
+            // bantuan tab lama di sebelah halaman lain hanya menyesatkan.
+            if (PanelBantuan.Visibility == Visibility.Visible) IsiPanelBantuan();
+        }
+
+        // -------------------------------------------------------------- Bantuan
+
+        string _tagAktif = "beranda";
+
+        void BtnBantuan_Click(object sender, RoutedEventArgs e)
+        {
+            if (PanelBantuan.Visibility == Visibility.Visible) { PanelBantuan.Visibility = Visibility.Collapsed; return; }
+            IsiPanelBantuan();
+            PanelBantuan.Visibility = Visibility.Visible;
+        }
+
+        void BtnTutupBantuan_Click(object sender, RoutedEventArgs e)
+        {
+            PanelBantuan.Visibility = Visibility.Collapsed;
+        }
+
+        void IsiPanelBantuan()
+        {
+            var h = Bantuan.Untuk(_tagAktif);
+            int i = Bantuan.IndeksBahasa(Lang.Kode);
+            TxtBantuanJudul.Text = Lang.T("Bantuan") + ": " + Lang.T(h.Judul);
+            IsiBantuan.Children.Clear();
+            IsiBantuan.Children.Add(new TextBlock
+            {
+                Text = h.Ringkas[i], TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14), Opacity = 0.85,
+            });
+            foreach (var b in h.Butir)
+            {
+                var kotak = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
+                if (b.Tombol != null)
+                    kotak.Children.Add(new TextBlock
+                    {
+                        Text = Lang.T(b.Tombol), FontWeight = FontWeights.SemiBold,
+                        TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 2),
+                    });
+                kotak.Children.Add(new TextBlock
+                {
+                    Text = b.Arti[i], TextWrapping = TextWrapping.Wrap,
+                    Opacity = b.Tombol == null ? 0.75 : 1.0,
+                    FontStyle = b.Tombol == null ? FontStyles.Italic : FontStyles.Normal,
+                });
+                IsiBantuan.Children.Add(kotak);
+            }
         }
 
         public void GoTo(string tag)

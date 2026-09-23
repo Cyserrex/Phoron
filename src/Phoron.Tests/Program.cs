@@ -110,6 +110,8 @@ namespace Phoron.Tests
                 UjiKolamBangkit();
                 UjiEksporImpor();
                 UjiUnduhanUtuh();
+                UjiCatatanDitutup();
+                UjiBantuan();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();

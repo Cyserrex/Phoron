@@ -1,0 +1,380 @@
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Phoron.Core
+{
+    /// <summary>
+    /// Isi panel Bantuan (tombol ? di pojok kanan atas tiap tab): apa gunanya
+    /// halaman itu, dan apa yang dikerjakan tiap tombolnya - untuk orang yang
+    /// belum pernah memakai Apache, MySQL, atau pengelola sejenis.
+    ///
+    /// Label tiap butir adalah teks tombol berbahasa Indonesia yang SAMA
+    /// dengan yang dipakai XAML-nya, dan diterjemahkan lewat <see cref="Lang.T(string)"/>
+    /// saat ditampilkan. Jadi nama tombol di bantuan selalu persis sama dengan
+    /// yang terlihat di layar, dalam bahasa apa pun; yang ditulis per bahasa di
+    /// sini hanya penjelasannya.
+    /// </summary>
+    public static class Bantuan
+    {
+        public sealed class Butir
+        {
+            /// <summary>Teks tombol/kontrol dalam bahasa Indonesia (kunci Lang), atau null untuk kiat.</summary>
+            public string Tombol;
+            /// <summary>Penjelasan: id, en, jv, bjn.</summary>
+            public string[] Arti;
+        }
+
+        public sealed class Halaman
+        {
+            public string Tag;
+            /// <summary>Judul tab dalam bahasa Indonesia (kunci Lang).</summary>
+            public string Judul;
+            public string[] Ringkas;
+            public readonly List<Butir> Butir = new List<Butir>();
+        }
+
+        static readonly string[] Urutan = { Lang.Indonesia, Lang.Inggris, Lang.Jawa, Lang.Banjar };
+
+        /// <summary>Indeks bahasa aktif di larik Arti/Ringkas.</summary>
+        public static int IndeksBahasa(string kode)
+        {
+            var i = System.Array.IndexOf(Urutan, kode);
+            return i < 0 ? 0 : i;
+        }
+
+        public static Halaman Untuk(string tag)
+        {
+            return Semua.FirstOrDefault(h => h.Tag == tag) ?? Semua[0];
+        }
+
+        static Halaman H(string tag, string judul, string id, string en, string jv, string bjn, params Butir[] butir)
+        {
+            var h = new Halaman { Tag = tag, Judul = judul, Ringkas = new[] { id, en, jv, bjn } };
+            h.Butir.AddRange(butir);
+            return h;
+        }
+
+        static Butir B(string tombol, string id, string en, string jv, string bjn)
+        {
+            return new Butir { Tombol = tombol, Arti = new[] { id, en, jv, bjn } };
+        }
+
+        public static readonly List<Halaman> Semua = new List<Halaman>
+        {
+            H("beranda", "Beranda",
+              "Pusat kendali: pilih profil (kombinasi versi PHP, Apache, dan MySQL), lalu nyalakan. Lampu hijau berarti layanannya jalan.",
+              "The control centre: pick a profile (a combination of PHP, Apache and MySQL versions) and start it. A green light means the service is running.",
+              "Pusat kendhali: pilih profil (gabungan versi PHP, Apache, lan MySQL), banjur urupna. Lampu ijo tegese layanane mlaku.",
+              "Pusat kandali: pilih profil (campuran versi PHP, Apache, wan MySQL), imbahtu hidupakan. Lampu hijau artinya layanannya bajalan.",
+              B("Switch & Jalankan",
+                "Pindah ke profil yang dipilih lalu langsung menyalakan web server dan MySQL-nya.",
+                "Switch to the selected profile and start its web server and MySQL straight away.",
+                "Pindhah menyang profil sing dipilih banjur langsung nguripake web server lan MySQL-e.",
+                "Pindah ka profil nang dipilih, imbahtu langsung mahidupakan web server wan MySQL-nya."),
+              B("Switch",
+                "Pindah profil saja, tanpa menyalakan apa pun.",
+                "Switch profile only, without starting anything.",
+                "Mung pindhah profil, ora nguripake apa-apa.",
+                "Pindah profil haja, kada mahidupakan apa-apa."),
+              B("Nyalakan ulang layanan",
+                "Muncul bila setelan sudah diubah tetapi server yang jalan masih memakai setelan lama. Menekannya mematikan lalu menyalakan server supaya perubahan berlaku.",
+                "Appears when settings changed but the running server still uses the old ones. It stops and restarts the server so the change takes effect.",
+                "Metu yen setelan wis diowahi nanging server sing mlaku isih nganggo setelan lawas. Dipencet, server dipateni banjur diurupake maneh supaya owahane kanggo.",
+                "Timbul amun setelan sudah diubah tagal server nang bajalan masih mamakai setelan lawas. Amun ditekan, server dimatiakan imbahtu dihidupakan pulang supaya parubahannya balaku."),
+              B("Daftarkan nama situs sekali",
+                "Mencatat alamat .test semua proyek ke berkas hosts Windows. Windows meminta izin Administrator sekali; sesudah itu tidak perlu lagi.",
+                "Writes every project's .test address into the Windows hosts file. Windows asks for administrator permission once; after that it is not needed again.",
+                "Nyathet alamat .test kabeh proyek menyang berkas hosts Windows. Windows njaluk idin Administrator sepisan; sabanjure ora perlu maneh.",
+                "Mancatat alamat .test sabarataan proyek ka barakas hosts Windows. Windows maminta ijin Administrator sakali; imbahtu kada parlu lagi."),
+              B("Hentikan proses yang tertinggal",
+                "Muncul bila port dipegang httpd/mysqld sisa sebelumnya. Jalur programnya ditampilkan dulu sebelum dihentikan.",
+                "Appears when a port is held by a leftover httpd/mysqld. The program path is shown before anything is stopped.",
+                "Metu yen port dicekel httpd/mysqld turahan. Dalan programe dituduhake dhisik sadurunge dipateni.",
+                "Timbul amun port dipacul httpd/mysqld sisa. Jalan programnya ditampaiakan dahulu sabalum dimatiakan."),
+              B("Buka localhost",
+                "Membuka http://localhost/ di browser: beranda Phoron berisi daftar proyek Anda.",
+                "Opens http://localhost/ in the browser: Phoron's home page listing your projects.",
+                "Mbukak http://localhost/ ing browser: kaca ngarep Phoron isine proyek-proyek sampeyan.",
+                "Mambuka http://localhost/ di browser: beranda Phoron nang baisi proyek-proyek pian."),
+              B("Terminal",
+                "Membuka jendela perintah yang sudah memakai PHP profil ini (php, composer siap dipakai).",
+                "Opens a command window already set up with this profile's PHP (php and composer ready to use).",
+                "Mbukak jendhela prentah sing wis nganggo PHP profil iki (php, composer siap dienggo).",
+                "Mambuka jandila parintah nang sudah mamakai PHP profil ini (php, composer siap dipakai)."),
+              B("Uji konfigurasi Apache",
+                "Memeriksa apakah setelan Apache sah, tanpa menyalakannya. Berguna bila Apache menolak menyala.",
+                "Checks whether the Apache configuration is valid, without starting it. Useful when Apache refuses to start.",
+                "Mriksa apa setelan Apache bener, tanpa nguripake. Migunani yen Apache ora gelem urip.",
+                "Mamariksa apakah setelan Apache sah, kada usah mahidupakan. Baguna amun Apache kada hakun hidup."),
+              B("Buat sertifikat SSL",
+                "Membuat sertifikat supaya alamat https:// bisa dipakai.",
+                "Creates a certificate so https:// addresses work.",
+                "Nggawe sertifikat supaya alamat https:// bisa dienggo.",
+                "Maulah sertifikat supaya alamat https:// kawa dipakai."),
+              B("Aktivitas",
+                "Catatan kejadian terbaru: apa yang dinyalakan, dimatikan, atau gagal. Baca di sini dulu bila ada yang tidak jalan.",
+                "A log of recent events: what started, stopped or failed. Read this first when something does not work.",
+                "Cathetan kedadeyan anyar: apa sing diurupake, dipateni, utawa gagal. Wacanen ing kene dhisik yen ana sing ora mlaku.",
+                "Catatan kajadian hanyar: apa nang dihidupakan, dimatiakan, atawa gagal. Baca di sini dahulu amun ada nang kada bajalan."),
+              B(null,
+                "Kiat: tombol X di catatan kuning menyembunyikan catatan itu. Catatan muncul lagi bila keadaannya berubah.",
+                "Tip: the X on a yellow note hides it. The note comes back if the situation changes.",
+                "Tips: tombol X ing cathetan kuning ndhelikake cathetan kuwi. Cathetane metu maneh yen kahanane owah.",
+                "Tips: tumbul X di catatan kuning manyambunyiakan catatan itu. Catatannya timbul pulang amun kaadaannya baubah.")),
+
+            H("profil", "Profil",
+              "Profil adalah satu kombinasi versi PHP, web server, MySQL, port, dan folder proyek. Buat beberapa profil untuk kebutuhan berbeda, lalu pindah dengan satu klik.",
+              "A profile is one combination of PHP, web server, MySQL, ports and project folders. Make several for different needs and switch with one click.",
+              "Profil yaiku siji gabungan versi PHP, web server, MySQL, port, lan folder proyek. Gawe sawetara profil kanggo kabutuhan beda, banjur pindhah sepisan klik.",
+              "Profil tu asa campuran versi PHP, web server, MySQL, port, wan folder proyek. Ulah babarapa profil gasan kaparluan balain, imbahtu pindah sakali klik.",
+              B("Switch ke profil ini",
+                "Menjadikan profil yang sedang dibuka sebagai profil aktif.",
+                "Makes the profile you are editing the active one.",
+                "Ndadekake profil sing lagi dibukak dadi profil aktif.",
+                "Maulah profil nang lagi dibuka jadi profil aktif."),
+              B("Profil baru",
+                "Membuat profil kosong. Duplikat menyalin profil yang dipilih; Hapus membuangnya (versi di folder bin tidak ikut terhapus).",
+                "Creates an empty profile. Duplicate copies the selected one; Delete removes it (the versions in the bin folder are not deleted).",
+                "Nggawe profil kosong. Duplikat nyalin profil sing dipilih; Hapus mbuwang profil (versi ing folder bin ora melu kehapus).",
+                "Maulah profil kosong. Duplikat manyalin profil nang dipilih; Hapus mambuang profil (versi di folder bin kada tahapus)."),
+              B("Sarankan otomatis",
+                "Memilihkan versi Apache yang cocok dengan versi PHP yang dipilih.",
+                "Picks an Apache version that matches the chosen PHP version.",
+                "Milihake versi Apache sing cocog karo versi PHP sing dipilih.",
+                "Mamilihakan versi Apache nang cucuk lawan versi PHP nang dipilih."),
+              B("Port HTTP",
+                "Nomor pintu web server. 80 berarti alamat tanpa nomor (http://localhost/). Ganti bila dipakai program lain.",
+                "The web server's port. 80 means addresses without a number (http://localhost/). Change it if another program uses it.",
+                "Nomer lawang web server. 80 tegese alamat tanpa nomer (http://localhost/). Ganti yen dienggo program liya.",
+                "Numur lawang web server. 80 artinya alamat kada panambahan numur (http://localhost/). Ganti amun dipakai program lain."),
+              B("Folder proyek",
+                "Folder tempat proyek-proyek Anda. Yang pertama menjadi http://localhost/; setiap subfolder menjadi satu situs.",
+                "Folders holding your projects. The first one becomes http://localhost/; each subfolder becomes a site.",
+                "Folder panggonan proyek-proyek sampeyan. Sing kapisan dadi http://localhost/; saben subfolder dadi siji situs.",
+                "Folder wadah proyek-proyek pian. Nang panambaian jadi http://localhost/; tiap subfolder jadi asa situs."),
+              B("Akhiran nama situs",
+                "Akhiran alamat situs, misalnya test menjadi namaproyek.test.",
+                "The ending of site addresses, e.g. test gives projectname.test.",
+                "Buntut alamat situs, upamane test dadi jenengproyek.test.",
+                "Buntut alamat situs, umpamanya test jadi ngaranproyek.test."),
+              B("Nyalakan ulang",
+                "Menerapkan perubahan profil ke server yang sedang jalan.",
+                "Applies profile changes to the running server.",
+                "Ngetrapake owahan profil menyang server sing lagi mlaku.",
+                "Manarapakan parubahan profil ka server nang lagi bajalan.")),
+
+            H("versi", "Versi",
+              "Semua versi PHP, Apache, Nginx, dan MySQL yang ditemukan Phoron di komputer ini, termasuk milik Laragon atau XAMPP. Phoron tidak pernah mengubah isi folder-folder itu.",
+              "Every PHP, Apache, Nginx and MySQL version Phoron found on this computer, including Laragon's or XAMPP's. Phoron never changes those folders.",
+              "Kabeh versi PHP, Apache, Nginx, lan MySQL sing ditemokake Phoron ing komputer iki, kalebu duweke Laragon utawa XAMPP. Phoron ora tau ngowahi isine folder-folder kuwi.",
+              "Sabarataan versi PHP, Apache, Nginx, wan MySQL nang ditamuakan Phoron di komputer ini, tamasuk ampun Laragon atawa XAMPP. Phoron kada suah maubah isi folder-folder itu.",
+              B("Folder bin yang dipindai",
+                "Daftar folder yang diperiksa untuk mencari versi. Satu folder per baris.",
+                "The folders searched for versions. One folder per line.",
+                "Folder-folder sing dipriksa kanggo nggoleki versi. Siji folder saben baris.",
+                "Folder-folder nang dipariksa gasan mancari versi. Asa folder satiap baris."),
+              B("Pindai ulang",
+                "Memeriksa ulang folder bin, misalnya sesudah Anda menyalin versi baru ke dalamnya.",
+                "Scans the bin folders again, e.g. after you copied a new version into one.",
+                "Mriksa maneh folder bin, upamane sawise sampeyan nyalin versi anyar mrono.",
+                "Mamariksa pulang folder bin, umpamanya imbah pian manyalin versi hanyar ka situ."),
+              B("Deteksi otomatis",
+                "Mencari Laragon, XAMPP, atau WAMP yang terpasang dan menawarkan untuk menambahkan foldernya.",
+                "Looks for an installed Laragon, XAMPP or WAMP and offers to add its folder.",
+                "Nggoleki Laragon, XAMPP, utawa WAMP sing wis dipasang lan nawakake nambahake foldere.",
+                "Mancari Laragon, XAMPP, atawa WAMP nang sudah tapasang, imbahtu manawarakan manambahakan foldernya."),
+              B("Unduh & pasang",
+                "Mengunduh versi yang dipilih di kotak sebelah kiri ke folder bin Phoron. Daftar PHP diambil langsung dari windows.php.net.",
+                "Downloads the version chosen in the box on the left into Phoron's bin folder. The PHP list comes straight from windows.php.net.",
+                "Ngundhuh versi sing dipilih ing kothak sisih kiwa menyang folder bin Phoron. Daftar PHP dijupuk langsung saka windows.php.net.",
+                "Maunduh versi nang dipilih di kutak sabalah kiwa ka folder bin Phoron. Catatan PHP diambil langsung matan windows.php.net."),
+              B(null,
+                "Kiat: NTS/TS dan x64/x86 penting. Untuk Apache pilih TS; untuk PHP per situs dan Nginx, NTS pun bisa. Pilih x64 kecuali ekstensi Anda (misalnya Oracle) butuh x86.",
+                "Tip: NTS/TS and x64/x86 matter. For Apache choose TS; for per-site PHP and Nginx, NTS works too. Choose x64 unless an extension (e.g. Oracle) needs x86.",
+                "Tips: NTS/TS lan x64/x86 iku penting. Kanggo Apache pilih TS; kanggo PHP saben situs lan Nginx, NTS uga bisa. Pilih x64 kajaba ekstensi sampeyan (upamane Oracle) butuh x86.",
+                "Tips: NTS/TS wan x64/x86 tu panting. Gasan Apache pilih TS; gasan PHP per situs wan Nginx, NTS gin kawa. Pilih x64 kacuali ekstensi pian (umpamanya Oracle) parlu x86.")),
+
+            H("situs", "Situs",
+              "Setiap folder di dalam folder proyek otomatis menjadi situs dengan alamatnya sendiri. Di sini Anda juga bisa memilih versi PHP berbeda untuk tiap situs.",
+              "Every folder inside a project folder automatically becomes a site with its own address. Here you can also choose a different PHP version for each site.",
+              "Saben folder ing njero folder proyek otomatis dadi situs karo alamate dhewe. Ing kene sampeyan uga bisa milih versi PHP sing beda kanggo saben situs.",
+              "Tiap folder di dalam folder proyek otomatis jadi situs lawan alamatnya saurangan. Di sini pian gin kawa mamilih versi PHP nang balain gasan tiap situs.",
+              B("PHP",
+                "Versi PHP untuk situs itu. \"Ikut profil\" memakai PHP profil. Setelah diganti, web server perlu dinyalakan ulang - tombolnya muncul di atas daftar.",
+                "The PHP version for that site. \"Follow profile\" uses the profile's PHP. After changing it the web server needs a restart - the button appears above the list.",
+                "Versi PHP kanggo situs kuwi. \"Melu profil\" nganggo PHP profil. Sawise diganti, web server kudu diurupake maneh - tombole metu ing dhuwur daftar.",
+                "Versi PHP gasan situs itu. \"Umpat profil\" mamakai PHP profil. Imbah diganti, web server parlu dihidupakan pulang - tumbulnya timbul di atas catatan situs."),
+              B("Buat situs",
+                "Membuat folder proyek baru berisi index.php contoh, dan langsung mendaftarkan alamatnya.",
+                "Creates a new project folder with a sample index.php and registers its address.",
+                "Nggawe folder proyek anyar isi index.php conto, lan langsung ndaftarake alamate.",
+                "Maulah folder proyek hanyar baisi index.php cuntuh, imbahtu langsung mancatat alamatnya."),
+              B("Buka di browser",
+                "Membuka situs yang dipilih di browser.",
+                "Opens the selected site in the browser.",
+                "Mbukak situs sing dipilih ing browser.",
+                "Mambuka situs nang dipilih di browser."),
+              B("Terminal di sini",
+                "Jendela perintah di folder situs itu, dengan PHP milik situs itu (cocok untuk php artisan / composer).",
+                "A command window in that site's folder, using that site's PHP (good for php artisan / composer).",
+                "Jendhela prentah ing folder situs kuwi, nganggo PHP duweke situs kuwi (cocog kanggo php artisan / composer).",
+                "Jandila parintah di folder situs itu, mamakai PHP ampun situs itu (cucuk gasan php artisan / composer)."),
+              B("Segarkan & sinkronkan",
+                "Membaca ulang folder proyek dan menulis ulang alamat situs, misalnya sesudah Anda menambah folder dari Explorer.",
+                "Re-reads the project folders and rewrites the site addresses, e.g. after adding a folder in Explorer.",
+                "Maca maneh folder proyek lan nulis maneh alamat situs, upamane sawise nambah folder saka Explorer.",
+                "Mambaca pulang folder proyek wan manulis pulang alamat situs, umpamanya imbah pian manambah folder matan Explorer."),
+              B("hosts",
+                "Kolom hosts/vhost: centang berarti alamat .test situs itu sudah terdaftar dan punya pengaturan web server sendiri.",
+                "The hosts/vhost columns: a tick means the site's .test address is registered and has its own web server settings.",
+                "Kolom hosts/vhost: centhang tegese alamat .test situs kuwi wis kadaftar lan duwe setelan web server dhewe.",
+                "Kolom hosts/vhost: cintang artinya alamat .test situs itu sudah tacatat wan baisi setelan web server saurangan."),
+              B(null,
+                "Kiat: dua folder bernama sama di folder proyek berbeda tetap sama-sama dilayani; yang kedua mendapat alamat -2 (catatan kuning menyebutkannya).",
+                "Tip: two folders with the same name in different project folders are both served; the second gets a -2 address (the yellow note says so).",
+                "Tips: rong folder kanthi jeneng padha ing folder proyek beda tetep padha dilayani; sing kapindho oleh alamat -2 (cathetan kuning nyebutake).",
+                "Tips: dua folder bangaran sama di folder proyek balain tatap sama-sama dilayani; nang kadua dapat alamat -2 (catatan kuning manyambat).")),
+
+            H("basisdata", "Basis data",
+              "Daftar basis data MySQL profil aktif. MySQL harus menyala dulu.",
+              "The MySQL databases of the active profile. MySQL has to be running first.",
+              "Basis data MySQL profil aktif. MySQL kudu diurupake dhisik.",
+              "Basis data MySQL profil aktif. MySQL musti dihidupakan dahulu.",
+              B("Buat...",
+                "Membuat basis data kosong. Hapus membuangnya beserta seluruh isinya - Anda diminta mengetik namanya dulu.",
+                "Creates an empty database. Delete removes it with everything in it - you are asked to type its name first.",
+                "Nggawe basis data kosong. Hapus mbuwang basis data sak isine - sampeyan dijaluk ngetik jenenge dhisik.",
+                "Maulah basis data kosong. Hapus mambuang basis data sabarataan isinya - pian diminta mangatik ngarannya dahulu."),
+              B("Impor .sql...",
+                "Menjalankan isi berkas .sql ke basis data yang dipilih (misalnya cadangan dari server). Tabel bernama sama bisa tertimpa.",
+                "Runs a .sql file into the selected database (e.g. a backup from a server). Tables with the same name may be overwritten.",
+                "Nglakokake isi berkas .sql menyang basis data sing dipilih (upamane serepan saka server). Tabel sing jenenge padha bisa ketimpa.",
+                "Manjalanakan isi barakas .sql ka basis data nang dipilih (umpamanya cadangan matan server). Tabel bangaran sama kawa tatimpa."),
+              B("Ekspor .sql...",
+                "Menyimpan seluruh isi basis data yang dipilih ke berkas .sql sebagai cadangan.",
+                "Saves the whole selected database to a .sql file as a backup.",
+                "Nyimpen kabeh isi basis data sing dipilih menyang berkas .sql minangka serepan.",
+                "Manyimpan sabarataan isi basis data nang dipilih ka barakas .sql jadi cadangan."),
+              B("Batal",
+                "Muncul selama impor/ekspor berjalan. Menghentikannya; impor yang dibatalkan bisa meninggalkan basis data terisi sebagian.",
+                "Shown while an import/export runs. Stops it; a cancelled import may leave the database partly filled.",
+                "Metu nalika impor/ekspor mlaku. Mandhegake; impor sing dibatalake bisa ninggal basis data kaisi sapérangan.",
+                "Timbul salawas impor/ekspor bajalan. Mahintiakannya; impor nang dibatalakan kawa maninggalakan basis data tapisi sabagian."),
+              B("Buka HeidiSQL",
+                "Membuka HeidiSQL (aplikasi untuk melihat dan menyunting tabel) yang langsung tersambung ke MySQL ini.",
+                "Opens HeidiSQL (an app for browsing and editing tables) already connected to this MySQL.",
+                "Mbukak HeidiSQL (aplikasi kanggo ndeleng lan nyunting tabel) sing langsung nyambung menyang MySQL iki.",
+                "Mambuka HeidiSQL (aplikasi gasan malihat wan manyunting tabel) nang langsung tasambung ka MySQL ini.")),
+
+            H("node", "Node / TS",
+              "Menjalankan proyek Node.js (Next.js, Vite, Astro, dan lain-lain) dari folder mana pun, tanpa membuka terminal sendiri.",
+              "Runs Node.js projects (Next.js, Vite, Astro and others) from any folder, without opening a terminal yourself.",
+              "Nglakokake proyek Node.js (Next.js, Vite, Astro, lsp.) saka folder endi wae, tanpa mbukak terminal dhewe.",
+              "Manjalanakan proyek Node.js (Next.js, Vite, Astro, wan nang lainnya) matan folder mana haja, kada usah mambuka terminal saurangan.",
+              B("Tambah proyek...",
+                "Memilih folder yang berisi package.json. Perintah (dev, build, start) dibaca dari berkas itu.",
+                "Choose a folder containing package.json. The commands (dev, build, start) are read from that file.",
+                "Milih folder sing isine package.json. Prentah (dev, build, start) diwaca saka berkas kuwi.",
+                "Mamilih folder nang baisi package.json. Parintah (dev, build, start) dibaca matan barakas itu."),
+              B("Jalankan",
+                "Menjalankan perintah yang dipilih. Alamatnya muncul di kolom Alamat begitu server pengembangnya siap.",
+                "Runs the chosen command. The address appears in the Address column once the dev server is ready.",
+                "Nglakokake prentah sing dipilih. Alamate metu ing kolom Alamat sawise server pangembangane siap.",
+                "Manjalanakan parintah nang dipilih. Alamatnya timbul di kolom Alamat imbah server pangambangnya siap."),
+              B("Hapus dari daftar",
+                "Mengeluarkan proyek dari daftar ini saja; foldernya tidak disentuh.",
+                "Removes the project from this list only; its folder is not touched.",
+                "Mung ngetokake proyek saka daftar iki; foldere ora disenggol.",
+                "Mangaluarakan proyek matan catatan ini haja; foldernya kada dijamah.")),
+
+            H("ekstensi", "Ekstensi PHP",
+              "Mencentang ekstensi PHP (misalnya mysqli, gd, oci8) dan mengubah setelan php.ini yang paling sering dipakai, per profil.",
+              "Tick PHP extensions (e.g. mysqli, gd, oci8) and change the most used php.ini settings, per profile.",
+              "Nyenthang ekstensi PHP (upamane mysqli, gd, oci8) lan ngowahi setelan php.ini sing paling kerep dienggo, saben profil.",
+              "Mancintang ekstensi PHP (umpamanya mysqli, gd, oci8) wan maubah setelan php.ini nang paling rancak dipakai, per profil.",
+              B("Setelan php.ini yang sering diubah",
+                "Batas memori, ukuran unggahan, waktu maksimum, dan tampilan galat.",
+                "Memory limit, upload size, max execution time and error display.",
+                "Wates memori, ukuran unggahan, wektu maksimum, lan tampilan galat.",
+                "Wates mamori, ukuran unggahan, waktu paling lawas, wan tampilan galat."),
+              B("Nyalakan ulang web server",
+                "Menerapkan perubahan ekstensi dan setelan ke server yang sedang jalan.",
+                "Applies extension and setting changes to the running server.",
+                "Ngetrapake owahan ekstensi lan setelan menyang server sing lagi mlaku.",
+                "Manarapakan parubahan ekstensi wan setelan ka server nang lagi bajalan."),
+              B("Uji: php -m",
+                "Menampilkan ekstensi yang benar-benar termuat. Bila yang dicentang tidak muncul, DLL-nya tidak cocok atau tidak ada.",
+                "Shows the extensions that actually load. If a ticked one is missing, its DLL is missing or does not match.",
+                "Nuduhake ekstensi sing tenan kamuat. Yen sing dicenthang ora metu, DLL-e ora ana utawa ora cocog.",
+                "Manampaiakan ekstensi nang bujur-bujur tamuat. Amun nang dicintang kada timbul, DLL-nya kada ada atawa kada cucuk."),
+              B("Ambil dari php.ini asli",
+                "Menyalin daftar ekstensi yang aktif di php.ini bawaan versi PHP itu.",
+                "Copies the list of extensions active in that PHP version's own php.ini.",
+                "Nyalin daftar ekstensi sing aktif ing php.ini gawane versi PHP kuwi.",
+                "Manyalin ekstensi nang aktif di php.ini bawaan versi PHP itu.")),
+
+            H("log", "Log",
+              "Catatan Apache, MySQL, PHP, dan Phoron. Tempat pertama untuk dibaca bila halaman menampilkan galat 500 atau layanan tidak mau menyala.",
+              "The Apache, MySQL, PHP and Phoron logs. The first place to look when a page shows error 500 or a service will not start.",
+              "Cathetan Apache, MySQL, PHP, lan Phoron. Panggonan kapisan sing diwaca yen kaca metu galat 500 utawa layanan ora gelem urip.",
+              "Catatan Apache, MySQL, PHP, wan Phoron. Wadah panambaian gasan dibaca amun situs manampaiakan galat 500 atawa layanan kada hakun hidup.",
+              B("Ikuti",
+                "Bila dicentang, baris baru langsung muncul di bawah selagi terjadi.",
+                "When ticked, new lines appear at the bottom as they happen.",
+                "Yen dicenthang, baris anyar langsung metu ing ngisor nalika kedadeyan.",
+                "Amun dicintang, baris hanyar langsung timbul di bawah pas kajadian."),
+              B("Kosongkan",
+                "Mengosongkan berkas log yang dipilih.",
+                "Empties the selected log file.",
+                "Ngosongake berkas log sing dipilih.",
+                "Mangusungakan barakas log nang dipilih."),
+              B("Buka folder",
+                "Membuka folder logs di Explorer.",
+                "Opens the logs folder in Explorer.",
+                "Mbukak folder logs ing Explorer.",
+                "Mambuka folder logs di Explorer.")),
+
+            H("setelan", "Pengaturan",
+              "Setelan Phoron sendiri: tampilan, bahasa, menyala bersama Windows, alamat .test, dan pembaruan.",
+              "Phoron's own settings: appearance, language, starting with Windows, .test addresses and updates.",
+              "Setelan Phoron dhewe: tampilan, basa, urip bareng Windows, alamat .test, lan pembaruan.",
+              "Setelan Phoron saurangan: tampilan, bahasa, hidup baimbai Windows, alamat .test, wan pambaharuan.",
+              B("Virtual Host: beri tiap folder proyek alamatnya sendiri",
+                "Menyalakan alamat namaproyek.test. Tanpa ini proyek tetap bisa dibuka di http://localhost/namaproyek/.",
+                "Turns on projectname.test addresses. Without it, projects still open at http://localhost/projectname/.",
+                "Nguripake alamat jenengproyek.test. Tanpa iki proyek tetep bisa dibukak ing http://localhost/jenengproyek/.",
+                "Mahidupakan alamat ngaranproyek.test. Amun kada, proyek tatap kawa dibuka di http://localhost/ngaranproyek/."),
+              B("Sinkronkan berkas hosts Windows (butuh Administrator)",
+                "Mengizinkan Phoron mencatat alamat .test ke berkas hosts Windows.",
+                "Lets Phoron write .test addresses into the Windows hosts file.",
+                "Ngidini Phoron nyathet alamat .test menyang berkas hosts Windows.",
+                "Maijinakan Phoron mancatat alamat .test ka barakas hosts Windows."),
+              B("Percepat PHP dengan opcache",
+                "Menyimpan hasil terjemahan skrip PHP di memori sehingga halaman lebih cepat. Perubahan kode tetap langsung terlihat.",
+                "Keeps compiled PHP scripts in memory so pages are faster. Code changes still show immediately.",
+                "Nyimpen skrip PHP sing wis diterjemahake ing memori supaya kaca luwih cepet. Owahan kode tetep langsung katon.",
+                "Manyimpan skrip PHP nang sudah ditarjamahakan di mamori supaya situs labih capat. Parubahan kode tatap langsung tampak."),
+              B("Tombol tutup mengecilkan ke baki sistem, bukan keluar",
+                "Tombol X jendela hanya menyembunyikan Phoron ke dekat jam; server tetap jalan.",
+                "The window's X only hides Phoron near the clock; the servers keep running.",
+                "Tombol X jendhela mung ndhelikake Phoron ing cedhak jam; server tetep mlaku.",
+                "Tumbul X jandila manyambunyiakan Phoron di parak jam haja; server tatap bajalan."),
+              B("Cek pembaruan sekarang",
+                "Memeriksa apakah ada versi Phoron yang lebih baru di GitHub.",
+                "Checks GitHub for a newer version of Phoron.",
+                "Mriksa apa ana versi Phoron sing luwih anyar ing GitHub.",
+                "Mamariksa apakah ada versi Phoron nang labih hanyar di GitHub.")),
+
+            H("tentang", "Tentang",
+              "Versi Phoron dan versi yang sedang dipakai, serta tautan ke halaman proyek.",
+              "Phoron's version and the versions in use, plus links to the project page.",
+              "Versi Phoron lan versi sing lagi dienggo, uga pranala menyang kaca proyek.",
+              "Versi Phoron wan versi nang lagi dipakai, wan tautan ka situs proyek.",
+              B("Salin info versi",
+                "Menyalin keterangan versi ke clipboard, untuk ditempel saat melaporkan masalah.",
+                "Copies the version details to the clipboard, to paste when reporting a problem.",
+                "Nyalin katrangan versi menyang clipboard, kanggo ditempel nalika nglaporake masalah.",
+                "Manyalin katarangan versi ka clipboard, gasan ditampal pas malapurakan masalah.")),
+        };
+    }
+}

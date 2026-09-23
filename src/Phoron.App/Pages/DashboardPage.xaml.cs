@@ -281,13 +281,14 @@ namespace Phoron.App.Pages
             // dan Apache tetap melayani keadaan sebelumnya. Situs yang baru saja
             // diumumkan siap di toko.test dijawab vhost bawaan.
             bool restartWeb = _e.PerluRestartWeb, restartDb = _e.PerluRestartDb;
+            string barisRestart = null, barisHosts = null, barisPembaruan = null, barisSisa = null;
+            var barisAdmin = new List<string>();
             if (restartWeb || restartDb)
-                pesan.Add(restartWeb && restartDb
+                pesan.Add(barisRestart = restartWeb && restartDb
                     ? "Konfigurasi web server dan MySQL sudah berubah, tapi keduanya masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
                     : restartWeb
                         ? "Konfigurasi web server sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
                         : "Konfigurasi MySQL sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku.");
-            BtnRestartKonfig.Visibility = restartWeb || restartDb ? Visibility.Visible : Visibility.Collapsed;
             // Sebagian pesan di panel ini bisa ditindak tanpa hak apa pun, sebagian
             // lagi memang mentok tanpa Administrator. Hanya yang kedua yang boleh
             // memunculkan tombol naik hak akses.
@@ -306,6 +307,7 @@ namespace Phoron.App.Pages
                 pesan.Add("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser "
                           + "akan memperingatkan - dan pada host ber-HSTS tidak ada tombol "
                           + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
+                barisAdmin.Add(pesan[pesan.Count - 1]);
                 perluAdmin = true;   // memasang ke Trusted Root butuh Administrator
             }
             // Versi yang dicatat profil tapi tidak ada di komputer ini. Phoron
@@ -316,7 +318,7 @@ namespace Phoron.App.Pages
 
             var baru = _e.Pembaruan;
             if (baru != null && baru.Galat == null && baru.LebihBaru)
-                pesan.Add("Phoron " + baru.Versi + " sudah rilis; yang terpasang "
+                pesan.Add(barisPembaruan = "Phoron " + baru.Versi + " sudah rilis; yang terpasang "
                           + AppInfo.Version + ".");
             // Autostart Windows memakai kunci Run, dan Windows SELALU menjalankan
             // entri Run tanpa hak admin. Jadi keadaan ini normal, bukan kerusakan,
@@ -325,11 +327,12 @@ namespace Phoron.App.Pages
             var belumDaftar = BelumDaftar();
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin() && belumDaftar.Count > 0)
             {
-                pesan.Add("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
+                pesan.Add(barisHosts = "Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
                           + "untuk aplikasi yang menyala sendiri saat boot. Akibatnya "
                           + belumDaftar.Count + " nama situs .test belum terdaftar di berkas hosts. "
                           + "Alamat http://localhost/proyek/ tetap jalan normal. "
                           + "Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.");
+                barisAdmin.Add(barisHosts);
                 perluAdmin = true;
             }
             // Tidak ada cabang "else" di sini dengan sengaja. Kalau seluruh nama
@@ -338,24 +341,37 @@ namespace Phoron.App.Pages
             // terpengaruh. Memasang panel kuning untuk keadaan yang tidak bisa -
             // dan tidak perlu - ditindak cuma melatih orang mengabaikan panelnya.
 
-            TxtPeringatan.Text = string.Join(Environment.NewLine, pesan);
-            PanelPeringatan.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            BtnAdmin.Visibility = perluAdmin && !HostsFile.IsAdmin()
-                ? Visibility.Visible : Visibility.Collapsed;
-            BtnDaftarHosts.Visibility = belumDaftar.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            BtnPembaruan.Visibility = baru != null && baru.Galat == null && baru.LebihBaru
-                ? Visibility.Visible : Visibility.Collapsed;
-
             // Sisa proses dari salinan Phoron sebelumnya: port terpakai, tapi
             // yang memegangnya justru httpd/mysqld - bukan aplikasi asing.
             // Menyebutkannya tanpa menyediakan tombolnya hanya memaksa orang
             // membuka Task Manager dan menebak PID mana yang boleh dimatikan.
-            BtnBebaskan.Visibility = sisa.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (sisa.Count > 0)
-                TxtPeringatan.Text += (TxtPeringatan.Text.Length > 0 ? Environment.NewLine : "")
-                    + "Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat "
+                pesan.Add(barisSisa = "Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat "
                     + "membersihkan diri - tapi bisa juga milik Laragon atau XAMPP yang memang "
-                    + "sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan.";
+                    + "sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan.");
+
+            // Catatan yang sudah ditutup (X) tidak ditampilkan lagi selama masih
+            // sama; tombol aksinya ikut tersembunyi bersama catatannya.
+            var tampil = CatatanDitutup.Saring("beranda", pesan);
+            _peringatanTampil = tampil;
+            Func<string, bool> terlihat = b => b != null && tampil.Contains(b);
+            TxtPeringatan.Text = string.Join(Environment.NewLine, tampil);
+            PanelPeringatan.Visibility = tampil.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            BtnRestartKonfig.Visibility = terlihat(barisRestart) ? Visibility.Visible : Visibility.Collapsed;
+            BtnAdmin.Visibility = perluAdmin && !HostsFile.IsAdmin() && barisAdmin.Any(terlihat)
+                ? Visibility.Visible : Visibility.Collapsed;
+            BtnDaftarHosts.Visibility = (barisHosts != null ? terlihat(barisHosts) : belumDaftar.Count > 0)
+                ? Visibility.Visible : Visibility.Collapsed;
+            BtnPembaruan.Visibility = terlihat(barisPembaruan) ? Visibility.Visible : Visibility.Collapsed;
+            BtnBebaskan.Visibility = terlihat(barisSisa) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        List<string> _peringatanTampil = new List<string>();
+
+        void BtnTutupPeringatan_Click(object sender, RoutedEventArgs e)
+        {
+            CatatanDitutup.Tutup("beranda", _peringatanTampil);
+            PanelPeringatan.Visibility = Visibility.Collapsed;
         }
 
         async void BtnRestartKonfig_Click(object sender, RoutedEventArgs e)
