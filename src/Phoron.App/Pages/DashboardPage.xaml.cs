@@ -230,16 +230,64 @@ namespace Phoron.App.Pages
                 : "PHP " + Lang.T(keadaanPhp == ServiceState.Jalan ? "dilayani" : "belum dilayani");
         }
 
-        void ShowConflicts()
+        int _nomorPeringatan;
+
+        /// <summary>
+        /// Panel peringatan kuning.
+        ///
+        /// Bagian yang lambat - memeriksa port, yang menjalankan netstat.exe bila
+        /// ada yang terpakai, dan mencari sisa proses - dikerjakan di utas latar.
+        /// Dulu semuanya di utas layar, pada SETIAP perubahan status layanan, dan
+        /// jendela membeku sesaat tiap kali lampu berganti warna.
+        ///
+        /// Hanya hasil permintaan TERAKHIR yang digambar. Menyalakan layanan
+        /// memicu beberapa perubahan status beruntun; tanpa nomor ini jawaban
+        /// yang lebih lama bisa tiba belakangan dan menimpa yang benar.
+        /// </summary>
+        async void ShowConflicts()
         {
-            var pesan = new List<string>();
-            if (_e.Active == null) pesan.Add("Belum ada profil. Buat satu di halaman Profil.");
-            else if (_e.Services.WebState != ServiceState.Jalan)
+            var nomor = ++_nomorPeringatan;
+            var aktif = _e.Active;
+            // Port hanya diperiksa untuk layanan yang BELUM jalan. Yang sudah
+            // jalan memegang portnya sendiri - dulu MySQL yang jalan selagi web
+            // server belum menghasilkan keluhan "port 3306 dipakai mysqld" tentang
+            // mysqld milik Phoron sendiri.
+            bool periksaWeb = _e.Services.WebState != ServiceState.Jalan;
+            bool periksaDb = _e.Services.DbState != ServiceState.Jalan;
+            List<string> bentrok;
+            List<PortCheck.Usage> sisa;
+            try
             {
-                // Port dicek hanya saat layanan belum jalan - kalau sudah jalan,
-                // yang memegang port itu justru kita sendiri.
-                foreach (var u in PortCheck.Conflicts(_e.Active, false)) pesan.Add(u.Describe());
+                var latar = await System.Threading.Tasks.Task.Run(() => new
+                {
+                    Bentrok = aktif == null ? new List<string>()
+                        : PortCheck.Conflicts(aktif, false, periksaWeb, periksaDb)
+                                   .Select(u => u.Describe()).ToList(),
+                    Sisa = _e.SisaProses(),
+                });
+                bentrok = latar.Bentrok;
+                sisa = latar.Sisa;
             }
+            catch { bentrok = new List<string>(); sisa = new List<PortCheck.Usage>(); }
+            if (nomor != _nomorPeringatan) return;   // sudah ada permintaan yang lebih baru
+
+            var pesan = new List<string>();
+            if (aktif == null) pesan.Add("Belum ada profil. Buat satu di halaman Profil.");
+            else pesan.AddRange(bentrok);
+
+            // Konfigurasi sudah berubah di cakram, tapi server yang sedang jalan
+            // masih memakai yang lama. Dulu tidak ada tanda apa pun: sakelar
+            // Virtual Host, folder proyek, situs baru - semuanya "tersimpan",
+            // dan Apache tetap melayani keadaan sebelumnya. Situs yang baru saja
+            // diumumkan siap di toko.test dijawab vhost bawaan.
+            bool restartWeb = _e.PerluRestartWeb, restartDb = _e.PerluRestartDb;
+            if (restartWeb || restartDb)
+                pesan.Add(restartWeb && restartDb
+                    ? "Konfigurasi web server dan MySQL sudah berubah, tapi keduanya masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
+                    : restartWeb
+                        ? "Konfigurasi web server sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
+                        : "Konfigurasi MySQL sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku.");
+            BtnRestartKonfig.Visibility = restartWeb || restartDb ? Visibility.Visible : Visibility.Collapsed;
             // Sebagian pesan di panel ini bisa ditindak tanpa hak apa pun, sebagian
             // lagi memang mentok tanpa Administrator. Hanya yang kedua yang boleh
             // memunculkan tombol naik hak akses.
@@ -302,13 +350,29 @@ namespace Phoron.App.Pages
             // yang memegangnya justru httpd/mysqld - bukan aplikasi asing.
             // Menyebutkannya tanpa menyediakan tombolnya hanya memaksa orang
             // membuka Task Manager dan menebak PID mana yang boleh dimatikan.
-            var sisa = _e.SisaProses();
             BtnBebaskan.Visibility = sisa.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (sisa.Count > 0)
                 TxtPeringatan.Text += (TxtPeringatan.Text.Length > 0 ? Environment.NewLine : "")
                     + "Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat "
                     + "membersihkan diri - tapi bisa juga milik Laragon atau XAMPP yang memang "
                     + "sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan.";
+        }
+
+        async void BtnRestartKonfig_Click(object sender, RoutedEventArgs e)
+        {
+            BtnRestartKonfig.IsEnabled = false;
+            try
+            {
+                // Basis data lebih dulu - alasannya sama dengan tombol serupa di
+                // halaman Profil: aplikasi PHP menyambung ke MySQL saat halamannya
+                // dibuka.
+                if (_e.PerluRestartDb) { await _e.StopDbAsync(); await _e.StartDbAsync(); }
+                if (_e.PerluRestartWeb) { await _e.StopWebAsync(); await _e.StartWebAsync(); }
+            }
+            finally { BtnRestartKonfig.IsEnabled = true; }
+            var main = Window.GetWindow(this) as MainWindow;
+            if (main != null) main.RefreshStatus();
+            RefreshState();
         }
 
         void BtnPembaruan_Click(object sender, RoutedEventArgs e)
@@ -471,7 +535,7 @@ namespace Phoron.App.Pages
             var httpd = Path.Combine(apache.Path, "bin", "httpd.exe");
             var conf = Path.Combine(Paths.EtcApache, "httpd.conf");
             var res = Shell.Run(httpd, "-f \"" + conf + "\" -d \"" + apache.Path + "\" -t",
-                                apache.Path, 30000, ServiceManager.EnvFor(_e.Php));
+                                apache.Path, 30000, ServiceManager.EnvFor(_e.Php, ConfigWriter.FolderPhpIni(_e.Php, _e.Settings.PhpIniKeFolderPhp)));
             AppState.Info(string.IsNullOrWhiteSpace(res.All) ? "Konfigurasi OK." : res.All,
                           res.Ok ? "Konfigurasi OK" : "Konfigurasi bermasalah");
         }

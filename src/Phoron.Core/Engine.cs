@@ -122,15 +122,25 @@ namespace Phoron.Core
             foreach (var u in SisaProses())
             {
                 var nama = (u.ProcessName ?? "").ToLowerInvariant();
-                if (nama == "mysqld" && MySql != null)
+                if (nama == "mysqld")
                 {
-                    var admin = Path.Combine(MySql.Path, "bin", "mysqladmin.exe");
-                    if (File.Exists(admin))
+                    Say("Meminta mysqld (PID " + u.Pid + ") berhenti dengan rapi...");
+                    // Lewat event bernamanya lebih dulu - tanpa kata sandi, jadi
+                    // tetap bekerja walau root sudah diberi sandi. mysqladmin
+                    // hanya cadangan untuk build yang tidak membuat event itu.
+                    if (ServiceManager.MintaMysqlBerhenti(u.Pid))
                     {
-                        Say("Meminta mysqld (PID " + u.Pid + ") berhenti dengan rapi...");
-                        await Task.Run(() => Shell.Run(admin,
-                            "--protocol=tcp --port=" + u.Port + " -u root shutdown", MySql.Path, 20000));
-                        await Task.Delay(1500);
+                        for (int i = 0; i < 30 && !PortCheck.IsFree(u.Port); i++) await Task.Delay(400);
+                    }
+                    else if (MySql != null)
+                    {
+                        var admin = Path.Combine(MySql.Path, "bin", "mysqladmin.exe");
+                        if (File.Exists(admin))
+                        {
+                            await Task.Run(() => Shell.Run(admin,
+                                "--protocol=tcp --port=" + u.Port + " -u root shutdown", MySql.Path, 20000));
+                            await Task.Delay(1500);
+                        }
                     }
                 }
                 if (!PortCheck.IsFree(u.Port))
@@ -423,7 +433,8 @@ namespace Phoron.Core
                 LastBuild.Warnings.Add(Core.Settings.KeluhanTerakhir);
             LastBuild.Warnings.AddRange(SiteWarnings);
             LastBuild.Warnings.AddRange(awal);
-            LastBuild.Warnings.AddRange(PaketKembar());
+            var kembar = PaketKembar();
+            LastBuild.Warnings.AddRange(kembar);
             LastBuild.Warnings.AddRange(Penyesuaian());
 
             // Daftar ekstensi yang diambil alih dari php.ini dasar disimpan ke
@@ -451,10 +462,22 @@ namespace Phoron.Core
             // seluruh berkas hosts dan menyentuh belasan berkas per folder
             // proyek.
             RefreshSites();
-            foreach (var w in LastBuild.Warnings) Say("Peringatan: " + w);
+            foreach (var w in LastBuild.Warnings)
+            {
+                // Paket kembar adalah keadaan komputer, bukan kejadian: ia tidak
+                // berubah di antara dua Apply. Dulu dicatat ulang di SETIAP Apply
+                // - di log pengguna dua kali tiap start, setiap hari - sampai
+                // orang berhenti membaca panel peringatan sama sekali. Cukup
+                // sekali per sesi; LastBuild.Warnings tetap memuatnya untuk layar.
+                if (kembar.Contains(w) && !_kembarTercatat.Add(w)) continue;
+                Say("Peringatan: " + w);
+            }
             Say("Konfigurasi profil \"" + Active.Name + "\" ditulis ulang.");
             return LastBuild.Warnings;
         }
+
+        /// <summary>Peringatan paket kembar yang sudah dicatat di sesi ini.</summary>
+        readonly HashSet<string> _kembarTercatat = new HashSet<string>();
 
         /// <summary>
         /// Profil menyimpan versi sebagai NAMA FOLDER saja. Kalau dua folder bin
@@ -638,7 +661,46 @@ namespace Phoron.Core
             // dilakukan tiap detik - dan layanan yang menyala dengan konfigurasi
             // yang bukan miliknya adalah kesalahan yang paling sulit dilacak.
             Apply();
-            return Services.StartWebAsync(Active, WebPackage, Php, LastBuild);
+            return CatatSaatNyala(ServiceKind.Web, ConfigWriter.VersiKonfigWeb,
+                                  Services.StartWebAsync(Active, WebPackage, Php, LastBuild));
+        }
+
+        // Versi konfigurasi yang dibaca layanan saat ia terakhir menyala - lihat
+        // ConfigWriter.VersiKonfigWeb. -1 berarti belum pernah menyala di sesi ini.
+        int _versiWebNyala = -1, _versiDbNyala = -1;
+
+        async Task<bool> CatatSaatNyala(ServiceKind jenis, int versi, Task<bool> start)
+        {
+            var ok = await start;
+            if (ok)
+            {
+                if (jenis == ServiceKind.Web) _versiWebNyala = versi;
+                else _versiDbNyala = versi;
+            }
+            return ok;
+        }
+
+        /// <summary>
+        /// Web server sedang jalan, tapi konfigurasinya sudah berubah di cakram
+        /// sejak ia menyala - jadi yang dilayaninya masih keadaan lama.
+        /// </summary>
+        public bool PerluRestartWeb
+        {
+            get
+            {
+                return Services.WebState == ServiceState.Jalan && _versiWebNyala >= 0
+                       && ConfigWriter.VersiKonfigWeb != _versiWebNyala;
+            }
+        }
+
+        /// <summary>Sama dengan <see cref="PerluRestartWeb"/>, untuk my.ini dan MySQL.</summary>
+        public bool PerluRestartDb
+        {
+            get
+            {
+                return Services.DbState == ServiceState.Jalan && _versiDbNyala >= 0
+                       && ConfigWriter.VersiKonfigDb != _versiDbNyala;
+            }
         }
 
         public Task StopWebAsync() { return Services.StopWebAsync(); }
@@ -652,7 +714,8 @@ namespace Phoron.Core
                 return Task.FromResult(false);
             }
             Apply();   // lihat alasannya di StartWebAsync
-            return Services.StartDbAsync(Active, MySql);
+            return CatatSaatNyala(ServiceKind.Db, ConfigWriter.VersiKonfigDb,
+                                  Services.StartDbAsync(Active, MySql));
         }
 
         public Task StopDbAsync() { return Services.StopDbGracefullyAsync(Active, MySql); }
@@ -683,7 +746,7 @@ namespace Phoron.Core
             {
                 { "PATH", string.Join(";", parts) + ";" + Environment.GetEnvironmentVariable("PATH") },
             };
-            if (Php != null) env["PHPRC"] = Path.Combine(Paths.Etc, "php", Php.Id);
+            if (Php != null) env["PHPRC"] = ConfigWriter.FolderPhpIni(Php, Settings.PhpIniKeFolderPhp);
             return env;
         }
 

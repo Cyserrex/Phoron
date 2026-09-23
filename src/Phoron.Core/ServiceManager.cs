@@ -120,10 +120,94 @@ namespace Phoron.Core
             if (h != null) h(text);
         }
 
+        // ------------------------------------------------------ Giliran start/stop
+        //
+        // DUA PERMINTAAN YANG BERTABRAKAN. Dulu start hanya menolak bila layanannya
+        // sudah "Jalan" - bukan bila ia MASIH menyala. Akibatnya yang sungguh
+        // terjadi:
+        //
+        //   - "Nyalakan semua" di baki ditekan dua kali selagi InnoDB memulihkan
+        //     diri: dua mysqld, rujukan yang pertama tertimpa, dan mysqld yang
+        //     benar-benar memegang 3306 tidak bisa dihentikan lagi sampai Phoron
+        //     ditutup.
+        //   - "Matikan semua" di tengah start web: Stop tidak menemukan apa pun
+        //     untuk dimatikan, start melanjutkan, dan Apache tetap hidup di port
+        //     80 walau orangnya meminta semuanya mati.
+        //   - Stop di tengah jeda pemeriksaan: httpd yang BARU SAJA dibunuh Stop
+        //     dilaporkan "Apache berhenti seketika", lengkap dengan saran VC++.
+        //
+        // Sekarang start yang masih berjalan dipakai ulang oleh permintaan start
+        // berikutnya, dan setiap Stop menaikkan nomor giliran. Start memeriksa
+        // nomor itu sesudah setiap await; kalau sudah berganti, ia membereskan
+        // apa pun yang sempat ia lahirkan lalu mundur diam-diam - Stop yang sudah
+        // melaporkan hasilnya.
+
+        Task<bool> _mulaiWeb, _mulaiDb;
+        int _giliranWeb, _giliranDb;
+
+        int Giliran(ServiceKind jenis)
+        {
+            return jenis == ServiceKind.Web
+                ? System.Threading.Volatile.Read(ref _giliranWeb)
+                : System.Threading.Volatile.Read(ref _giliranDb);
+        }
+
+        bool Batal(ServiceKind jenis, int giliran) { return Giliran(jenis) != giliran; }
+
+        void NaikkanGiliran(ServiceKind jenis)
+        {
+            if (jenis == ServiceKind.Web) System.Threading.Interlocked.Increment(ref _giliranWeb);
+            else System.Threading.Interlocked.Increment(ref _giliranDb);
+        }
+
+        Task<bool> Antre(ServiceKind jenis, Func<int, Task<bool>> kerja)
+        {
+            TaskCompletionSource<bool> tcs;
+            int giliran;
+            lock (_lock)
+            {
+                var berjalan = jenis == ServiceKind.Web ? _mulaiWeb : _mulaiDb;
+                if (berjalan != null && !berjalan.IsCompleted) return berjalan;
+                tcs = new TaskCompletionSource<bool>();
+                if (jenis == ServiceKind.Web) _mulaiWeb = tcs.Task; else _mulaiDb = tcs.Task;
+                giliran = Giliran(jenis);
+            }
+            // Dijalankan DI LUAR kunci: badan start langsung mengangkat
+            // StateChanged, dan peristiwa tidak boleh diangkat sambil memegang
+            // _lock - lihat catatan di sana.
+            var _ = Kerjakan(jenis, tcs, kerja, giliran);
+            return tcs.Task;
+        }
+
+        /// <summary>
+        /// Menjalankan badan start dan MENJAMIN statusnya tidak tertinggal di
+        /// "Menyalakan". Galat yang lolos - exe yang dikarantina antivirus
+        /// sesudah dipindai, folder data yang tidak bisa dibuat - dulu membuat
+        /// tombol daya mati selamanya sampai Phoron dibuka ulang.
+        /// </summary>
+        async Task Kerjakan(ServiceKind jenis, TaskCompletionSource<bool> tcs,
+                            Func<int, Task<bool>> kerja, int giliran)
+        {
+            try { tcs.TrySetResult(await kerja(giliran)); }
+            catch (Exception ex)
+            {
+                Say((jenis == ServiceKind.Web ? "Web server" : "MySQL")
+                    + " tidak bisa dinyalakan: " + ex.Message);
+                if (!Batal(jenis, giliran)) SetState(jenis, ServiceState.Gagal);
+                tcs.TrySetResult(false);
+            }
+        }
+
         // ------------------------------------------------------------- Web server
 
-        public async Task<bool> StartWebAsync(Profile profile, BinPackage web, BinPackage php,
-                                              ConfigWriter.Result cfg)
+        public Task<bool> StartWebAsync(Profile profile, BinPackage web, BinPackage php,
+                                        ConfigWriter.Result cfg)
+        {
+            return Antre(ServiceKind.Web, g => MulaiWebAsync(profile, web, php, cfg, g));
+        }
+
+        async Task<bool> MulaiWebAsync(Profile profile, BinPackage web, BinPackage php,
+                                       ConfigWriter.Result cfg, int g)
         {
             if (WebState == ServiceState.Jalan) return true;
             if (web == null) { Say("Profil belum menunjuk web server."); SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
@@ -154,8 +238,20 @@ namespace Phoron.Core
                 }
             }
 
-            if (profile.WebServer == "nginx") return await StartNginxAsync(web, php, cfg);
-            return await StartApacheAsync(profile, web, php, cfg);
+            if (profile.WebServer == "nginx") return await StartNginxAsync(web, php, cfg, g);
+            return await StartApacheAsync(profile, web, php, cfg, g);
+        }
+
+        /// <summary>
+        /// Web server yang baru saja dilahirkan ternyata sudah tidak diminta
+        /// lagi - Stop datang di tengah jalan. Bereskan proses itu sendiri, sebab
+        /// Stop mungkin datang SEBELUM ia sempat dipasang dan tidak menemukannya.
+        /// </summary>
+        void BuangWebYatim(Process p)
+        {
+            if (p != null && LepasWebJika(p))
+                try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
+            StopFastCgi();
         }
 
         /// <summary>
@@ -193,7 +289,7 @@ namespace Phoron.Core
         }
 
         async Task<bool> StartApacheAsync(Profile profile, BinPackage apache, BinPackage php,
-                                          ConfigWriter.Result cfg)
+                                          ConfigWriter.Result cfg, int g)
         {
             var httpd = Path.Combine(apache.Path, "bin", "httpd.exe");
             var conf = cfg.HttpdConf ?? Path.Combine(Paths.EtcApache, "httpd.conf");
@@ -202,7 +298,8 @@ namespace Phoron.Core
             // Uji konfigurasi dulu. httpd yang gagal karena salah konfigurasi
             // mencetak sebabnya lalu keluar seketika; tanpa uji ini pengguna cuma
             // melihat "Gagal" tanpa satu baris pun keterangan.
-            var test = await Task.Run(() => Shell.Run(httpd, args + " -t", apache.Path, 30000, EnvFor(php)));
+            var test = await Task.Run(() => Shell.Run(httpd, args + " -t", apache.Path, 30000, EnvFor(php, cfg.PhpIniDir)));
+            if (Batal(ServiceKind.Web, g)) return false;
             if (!test.Ok)
             {
                 Say("Konfigurasi Apache ditolak:" + Environment.NewLine + test.All
@@ -211,19 +308,25 @@ namespace Phoron.Core
                 return false;
             }
 
-            if (cfg.PhpFastCgi && php != null && !await StartFastCgiAsync(php, cfg.FastCgiPort))
+            if (cfg.PhpFastCgi && php != null)
             {
-                SetState(ServiceKind.Web, ServiceState.Gagal);
-                return false;
+                var fcgi = await StartFastCgiAsync(php, cfg.FastCgiPort, cfg.PhpIniDir);
+                if (Batal(ServiceKind.Web, g)) { StopFastCgi(); return false; }
+                if (!fcgi) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             }
 
-            var p = Spawn(httpd, args, apache.Path, EnvFor(php), "apache");
+            var p = Spawn(httpd, args, apache.Path, EnvFor(php, cfg.PhpIniDir), "apache");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             PasangWeb(p);
+            if (Batal(ServiceKind.Web, g)) { BuangWebYatim(p); return false; }
 
             // httpd yang sehat tidak keluar. Kalau ia sudah mati dalam dua detik,
             // yang gagal adalah bind port atau modul, bukan konfigurasinya.
             await Task.Delay(1200);
+            // Stop yang datang selama jeda ini sudah membunuh httpd-nya. Tanpa
+            // pemeriksaan ini, kematian yang DISENGAJA itu dilaporkan sebagai
+            // "Apache berhenti seketika", lengkap dengan saran memasang VC++.
+            if (Batal(ServiceKind.Web, g)) { BuangWebYatim(p); return false; }
             if (p.HasExited)
             {
                 var ekor = EkorLogApache();
@@ -236,37 +339,56 @@ namespace Phoron.Core
                 return false;
             }
             Say("Apache " + apache.Version + " jalan di port " + profile.HttpPort + " (PID " + p.Id + ").");
-            SetState(ServiceKind.Web, ServiceState.Jalan);
-            return true;
+            return Selesaikan(ServiceKind.Web, g, p);
         }
 
-        async Task<bool> StartNginxAsync(BinPackage nginx, BinPackage php, ConfigWriter.Result cfg)
+        /// <summary>
+        /// Langkah terakhir start: nyatakan Jalan. Diperiksa SEKALI LAGI sesudahnya,
+        /// sebab Stop dari utas lain bisa menyelinap tepat di antara pemeriksaan
+        /// terakhir dan penyetelan status - dan lampu hijau untuk layanan yang
+        /// sudah diminta mati adalah persis kebohongan yang sedang ditutup ini.
+        /// </summary>
+        bool Selesaikan(ServiceKind jenis, int g, Process p)
+        {
+            SetState(jenis, ServiceState.Jalan);
+            if (!Batal(jenis, g)) return true;
+            if (jenis == ServiceKind.Web) BuangWebYatim(p);
+            else if (p != null && LepasDbJika(p)) try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
+            SetState(jenis, ServiceState.Berhenti);
+            return false;
+        }
+
+        async Task<bool> StartNginxAsync(BinPackage nginx, BinPackage php, ConfigWriter.Result cfg, int g)
         {
             var exe = Path.Combine(nginx.Path, "nginx.exe");
             var conf = cfg.NginxConf ?? Path.Combine(Paths.EtcNginx, "nginx.conf");
             var args = "-p \"" + nginx.Path + "\" -c \"" + conf + "\"";
 
-            var test = await Task.Run(() => Shell.Run(exe, args + " -t", nginx.Path, 30000, EnvFor(php)));
+            var test = await Task.Run(() => Shell.Run(exe, args + " -t", nginx.Path, 30000, EnvFor(php, cfg.PhpIniDir)));
+            if (Batal(ServiceKind.Web, g)) return false;
             if (!test.Ok)
             {
                 Say("Konfigurasi Nginx ditolak:\n" + test.All);
                 SetState(ServiceKind.Web, ServiceState.Gagal);
                 return false;
             }
-            if (php != null && !await StartFastCgiAsync(php, cfg.FastCgiPort))
+            if (php != null)
             {
-                SetState(ServiceKind.Web, ServiceState.Gagal);
-                return false;
+                var fcgi = await StartFastCgiAsync(php, cfg.FastCgiPort, cfg.PhpIniDir);
+                if (Batal(ServiceKind.Web, g)) { StopFastCgi(); return false; }
+                if (!fcgi) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             }
-            var p = Spawn(exe, args, nginx.Path, EnvFor(php), "nginx");
+            var p = Spawn(exe, args, nginx.Path, EnvFor(php, cfg.PhpIniDir), "nginx");
             if (p == null) { SetState(ServiceKind.Web, ServiceState.Gagal); return false; }
             PasangWeb(p);
+            if (Batal(ServiceKind.Web, g)) { BuangWebYatim(p); return false; }
 
             // Penjaga yang sama seperti Apache, yang dulu TIDAK ada di sini:
             // nginx yang mati seketika - port terpakai, jalur log tidak bisa
             // dibuat - tetap dilaporkan "jalan", dan orang mencari-cari sebab
             // halamannya tidak terbuka padahal Phoron bilang semuanya beres.
             await Task.Delay(1000);
+            if (Batal(ServiceKind.Web, g)) { BuangWebYatim(p); return false; }
             if (p.HasExited)
             {
                 Say("Nginx berhenti seketika (kode " + p.ExitCode + "). "
@@ -277,12 +399,15 @@ namespace Phoron.Core
                 return false;
             }
             Say("Nginx " + nginx.Version + " jalan (PID " + p.Id + ").");
-            SetState(ServiceKind.Web, ServiceState.Jalan);
-            return true;
+            return Selesaikan(ServiceKind.Web, g, p);
         }
 
         public async Task StopWebAsync()
         {
+            // PALING AWAL, sebelum apa pun: start yang sedang berjalan harus
+            // melihat dirinya dibatalkan sebelum ia sempat melahirkan httpd yang
+            // tidak akan ditemukan Stop ini.
+            NaikkanGiliran(ServiceKind.Web);
             SetState(ServiceKind.Web, ServiceState.Mematikan);
             // Rujukannya dilepas SEBELUM dimatikan: pengawas Exited memakai
             // rujukan itu untuk membedakan "dimatikan pengguna" dari "mati
@@ -301,13 +426,13 @@ namespace Phoron.Core
 
         // ----------------------------------------------------------------- PHP CGI
 
-        async Task<bool> StartFastCgiAsync(BinPackage php, int port)
+        async Task<bool> StartFastCgiAsync(BinPackage php, int port, string folderPhpIni)
         {
             var exe = Path.Combine(php.Path, "php-cgi.exe");
             if (!File.Exists(exe)) { Say("php-cgi.exe tidak ada di " + php.Id + "."); return false; }
             StopFastCgi();
 
-            var env = EnvFor(php);
+            var env = EnvFor(php, folderPhpIni);
             // php-cgi memutar ulang dirinya setelah sekian permintaan; nilai bawaan
             // 500 membuat pekerja mati di tengah pengembangan dan Apache membalas 503.
             env["PHP_FCGI_MAX_REQUESTS"] = "0";
@@ -350,7 +475,18 @@ namespace Phoron.Core
 
         // ------------------------------------------------------------------ MySQL
 
-        public async Task<bool> StartDbAsync(Profile profile, BinPackage mysql)
+        // Paket dan port mysqld yang sedang dijalankan. StopAll dipanggil saat
+        // aplikasi ditutup dan tidak menerima profil apa pun, padahal cadangan
+        // penghentian rapinya - mysqladmin - butuh keduanya.
+        BinPackage _dbPaket;
+        int _dbPort;
+
+        public Task<bool> StartDbAsync(Profile profile, BinPackage mysql)
+        {
+            return Antre(ServiceKind.Db, g => MulaiDbAsync(profile, mysql, g));
+        }
+
+        async Task<bool> MulaiDbAsync(Profile profile, BinPackage mysql, int g)
         {
             if (DbState == ServiceState.Jalan) return true;
             if (mysql == null) { Say("Profil belum menunjuk versi MySQL."); return false; }
@@ -370,6 +506,7 @@ namespace Phoron.Core
             {
                 Say("Folder data " + mysql.Id + " belum ada - menyiapkan basis data awal...");
                 var init = await Task.Run(() => Initialize(mysql, myIni, dataDir));
+                if (Batal(ServiceKind.Db, g)) return false;
                 if (!init) { SetState(ServiceKind.Db, ServiceState.Gagal); return false; }
                 Say("Basis data siap. Pengguna: root, tanpa kata sandi.");
             }
@@ -378,16 +515,30 @@ namespace Phoron.Core
             var p = Spawn(mysqld, "--defaults-file=\"" + myIni + "\" --console", mysql.Path, null, "mysql");
             if (p == null) { SetState(ServiceKind.Db, ServiceState.Gagal); return false; }
             PasangDb(p);
+            _dbPaket = mysql;
+            _dbPort = profile.MySqlPort;
 
             // mysqld butuh waktu memulihkan InnoDB; port-nya dijadikan tanda siap
             // karena log-nya berbeda-beda antarversi.
-            for (int i = 0; i < 40 && !p.HasExited; i++)
+            for (int i = 0; i < 40; i++)
             {
+                // Stop datang selagi InnoDB masih memulihkan diri. Kalau Stop itu
+                // datang sebelum mysqld ini sempat dipasang, ia tidak menemukannya
+                // - jadi yang membereskannya start ini sendiri.
+                if (Batal(ServiceKind.Db, g))
+                {
+                    if (LepasDbJika(p)) try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
+                    return false;
+                }
+                // Mati sendiri di tengah start. ProsesMati sudah melaporkannya dan
+                // menyetel Gagal; menambahkan "gagal siap dalam 20 detik" lalu
+                // "MySQL dimatikan" hanya menulis dua kebohongan di bawah laporan
+                // yang benar.
+                if (p.HasExited) return false;
                 if (!PortCheck.IsFree(profile.MySqlPort))
                 {
                     Say("MySQL " + mysql.Version + " jalan di port " + profile.MySqlPort + " (PID " + p.Id + ").");
-                    SetState(ServiceKind.Db, ServiceState.Jalan);
-                    return true;
+                    return Selesaikan(ServiceKind.Db, g, p);
                 }
                 await Task.Delay(500);
             }
@@ -399,6 +550,7 @@ namespace Phoron.Core
 
         public async Task StopDbAsync()
         {
+            NaikkanGiliran(ServiceKind.Db);
             SetState(ServiceKind.Db, ServiceState.Mematikan);
             var proc = AmbilLepasDb();
             if (proc != null)
@@ -412,26 +564,84 @@ namespace Phoron.Core
             SetState(ServiceKind.Db, ServiceState.Berhenti);
         }
 
-        /// <summary>Matikan MySQL dengan rapi lewat mysqladmin sebelum jalan paksa - InnoDB tidak suka dibunuh.</summary>
+        /// <summary>
+        /// Matikan MySQL dengan rapi - InnoDB tidak suka dibunuh, dan tabel MyISAM
+        /// bisa rusak karenanya.
+        ///
+        /// Rujukannya dilepas LEBIH DULU, sebelum mysqld diminta berhenti. Dulu
+        /// urutannya terbalik: mysqld keluar dengan tertib, pengawas Exited masih
+        /// menemukan rujukannya, dan setiap penghentian rapi dilaporkan "MySQL
+        /// berhenti sendiri (kode 0)" dengan lampu merah - di log pengguna, 42
+        /// kali.
+        /// </summary>
         public async Task StopDbGracefullyAsync(Profile profile, BinPackage mysql)
         {
-            if (AmbilDb() == null) { SetState(ServiceKind.Db, ServiceState.Berhenti); return; }
+            NaikkanGiliran(ServiceKind.Db);
+            var proc = AmbilLepasDb();
+            if (proc == null) { SetState(ServiceKind.Db, ServiceState.Berhenti); return; }
             SetState(ServiceKind.Db, ServiceState.Mematikan);
-            var admin = mysql != null ? Path.Combine(mysql.Path, "bin", "mysqladmin.exe") : null;
-            if (admin != null && File.Exists(admin))
+            Say("Meminta MySQL berhenti dengan rapi...");
+            var port = profile != null ? profile.MySqlPort : _dbPort;
+            var rapi = await Task.Run(() => MatikanMysqlRapi(proc, mysql ?? _dbPaket, port));
+            if (!rapi) Say("MySQL tidak mau berhenti dengan rapi - dimatikan paksa.");
+            Say("MySQL dimatikan.");
+            SetState(ServiceKind.Db, ServiceState.Berhenti);
+        }
+
+        /// <summary>
+        /// Minta mysqld berhenti dengan tertib, tunggu, lalu paksa bila perlu.
+        /// Mengembalikan true bila ia berhenti sendiri tanpa dipaksa.
+        ///
+        /// Jalan pertama: event bernama "MySQLShutdown&lt;PID&gt;" yang dibuat
+        /// mysqld di Windows - jalan yang sama yang dipakai saat layanan Windows-
+        /// nya dihentikan. Tidak butuh kata sandi apa pun. Dibuktikan pada MySQL
+        /// 5.7.38: berhenti dalam 1,1 detik, log mencatat "Shutdown complete".
+        ///
+        /// Cadangannya mysqladmin, untuk build yang tidak membuat event itu.
+        /// mysqladmin dijalankan sebagai root TANPA sandi, jadi begitu root diberi
+        /// sandi cadangan ini gagal - karena itulah ia bukan jalan pertama.
+        /// </summary>
+        /// <summary>
+        /// Setel event "MySQLShutdown&lt;PID&gt;" milik mysqld. Mengembalikan
+        /// false bila event itu tidak ada (build yang tidak membuatnya, atau
+        /// mysqld milik pengguna lain yang tidak bisa dibuka).
+        /// </summary>
+        public static bool MintaMysqlBerhenti(int pid)
+        {
+            try
             {
-                Say("Meminta MySQL berhenti dengan rapi...");
-                await Task.Run(() => Shell.Run(admin,
-                    "--protocol=tcp --port=" + profile.MySqlPort + " -u root shutdown",
-                    mysql.Path, 20000));
-                for (int i = 0; i < 30; i++)
-                {
-                    var d = AmbilDb();
-                    if (d == null || d.HasExited) break;
-                    await Task.Delay(400);
-                }
+                System.Threading.EventWaitHandle ev;
+                if (!System.Threading.EventWaitHandle.TryOpenExisting("MySQLShutdown" + pid, out ev)) return false;
+                using (ev) return ev.Set();
             }
-            await StopDbAsync();
+            catch { return false; }
+        }
+
+        bool MatikanMysqlRapi(Process proc, BinPackage mysql, int port)
+        {
+            try
+            {
+                if (proc.HasExited) return true;
+                bool diminta = MintaMysqlBerhenti(proc.Id);
+
+                if (!diminta && mysql != null && port > 0)
+                {
+                    var admin = Path.Combine(mysql.Path, "bin", "mysqladmin.exe");
+                    if (File.Exists(admin))
+                        Shell.Run(admin, "--protocol=tcp --port=" + port + " -u root shutdown",
+                                  mysql.Path, 15000);
+                }
+                // InnoDB yang sedang menulis buffer pool-nya bisa perlu beberapa
+                // detik; dua belas detik jauh di atas yang pernah terukur.
+                if (proc.WaitForExit(12000)) return true;
+                Shell.KillTree(proc.Id);
+                return false;
+            }
+            catch
+            {
+                try { if (!proc.HasExited) Shell.KillTree(proc.Id); } catch { }
+                return false;
+            }
         }
 
         static bool IsInitialized(string dataDir)
@@ -546,13 +756,15 @@ namespace Phoron.Core
         }
 
         /// <summary>PATH anak diberi folder PHP di depan supaya exec() dari skrip memakai versi profil ini.</summary>
-        public static IDictionary<string, string> EnvFor(BinPackage php)
+        public static IDictionary<string, string> EnvFor(BinPackage php, string folderPhpIni = null)
         {
             var env = new Dictionary<string, string>();
             if (php != null)
             {
                 env["PATH"] = php.Path + ";" + Environment.GetEnvironmentVariable("PATH");
-                env["PHPRC"] = Path.Combine(Paths.Etc, "php", php.Id);
+                // Ke folder php.ini yang BENAR-BENAR ditulis - lihat
+                // ConfigWriter.FolderPhpIni.
+                env["PHPRC"] = folderPhpIni ?? ConfigWriter.FolderPhpIni(php, false);
             }
             return env;
         }
@@ -564,18 +776,36 @@ namespace Phoron.Core
             // dan memicu callback Exited di utas kolam yang ikut meminta kunci
             // yang sama; memegangnya selama pembunuhan berarti menahan mereka
             // semua di belakang utas layar tanpa alasan.
+            //
+            // Start yang masih berjalan ikut dibatalkan, supaya ia tidak
+            // melahirkan httpd atau mysqld baru sesudah semuanya dibereskan.
+            NaikkanGiliran(ServiceKind.Web);
+            NaikkanGiliran(ServiceKind.Db);
             Process w, f, d;
             lock (_lock)
             {
                 w = _web; f = _fcgi; d = _db;
                 _web = _fcgi = _db = null;
             }
-            foreach (var p in new[] { w, f, d }.Where(x => x != null))
+            // Web server dan php-cgi aman dibunuh: tidak ada yang mereka tulis
+            // setengah jalan.
+            foreach (var p in new[] { w, f }.Where(x => x != null))
             {
                 try { if (!p.HasExited) Shell.KillTree(p.Id); } catch { }
             }
-            _webState = ServiceState.Berhenti;
-            _dbState = ServiceState.Berhenti;
+            // MySQL TIDAK. Dulu ia ikut dibunuh dengan taskkill /F setiap kali
+            // Phoron ditutup, diperbarui, atau Windows dimatikan - sementara
+            // lognya berkata "mematikan layanan dulu". Tiap start sesudahnya
+            // diawali pemulihan InnoDB, dan tabel MyISAM bisa rusak.
+            if (d != null)
+            {
+                if (MatikanMysqlRapi(d, _dbPaket, _dbPort)) Say("MySQL dimatikan dengan rapi.");
+                else Say("MySQL tidak mau berhenti dengan rapi - dimatikan paksa.");
+            }
+            // Lewat SetState, bukan medannya langsung: tanpa peristiwa ini lampu
+            // di layar tetap hijau untuk layanan yang sudah mati.
+            SetState(ServiceKind.Web, ServiceState.Berhenti);
+            SetState(ServiceKind.Db, ServiceState.Berhenti);
         }
     }
 }

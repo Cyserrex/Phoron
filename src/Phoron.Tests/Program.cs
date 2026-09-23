@@ -85,9 +85,11 @@ namespace Phoron.Tests
                 UjiSalinanKedua();
                 UjiObjekAntarProses();
                 UjiOpcache();
+                UjiXdebug();
                 UjiPanelLog();
                 UjiFastCgi();
                 UjiHostsTanpaUbah();
+                UjiLayananBertabrakan();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
@@ -1982,6 +1984,29 @@ namespace Phoron.Tests
             Ok("nginx.exe -t menerima konfigurasi",
                res.All.IndexOf("test is successful", StringComparison.OrdinalIgnoreCase) >= 0,
                res.All);
+
+            // Dua sakelar yang dulu hanya dihormati Apache. Dengan Nginx, log
+            // akses tetap ditulis walau "Catat log rinci" mati, dan beranda tidak
+            // pernah muncul di http://localhost/ walau sakelarnya menyala.
+            Ok("Beranda di akar: alamat akar persis diarahkan ke beranda",
+               isi.Contains("location = / { rewrite ^ " + Beranda.Alias + "/index.php last; }"),
+               "tidak ada location = /");
+            Ok("Beranda di akar: HANYA di server bawaan, bukan di situs proyek",
+               Regex.Matches(isi, @"location = / ").Count == 1,
+               Regex.Matches(isi, @"location = / ").Count + " kali");
+            Ok("Log rinci menyala: access_log ditulis",
+               isi.Contains("nginx-access.log") && !isi.Contains("access_log off"), "");
+
+            var hasil2 = ConfigWriter.Build(profil, php, null, null, nginx, situs,
+                                            false, false, false, true);
+            var isi2 = File.ReadAllText(hasil2.NginxConf);
+            Ok("Log rinci mati: access_log off", isi2.Contains("access_log off;"),
+               "log akses tetap ditulis walau sakelarnya mati");
+            Ok("Beranda di akar mati: tidak ada pengalihan", !isi2.Contains("location = /"), "");
+            var res2 = Shell.Run(nginx.MainExe, "-t -c \"" + hasil2.NginxConf + "\" -p \"" + nginx.Path + "\"",
+                                 nginx.Path, 30000);
+            Ok("nginx.exe -t menerima konfigurasi dengan kedua sakelar mati",
+               res2.All.IndexOf("test is successful", StringComparison.OrdinalIgnoreCase) >= 0, res2.All);
         }
 
         static void UjiKonfigurasiApache()

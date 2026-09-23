@@ -106,7 +106,7 @@ namespace Phoron.App.Pages
             {
                 var res = Shell.Run(Path.Combine(php.Path, "php.exe"),
                     "-r \"echo ini_get('" + key + "') ? 1 : 0;\"", php.Path, 15000,
-                    ServiceManager.EnvFor(php));
+                    ServiceManager.EnvFor(php, ConfigWriter.FolderPhpIni(php, _e.Settings.PhpIniKeFolderPhp)));
                 return res.StdOut.Trim() == "1";
             }
             catch { return false; }
@@ -298,7 +298,7 @@ namespace Phoron.App.Pages
             if (php == null) { AppState.Warn("Profil belum menunjuk PHP."); return; }
             Simpan();
             var res = Shell.Run(Path.Combine(php.Path, "php.exe"), "-m", php.Path, 30000,
-                                ServiceManager.EnvFor(php));
+                                ServiceManager.EnvFor(php, ConfigWriter.FolderPhpIni(php, _e.Settings.PhpIniKeFolderPhp)));
             AppState.Info(res.All + Petunjuk(res.All), "Modul yang benar-benar dimuat");
         }
     }

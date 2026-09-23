@@ -59,7 +59,7 @@ namespace Phoron.Core
             }
             else if (profile.WebServer == "nginx")
             {
-                if (nginx != null) r.NginxConf = WriteNginx(profile, nginx, php, sites, r);
+                if (nginx != null) r.NginxConf = WriteNginx(profile, nginx, php, sites, r, logAkses, berandaDiAkar);
                 else r.Warnings.Add("Versi Nginx yang dicatat profil tidak ada di komputer ini, "
                                     + "dan tidak ada Nginx lain sebagai gantinya.");
             }
@@ -229,12 +229,45 @@ namespace Phoron.Core
             return v >= new Version(2, 4, 26);
         }
 
+        /// <summary>
+        /// Apakah Apache harus melayani PHP ini lewat FastCGI - yaitu karena
+        /// build-nya tidak membawa modul Apache.
+        ///
+        /// SATU-SATUNYA tempat keputusan ini diambil. Dulu ada dua syarat yang
+        /// berbeda: modul proxy dimuat bila "!ThreadSafe", sedangkan jalur
+        /// FastCGI dipakai bila "tidak ada DLL modul Apache". ThreadSafe sendiri
+        /// ditebak dari nama folder bila DLL-nya tidak ada, jadi PHP NTS yang
+        /// diekstrak ke folder tanpa kata "nts" - "php-8.3", misalnya - memakai
+        /// jalur FastCGI TANPA modulnya, dan httpd menolak start dengan
+        /// "Invalid command 'ProxyFCGISetEnvIf'".
+        ///
+        /// Yang menentukan memang DLL-nya: tanpa php*apache2_4.dll tidak ada
+        /// apa pun yang bisa dimuat LoadModule, apa pun kata nama foldernya.
+        /// </summary>
+        public static bool PakaiFastCgi(BinPackage php)
+        {
+            return php != null && string.IsNullOrEmpty(php.ApacheModuleDll);
+        }
+
+        /// <summary>
+        /// Baris ProxyFCGISetEnvIf yang membuang awalan "proxy:fcgi://host:port/"
+        /// dari SCRIPT_FILENAME, menyisakan jalur berkas yang sudah dipetakan
+        /// Apache - termasuk hasil Alias.
+        /// </summary>
+        public static string SetelNamaBerkasFcgi(int port)
+        {
+            // String verbatim: titik di alamat IP harus sampai ke Apache sebagai
+            // "\." - titik mentah di ungkapan reguler cocok dengan aksara apa pun.
+            return @"ProxyFCGISetEnvIf ""reqenv('SCRIPT_FILENAME') =~ m#^proxy:fcgi://127\.0\.0\.1:"
+                   + port + @"/(.*)$#"" SCRIPT_FILENAME ""$1""";
+        }
+
         static IEnumerable<string> ApacheModules(BinPackage php)
         {
             var mods = new List<string> { "rewrite", "deflate", "expires", "headers", "ssl", "socache_shmcb", "vhost_alias" };
-            // PHP non-thread-safe tidak punya modul Apache; satu-satunya jalan
-            // adalah FastCGI, yang butuh mod_proxy + mod_proxy_fcgi.
-            if (php != null && !php.ThreadSafe) { mods.Add("proxy"); mods.Add("proxy_fcgi"); }
+            // FastCGI butuh mod_proxy + mod_proxy_fcgi. Syaratnya HARUS sama
+            // persis dengan yang dipakai WriteModPhp - lihat PakaiFastCgi.
+            if (PakaiFastCgi(php)) { mods.Add("proxy"); mods.Add("proxy_fcgi"); }
             return mods;
         }
 
@@ -250,7 +283,7 @@ namespace Phoron.Core
                 return;
             }
 
-            if (php.ThreadSafe && !string.IsNullOrEmpty(php.ApacheModuleDll))
+            if (!PakaiFastCgi(php))
             {
                 sb.AppendLine("LoadModule " + BinScanner.ApacheModuleName(php)
                               + " \"" + Paths.Fwd(php.ApacheModuleDll) + "\"");
@@ -280,11 +313,17 @@ namespace Phoron.Core
                 sb.AppendLine("# mengirim SELURUH alamat proxy sebagai nama berkas yang harus dijalankan");
                 sb.AppendLine("# PHP - \"proxy:fcgi://127.0.0.1:9123/C:/...\" - dan php-cgi menjawab");
                 sb.AppendLine("# \"No input file specified\" untuk setiap permintaan.");
+                sb.AppendLine("#");
+                sb.AppendLine("# Awalan proxy-nya DIKUPAS dari jalur yang sudah dipetakan Apache, bukan");
+                sb.AppendLine("# dirakit ulang dari DOCUMENT_ROOT + REQUEST_URI. Rakitan itu salah untuk");
+                sb.AppendLine("# setiap Alias - termasuk /phoron, yang dilayani dari etc/dashboard dan");
+                sb.AppendLine("# bukan dari folder proyek - dan pernah membuat beranda Phoron sendiri");
+                sb.AppendLine("# menjawab \"No input file specified\".");
                 sb.AppendLine("<FilesMatch \\.php$>");
                 sb.AppendLine("    SetHandler \"proxy:fcgi://127.0.0.1:" + r.FastCgiPort + "/\"");
                 sb.AppendLine("</FilesMatch>");
                 if (ProxyFcgiSetEnvIfAda(apache))
-                    sb.AppendLine("ProxyFCGISetEnvIf \"true\" SCRIPT_FILENAME \"%{DOCUMENT_ROOT}%{REQUEST_URI}\"");
+                    sb.AppendLine(SetelNamaBerkasFcgi(r.FastCgiPort));
                 else
                     r.Warnings.Add("Apache " + (apache != null ? apache.Version : "ini")
                         + " belum mengenal ProxyFCGISetEnvIf (ada sejak 2.4.26), jadi PHP "
@@ -327,7 +366,12 @@ namespace Phoron.Core
         {
             Directory.CreateDirectory(Paths.SitesEnabled);
             var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bool ssl = File.Exists(Path.Combine(Paths.EtcSsl, "phoron.crt"));
+            // Syaratnya HARUS sama dengan WriteSslConf: sertifikat DAN kuncinya.
+            // Dulu di sini cukup .crt saja, jadi .key yang hilang - terhapus,
+            // pembuatan openssl yang gagal di tengah - membuat vhost menunjuk
+            // SSLCertificateKeyFile yang tidak ada, dan Apache menolak start
+            // sementara ssl.conf sendiri sudah dengan benar mematikan HTTPS.
+            bool ssl = SslTool.Exists;
 
             WriteDefaultVhost(profile, ssl, berandaDiAkar);
 
@@ -350,7 +394,7 @@ namespace Phoron.Core
             // kalau tidak Apache menolak start karena DocumentRoot tidak ada.
             foreach (var f in Directory.GetFiles(Paths.SitesEnabled, "auto.*.conf"))
                 if (!wanted.Contains(Path.GetFileName(f)))
-                    try { File.Delete(f); } catch { }
+                    try { File.Delete(f); CatatBerubah(f); } catch { }
         }
 
         /// <summary>
@@ -441,10 +485,26 @@ namespace Phoron.Core
         /// Menulis php.ini milik profil ke etc\php\&lt;versi&gt;\php.ini dan mengembalikan
         /// foldernya (dipakai PHPIniDir). php.ini di dalam folder bin tidak disentuh.
         /// </summary>
+        /// <summary>
+        /// Folder tempat php.ini profil ini ditulis - SATU-SATUNYA tempat hal ini
+        /// diputuskan. PHPRC untuk php-cgi, php.exe di terminal Phoron, dan
+        /// halaman Ekstensi semuanya harus menunjuk ke sini.
+        ///
+        /// Dulu PHPRC selalu menunjuk etc\php\&lt;versi&gt;, walau sakelar "Tulis
+        /// php.ini ke dalam folder PHP" menyala. Berkas lama dari sebelum sakelar
+        /// itu dinyalakan masih tertinggal di sana, dan php-cgi - Nginx, atau
+        /// Apache dengan PHP NTS - serta terminal membacanya lebih dulu: ekstensi
+        /// dan opcache yang diubah tidak pernah sampai ke mereka.
+        /// </summary>
+        public static string FolderPhpIni(BinPackage php, bool keFolderPhp)
+        {
+            return keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Id);
+        }
+
         public static string WritePhpIni(Profile profile, BinPackage php, Result r,
                                          bool keFolderPhp = false, bool opcache = true)
         {
-            var dir = keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Id);
+            var dir = FolderPhpIni(php, keFolderPhp);
             Directory.CreateDirectory(dir);
             var target = Path.Combine(dir, "php.ini");
 
@@ -604,8 +664,7 @@ namespace Phoron.Core
                     r.Warnings.Add("Ekstensi " + ext + " tidak ada di " + php.Id + " - dilewati.");
                     continue;
                 }
-                var directive = ext.Equals("opcache", StringComparison.OrdinalIgnoreCase)
-                    ? "zend_extension" : "extension";
+                var directive = EkstensiZend.Contains(ext) ? "zend_extension" : "extension";
                 sb.AppendLine(directive + " = " + ExtensionValue(php, ext));
             }
 
@@ -729,6 +788,19 @@ namespace Phoron.Core
             if (php == null) return new List<string>();
             return EkstensiAktif(PhpIniTemplate(php));
         }
+
+        /// <summary>
+        /// Ekstensi yang HARUS dimuat lewat zend_extension, bukan extension.
+        ///
+        /// Keduanya menempel ke mesin Zend sendiri, bukan sekadar menambah
+        /// fungsi. Dimuat dengan "extension =", xdebug menolak dan mencetak
+        /// "Xdebug MUST be loaded as a Zend extension" di awal SETIAP
+        /// permintaan - dan tetap tidak termuat. Pernah terjadi: hanya opcache
+        /// yang dikenali, jadi xdebug yang dicentang atau diambil alih dari
+        /// php.ini Laragon selalu ditulis dengan cara yang salah.
+        /// </summary>
+        static readonly HashSet<string> EkstensiZend =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "opcache", "xdebug" };
 
         /// <summary>Apakah build PHP ini membawa php_opcache.dll.</summary>
         public static bool AdaOpcache(BinPackage php)
@@ -935,7 +1007,8 @@ namespace Phoron.Core
         }
 
         static string WriteNginx(Profile profile, BinPackage nginx, BinPackage php,
-                                 List<Site> sites, Result r)
+                                 List<Site> sites, Result r, bool logAkses = true,
+                                 bool berandaDiAkar = true)
         {
             if (php == null || !File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
                 r.Warnings.Add("Nginx melayani PHP lewat FastCGI; php-cgi.exe tidak ditemukan.");
@@ -965,20 +1038,31 @@ namespace Phoron.Core
             sb.AppendLine("    default_type application/octet-stream;");
             sb.AppendLine("    sendfile on;");
             sb.AppendLine("    client_max_body_size 128m;");
-            sb.AppendLine("    access_log \"" + Paths.Fwd(Path.Combine(Paths.Logs, "nginx-access.log")) + "\";");
+            // Dua sakelar di bawah dulu hanya dihormati Apache: dengan Nginx, log
+            // akses tetap ditulis walau "Catat log rinci" mati, dan beranda
+            // Phoron tidak pernah muncul di http://localhost/ walau sakelarnya
+            // menyala. Perilakunya kini sama untuk kedua web server.
+            if (logAkses)
+                sb.AppendLine("    access_log \"" + Paths.Fwd(Path.Combine(Paths.Logs, "nginx-access.log")) + "\";");
+            else
+                sb.AppendLine("    access_log off;   # Pengaturan > Catat log rinci");
             sb.AppendLine("    client_body_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-body")) + "\";");
             sb.AppendLine("    proxy_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-proxy")) + "\";");
             sb.AppendLine("    fastcgi_temp_path \"" + Paths.Fwd(Path.Combine(Paths.Tmp, "nginx-fcgi")) + "\";");
-            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams));
+            // Beranda di akar hanya untuk server bawaan, sama seperti Apache yang
+            // hanya menaruhnya di vhost _default_: situs .test milik proyek
+            // tetap menampilkan index-nya sendiri.
+            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams, berandaDiAkar));
             foreach (var s in sites ?? new List<Site>())
-                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort, fcgiParams));
+                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path), r.FastCgiPort, fcgiParams, false));
             sb.AppendLine("}");
             var path = Path.Combine(dir, "nginx.conf");
             WriteIfChanged(path, sb.ToString());
             return path;
         }
 
-        static string NginxServer(int port, string name, string root, int fcgiPort, string fcgiParams)
+        static string NginxServer(int port, string name, string root, int fcgiPort, string fcgiParams,
+                                  bool berandaDiAkar = false)
         {
             var sb = new StringBuilder();
             sb.AppendLine("    server {");
@@ -986,6 +1070,12 @@ namespace Phoron.Core
             sb.AppendLine("        server_name  " + name + ";");
             sb.AppendLine("        root         \"" + root + "\";");
             sb.AppendLine("        index        index.php index.html index.htm;");
+            if (berandaDiAkar)
+                // "location = /" hanya cocok dengan alamat akar PERSIS - setara
+                // RewriteRule "^/?$" di Apache. /simpdam/ dan subfolder lain
+                // tidak tersentuh. "last" mengulang pencarian location dengan
+                // alamat baru, jadi yang melayaninya blok beranda di bawah.
+                sb.AppendLine("        location = / { rewrite ^ " + Beranda.Alias + "/index.php last; }");
             sb.AppendLine("        location / { try_files $uri $uri/ /index.php?$query_string; }");
             // Setara Alias di Apache - lihat catatan di sana.
             sb.AppendLine("        location " + Beranda.Alias + "/ {");
@@ -1014,6 +1104,35 @@ namespace Phoron.Core
         /// perubahan isi memicu editor dan pengawas berkas tanpa alasan, dan
         /// mengaburkan jejak "kapan konfigurasi ini terakhir berubah".
         /// </summary>
+        // Berapa kali konfigurasi yang dibaca server BENAR-BENAR berubah di
+        // cakram, dipisah untuk web server dan MySQL. Engine mencatat nilainya
+        // saat layanan menyala; nilai yang bergeser sesudahnya berarti server
+        // yang sedang jalan masih memakai konfigurasi lama.
+        //
+        // Dulu tidak ada yang tahu. Sakelar Virtual Host, folder proyek, situs
+        // baru - semuanya memanggil Apply, berkasnya berubah, dan Apache tetap
+        // melayani keadaan lama tanpa satu pun tanda. "Situs siap di toko.test"
+        // lalu dijawab vhost bawaan.
+        static int _versiWeb, _versiDb;
+        public static int VersiKonfigWeb { get { return System.Threading.Volatile.Read(ref _versiWeb); } }
+        public static int VersiKonfigDb { get { return System.Threading.Volatile.Read(ref _versiDb); } }
+
+        static void CatatBerubah(string path)
+        {
+            // Beranda Phoron berupa berkas PHP biasa: berlaku pada permintaan
+            // berikutnya tanpa menyalakan ulang apa pun.
+            try
+            {
+                var beranda = Path.GetFullPath(Beranda.Folder).TrimEnd('\\') + "\\";
+                if (Path.GetFullPath(path).StartsWith(beranda, StringComparison.OrdinalIgnoreCase)) return;
+            }
+            catch { }
+            if (string.Equals(Path.GetFileName(path), "my.ini", StringComparison.OrdinalIgnoreCase))
+                System.Threading.Interlocked.Increment(ref _versiDb);
+            else
+                System.Threading.Interlocked.Increment(ref _versiWeb);
+        }
+
         public static bool WriteIfChanged(string path, string content)
         {
             content = content.Replace("\r\n", "\n").Replace("\n", Environment.NewLine);
@@ -1023,6 +1142,7 @@ namespace Phoron.Core
             try { if (File.Exists(path) && File.ReadAllText(path) == content) return false; }
             catch { }
             AtomicFile.WriteAllText(path, content, new UTF8Encoding(false));
+            CatatBerubah(path);
             return true;
         }
     }

@@ -247,7 +247,13 @@ namespace Phoron.App
             {
                 _tray.Text = "Phoron - " + (anyRunning ? "berjalan" : "berhenti");
                 if (_tray.ContextMenuStrip != null && _tray.ContextMenuStrip.Items.Count > 0)
+                {
                     _tray.ContextMenuStrip.Items[0].Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
+                    // Sama dengan tombol daya di jendela. Dulu hanya tombol itu
+                    // yang dinonaktifkan saat sibuk, dan item baki ini jadi pintu
+                    // belakang untuk start kedua di tengah start pertama.
+                    _tray.ContextMenuStrip.Items[0].Enabled = !busy;
+                }
             }
 
             var dash = Host.Content as DashboardPage;
@@ -263,14 +269,22 @@ namespace Phoron.App
         }
 
         /// <summary>
-        /// Mendengarkan WM_QUERYENDSESSION.
+        /// Mendengarkan berakhirnya sesi Windows.
         ///
         /// Restart Manager - yang dipakai pemasang Inno Setup untuk menutup
-        /// aplikasi yang sedang berjalan - mengirim pesan itu ke jendela
+        /// aplikasi yang sedang berjalan - mengirim pesan yang sama ke jendela
         /// aplikasi. Tanpa penanganan ini, permintaan tutupnya jatuh ke jalur
         /// penutupan biasa, dan perilaku "mengecil ke baki sistem" justru
         /// MEMBATALKAN penutupan. Pemasang lalu menghentikan prosesnya paksa,
         /// dan Apache serta MySQL tidak pernah sempat dimatikan dengan rapi.
+        ///
+        /// Yang ditangani hanya WM_ENDSESSION dengan wParam bukan nol - "sesi
+        /// BENAR-BENAR berakhir". WM_QUERYENDSESSION sengaja dibiarkan: itu baru
+        /// PERTANYAAN, dan aplikasi lain masih boleh menolaknya (Notepad dengan
+        /// berkas yang belum disimpan, misalnya). Dulu layanan sudah dimatikan
+        /// pada pertanyaan itu, jadi shutdown yang dibatalkan meninggalkan Apache
+        /// dan MySQL mati dengan lampu tetap hijau - dan tombol tutup berikutnya
+        /// malah mengakhiri Phoron, bukan menyembunyikannya ke baki.
         /// </summary>
         void PasangPengawasSesi()
         {
@@ -279,9 +293,8 @@ namespace Phoron.App
             if (sumber == null) return;
             sumber.AddHook((IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
             {
-                const int WM_QUERYENDSESSION = 0x0011;
                 const int WM_ENDSESSION = 0x0016;
-                if (msg == WM_QUERYENDSESSION || msg == WM_ENDSESSION)
+                if (msg == WM_ENDSESSION && wParam != IntPtr.Zero)
                 {
                     // Ditandai sebagai penutupan sungguhan supaya OnClosing tidak
                     // mengalihkannya jadi "sembunyi ke baki sistem".

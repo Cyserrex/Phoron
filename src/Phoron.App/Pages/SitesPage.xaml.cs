@@ -226,7 +226,14 @@ namespace Phoron.App.Pages
                 File.WriteAllText(Path.Combine(dir, "index.php"),
                     "<?php\n"
                     + "// Dibuat oleh Phoron.\n"
-                    + "echo '<h1>" + nama + "</h1>';\n"
+                    // Nama folder dikodekan sebagai HTML sebelum masuk ke string PHP
+                    // berkutip tunggal. Dulu disisipkan mentah, jadi folder
+                    // bernama O'Neil memutus stringnya dan halaman pertama situs
+                    // baru itu langsung berupa galat sintaks PHP. HtmlEncode
+                    // mengubah apostrof jadi &#39;, dan nama folder Windows tidak
+                    // bisa memuat garis miring terbalik - jadi tidak ada lagi yang
+                    // bisa memutus string.
+                    + "echo '<h1>" + System.Net.WebUtility.HtmlEncode(nama) + "</h1>';\n"
                     + "echo '<p>PHP ' . PHP_VERSION . ' lewat ' . php_sapi_name() . '</p>';\n",
                     new UTF8Encoding(false));
                 _e.Apply();

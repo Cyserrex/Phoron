@@ -26,6 +26,11 @@ namespace Phoron.App.Pages
         class Row
         {
             public BinPackage Pkg;
+            /// <summary>
+            /// ID versi yang dicatat profil tapi TIDAK ada di komputer ini.
+            /// Hanya terisi pada baris pengganti buatan PilihPkg.
+            /// </summary>
+            public string IdHilang;
             public string Text { get; set; }
             public override string ToString() { return Text; }
         }
@@ -163,19 +168,52 @@ namespace Phoron.App.Pages
             box.SelectedIndex = 0;
         }
 
+        /// <summary>
+        /// Pilih baris untuk ID versi yang dicatat profil.
+        ///
+        /// Kalau versinya TIDAK ada di komputer ini, yang dipilih bukan
+        /// "(tidak dipakai)" melainkan baris pengganti yang MEMBAWA ID aslinya.
+        /// Dulu pilihannya jatuh ke "(tidak dipakai)", dan halaman ini menyimpan
+        /// sendiri setiap kali sebuah kotak teks ditinggalkan - jadi profil yang
+        /// dibawa dari komputer lain kehilangan versi PHP, Apache, dan MySQL-nya
+        /// hanya karena orang mengeklik kotak nama lalu pindah ke kotak lain.
+        /// Dibawa pulang ke komputer asalnya, profil itu sudah tidak menyala.
+        ///
+        /// Sama dengan janji Engine.Pakai: berkas profil TIDAK diubah hanya
+        /// karena komputer ini kebetulan tidak punya versi yang sama. Pengguna
+        /// tetap bebas memilih versi lain - saat itulah ID-nya berganti.
+        /// </summary>
         static void PilihPkg(ComboBox box, string id)
         {
-            var rows = box.ItemsSource as List<Row>;
-            if (rows == null) return;
-            box.SelectedItem = rows.FirstOrDefault(r => r.Pkg != null
-                                   && string.Equals(r.Pkg.Id, id, StringComparison.OrdinalIgnoreCase))
-                               ?? rows[0];
+            var semula = box.ItemsSource as List<Row>;
+            if (semula == null) return;
+
+            // Baris pengganti milik profil yang dibuka SEBELUMNYA dibuang dulu.
+            var rows = semula.Where(r => r.IdHilang == null).ToList();
+            var cocok = rows.FirstOrDefault(r => r.Pkg != null
+                            && string.Equals(r.Pkg.Id, id, StringComparison.OrdinalIgnoreCase));
+            if (cocok == null && !string.IsNullOrWhiteSpace(id))
+            {
+                cocok = new Row
+                {
+                    IdHilang = id,
+                    Text = Lang.T("{0} - tidak ada di komputer ini", id),
+                };
+                rows.Insert(1, cocok);   // tepat di bawah "(tidak dipakai)"
+            }
+            // Daftar baru, bukan disunting di tempat: ItemsSource berupa List
+            // biasa yang tidak memberi kabar perubahan ke ComboBox.
+            if (rows.Count != semula.Count || rows.Where((r, i) => !ReferenceEquals(r, semula[i])).Any())
+                box.ItemsSource = rows;
+            box.SelectedItem = cocok ?? rows[0];
         }
 
         static string IdDari(ComboBox box)
         {
             var row = box.SelectedItem as Row;
-            return row != null && row.Pkg != null ? row.Pkg.Id : "";
+            if (row == null) return "";
+            if (row.Pkg != null) return row.Pkg.Id;
+            return row.IdHilang ?? "";
         }
 
         void CmbWeb_Changed(object sender, SelectionChangedEventArgs e) { AturTampilanWeb(); Simpan(); }
@@ -206,9 +244,23 @@ namespace Phoron.App.Pages
             if (string.IsNullOrWhiteSpace(TxtNama.Text)) masalah.Add("Nama profil belum diisi.");
             else p.Name = TxtNama.Text.Trim();
 
+            var httpLama = p.HttpPort;
+            var httpsLama = p.HttpsPort;
             p.HttpPort = Port(TxtPortHttp.Text, p.HttpPort, "HTTP", masalah);
             p.HttpsPort = Port(TxtPortHttps.Text, p.HttpsPort, "HTTPS", masalah);
             p.MySqlPort = Port(TxtPortMysql.Text, p.MySqlPort, "MySQL", masalah);
+
+            // Port HTTP dan HTTPS yang sama menghasilkan dua baris "Listen N", dan
+            // Apache menolak start dengan keluhan tentang pendengar ganda yang
+            // tidak menyebut profil sama sekali. KEDUANYA dikembalikan: kalau
+            // hanya HTTPS, bentroknya tetap ada saat yang diubah justru HTTP.
+            if (p.HttpPort == p.HttpsPort)
+            {
+                masalah.Add("Port HTTP dan HTTPS tidak boleh sama (" + p.HttpPort + "), "
+                            + "jadi keduanya tetap " + httpLama + " dan " + httpsLama + ".");
+                p.HttpPort = httpLama;
+                p.HttpsPort = httpsLama;
+            }
 
             var item = CmbWeb.SelectedItem as ComboBoxItem;
             p.WebServer = item != null ? (item.Tag ?? "apache").ToString() : "apache";

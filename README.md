@@ -363,6 +363,14 @@ oleh httpd VS16 — dan gagalnya berupa Apache yang mati seketika tanpa pesan ya
 menjelaskan. Phoron memasangkan otomatis berdasarkan toolset, dan memperingatkan
 kalau Anda memilih kombinasi yang berbeda.
 
+**MySQL selalu dimatikan dengan rapi** — saat tombol stop ditekan, saat Phoron
+ditutup atau diperbarui, dan saat Windows dimatikan. Phoron menyetel event
+`MySQLShutdown<PID>` milik mysqld, jalan yang sama yang dipakai layanan Windows-nya;
+tidak butuh kata sandi, jadi tetap bekerja walau root sudah diberi sandi. `mysqladmin`
+hanya cadangan untuk build yang tidak membuat event itu, dan pembunuhan paksa
+hanya bila mysqld tidak berhenti dalam dua belas detik. Dimatikan paksa, InnoDB
+harus memulihkan diri di start berikutnya dan tabel MyISAM bisa rusak.
+
 **opcache menyala secara bawaan.** Tanpa itu setiap permintaan halaman mengurai
 ulang seluruh kerangka kerja dari nol. Diukur pada satu permintaan CodeIgniter di
 mesin pengembang: 34,8 ms jadi 17,0 ms. Disetelnya `opcache.validate_timestamps=1`

@@ -147,18 +147,30 @@ namespace Phoron.Core
         /// <summary>Periksa semua port sebuah profil sekaligus; hanya yang bermasalah yang dikembalikan.</summary>
         public static List<Usage> Conflicts(Profile p, bool https)
         {
+            return Conflicts(p, https, true, true);
+        }
+
+        /// <summary>
+        /// Seperti di atas, tapi port web dan port MySQL bisa dilewati masing-
+        /// masing. Layanan yang SEDANG JALAN memegang portnya sendiri; memeriksa
+        /// port itu hanya menghasilkan keluhan "port 3306 dipakai mysqld" tentang
+        /// mysqld milik Phoron sendiri - yang dulu memang muncul setiap kali
+        /// MySQL jalan dan web server belum.
+        /// </summary>
+        public static List<Usage> Conflicts(Profile p, bool https, bool periksaWeb, bool periksaDb)
+        {
             // Port layanan yang TIDAK dipakai profil ini tidak diperiksa sama
             // sekali. Kalau tidak, profil tanpa MySQL akan mengeluh port 3306
             // dipegang orang lain - padahal ia memang tidak berniat memakainya,
             // dan yang memegangnya sering justru Laragon atau XAMPP milik orang
             // itu sendiri yang sedang dipakai.
             var ports = new List<int>();
-            if (p.PakaiWeb)
+            if (p.PakaiWeb && periksaWeb)
             {
                 ports.Add(p.HttpPort);
                 if (https) ports.Add(p.HttpsPort);
             }
-            if (p.PakaiMySql) ports.Add(p.MySqlPort);
+            if (p.PakaiMySql && periksaDb) ports.Add(p.MySqlPort);
             return ports.Distinct().Select(Check).Where(u => u.InUse).ToList();
         }
     }

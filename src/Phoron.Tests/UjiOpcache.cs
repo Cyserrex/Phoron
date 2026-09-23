@@ -111,6 +111,50 @@ namespace Phoron.Tests
                jumlah + " baris zend_extension opcache");
         }
 
+        /// <summary>
+        /// xdebug harus dimuat lewat zend_extension. Dengan "extension =" ia
+        /// menolak, mencetak "Xdebug MUST be loaded as a Zend extension" di awal
+        /// SETIAP permintaan, dan tetap tidak termuat. Dulu hanya opcache yang
+        /// dikenali sebagai ekstensi Zend.
+        /// </summary>
+        static void UjiXdebug()
+        {
+            Bagian("xdebug dimuat sebagai ekstensi Zend");
+
+            var folder = Path.Combine(Paths.Tmp, "php-xdebug-uji");
+            Directory.CreateDirectory(Path.Combine(folder, "ext"));
+            foreach (var dll in new[] { "php_xdebug.dll", "php_mbstring.dll" })
+                File.WriteAllText(Path.Combine(folder, "ext", dll), "");
+            var php = new BinPackage
+            {
+                Kind = BinKind.Php,
+                Id = "php-8.3.12-xdebug-uji",
+                Path = folder,
+                Version = "8.3.12",
+                Arch = "x64",
+                ThreadSafe = true,
+            };
+            var profil = new Profile
+            {
+                Name = "Uji xdebug",
+                PhpId = php.Id,
+                PhpExtensions = new List<string> { "mbstring", "xdebug" },
+            };
+            try
+            {
+                var isi = TulisPhpIni(profil, php, false);
+                Ok("xdebug ditulis sebagai zend_extension",
+                   Regex.IsMatch(isi, @"(?m)^\s*zend_extension\s*=\s*xdebug\s*$"),
+                   "tidak ada zend_extension = xdebug");
+                Ok("xdebug TIDAK ditulis sebagai extension biasa",
+                   !Regex.IsMatch(isi, @"(?m)^\s*extension\s*=\s*xdebug"),
+                   "PHP akan menolaknya di setiap permintaan");
+                Ok("Ekstensi biasa tetap extension",
+                   Regex.IsMatch(isi, @"(?m)^\s*extension\s*=\s*mbstring\s*$"), "");
+            }
+            finally { try { Directory.Delete(folder, true); } catch { } }
+        }
+
         static string TulisPhpIni(Profile profil, BinPackage php, bool opcache)
         {
             var r = new ConfigWriter.Result();

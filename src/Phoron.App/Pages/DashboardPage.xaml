@@ -103,6 +103,9 @@
                         <!-- Ditaruh SEBELUM tombol jalankan-ulang: inilah jalan
                              keluar yang benar untuk kebanyakan orang. Sekali
                              izin, sesudahnya tidak perlu admin lagi. -->
+                        <ui:Button x:Name="BtnRestartKonfig" Content="{loc:T 'Nyalakan ulang layanan'}"
+                                   Appearance="Primary" Margin="0,0,8,0"
+                                   Visibility="Collapsed" Click="BtnRestartKonfig_Click"/>
                         <ui:Button x:Name="BtnDaftarHosts" Content="{loc:T 'Daftarkan nama situs sekali'}"
                                    Appearance="Primary" Margin="0,0,8,0"
                                    Visibility="Collapsed" Click="BtnDaftarHosts_Click"/>

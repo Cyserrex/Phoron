@@ -74,15 +74,67 @@ namespace Phoron.Tests
             Ok("SCRIPT_FILENAME disetel sendiri",
                isi.Contains("ProxyFCGISetEnvIf") && isi.Contains("SCRIPT_FILENAME"),
                "tanpa ini php-cgi menjawab \"No input file specified\"");
-            Ok("SCRIPT_FILENAME dirakit dari akar dokumen dan alamat permintaan",
-               isi.Contains("%{DOCUMENT_ROOT}%{REQUEST_URI}"), "");
+            // Rakitan DOCUMENT_ROOT + REQUEST_URI pernah dipakai di sini, dan
+            // salah untuk setiap Alias: /phoron dilayani dari etc\dashboard,
+            // bukan dari folder proyek, jadi beranda Phoron sendiri menjawab
+            // "No input file specified". Yang benar mengupas awalan proxy dari
+            // jalur yang SUDAH dipetakan Apache. Keduanya dibuktikan pada Apache
+            // 2.4.38 + php-cgi 8.3 sungguhan: /phoron/ 404 dengan rakitan lama,
+            // 200 dengan pengupasan.
+            Ok("SCRIPT_FILENAME tidak dirakit dari DOCUMENT_ROOT (salah untuk Alias)",
+               !isi.Contains("%{DOCUMENT_ROOT}%{REQUEST_URI}"),
+               "beranda /phoron akan menjawab \"No input file specified\"");
+            Ok("SCRIPT_FILENAME dikupas dari jalur yang sudah dipetakan Apache",
+               isi.Contains(ConfigWriter.SetelNamaBerkasFcgi(r.FastCgiPort)), isi);
+            Ok("Titik alamat IP diloloskan di ungkapan regulernya",
+               isi.Contains(@"127\.0\.0\.1:" + r.FastCgiPort + "/(.*)$#"), "");
 
             // mod_proxy dan mod_proxy_fcgi harus ikut dimuat, kalau tidak
             // direktifnya tidak dikenal dan Apache menolak start.
             var httpd = r.HttpdConf != null && File.Exists(r.HttpdConf)
                 ? File.ReadAllText(r.HttpdConf) : "";
-            Ok("mod_proxy dimuat", httpd.Contains("mod_proxy.so"), "");
-            Ok("mod_proxy_fcgi dimuat", httpd.Contains("mod_proxy_fcgi.so"), "");
+            Ok("mod_proxy dimuat", ModulAktif(httpd, "proxy"), "");
+            Ok("mod_proxy_fcgi dimuat", ModulAktif(httpd, "proxy_fcgi"), "");
+
+            // Hakim sesungguhnya: httpd.exe sendiri. -t mengurai seluruh berkas
+            // termasuk ungkapan ProxyFCGISetEnvIf; salah tulis di sana berarti
+            // Apache menolak start.
+            if (r.HttpdConf != null && File.Exists(apache.MainExe ?? ""))
+            {
+                var uji = Shell.Run(apache.MainExe, "-t -f \"" + r.HttpdConf + "\" -d \"" + apache.Path + "\"",
+                                    apache.Path, 30000);
+                Ok("httpd.exe -t menerima konfigurasi FastCGI",
+                   uji.All.IndexOf("Syntax OK", StringComparison.OrdinalIgnoreCase) >= 0, uji.All);
+            }
+
+            // --- PHP NTS yang foldernya TIDAK menyebut "nts". Pemindai lalu
+            //     menebaknya thread-safe dari nama, padahal DLL modul Apache-nya
+            //     tidak ada. Dulu modul proxy tidak dimuat sementara jalur FastCGI
+            //     tetap dipakai, dan Apache menolak start dengan "Invalid command
+            //     'ProxyFCGISetEnvIf'".
+            var tanpaNts = new BinPackage
+            {
+                Kind = BinKind.Php,
+                Id = "php-8.3-uji",
+                Path = folder,
+                Version = "8.3.12",
+                Arch = "x64",
+                ThreadSafe = true,         // tebakan pemindai dari nama folder
+                ApacheModuleDll = null,    // tapi DLL modulnya tidak ada
+            };
+            var r3 = ConfigWriter.Build(profil, tanpaNts, apache, null, null, new List<Site>());
+            var httpd3 = r3.HttpdConf != null && File.Exists(r3.HttpdConf) ? File.ReadAllText(r3.HttpdConf) : "";
+            Ok("NTS tanpa kata \"nts\": dilayani lewat FastCGI", r3.PhpFastCgi, "");
+            Ok("NTS tanpa kata \"nts\": modul proxy ikut dimuat",
+               ModulAktif(httpd3, "proxy_fcgi"),
+               "jalur FastCGI tanpa modulnya - Apache menolak start");
+            if (r3.HttpdConf != null && File.Exists(apache.MainExe ?? ""))
+            {
+                var uji3 = Shell.Run(apache.MainExe, "-t -f \"" + r3.HttpdConf + "\" -d \"" + apache.Path + "\"",
+                                     apache.Path, 30000);
+                Ok("NTS tanpa kata \"nts\": httpd.exe -t menerima",
+                   uji3.All.IndexOf("Syntax OK", StringComparison.OrdinalIgnoreCase) >= 0, uji3.All);
+            }
 
             // Apache tua tidak mengenal ProxyFCGISetEnvIf, dan direktif yang
             // tidak dikenal membuat httpd MENOLAK START - jauh lebih buruk
@@ -107,6 +159,17 @@ namespace Phoron.Tests
                "tidak ada keluhan - PHP diam-diam tidak jalan");
 
             try { Directory.Delete(folder, true); } catch { }
+        }
+        /// <summary>
+        /// Baris LoadModule yang AKTIF. httpd.conf bawaan vendor sudah memuat
+        /// "#LoadModule proxy_fcgi_module ..." yang dikomentari, jadi sekadar
+        /// mencari nama berkasnya selalu lulus - termasuk ketika modulnya sama
+        /// sekali tidak dimuat. Itu pernah membuat penjaga ini buta.
+        /// </summary>
+        static bool ModulAktif(string conf, string modul)
+        {
+            return System.Text.RegularExpressions.Regex.IsMatch(conf,
+                @"(?m)^\s*LoadModule\s+" + modul + @"_module\s");
         }
     }
 }
