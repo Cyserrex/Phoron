@@ -337,7 +337,7 @@ namespace Phoron.Core
                 var pk = new Profile
                 {
                     Name = profile.Name + " - PHP " + k.Php.Version + " per situs",
-                    PhpId = k.Php.Id,
+                    PhpId = k.Php.NilaiSimpan,
                     PhpExtensions = new List<string>(k.Ekstensi),
                     PhpIniOverrides = new Dictionary<string, string>(k.Timpa, StringComparer.OrdinalIgnoreCase),
                 };
@@ -636,7 +636,10 @@ namespace Phoron.Core
         /// </summary>
         public static string FolderPhpIni(BinPackage php, bool keFolderPhp)
         {
-            return keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Id);
+            // Kunci, bukan Id: dua PHP XAMPP sama-sama bernama "php" dan dulu
+            // berbagi satu php.ini. Paket yang selama ini dipakai tetap di
+            // folder lamanya - kuncinya Id polos.
+            return keFolderPhp ? php.Path : Path.Combine(Paths.Etc, "php", php.Kunci);
         }
 
         public static string WritePhpIni(Profile profile, BinPackage php, Result r,
@@ -1060,9 +1063,67 @@ namespace Phoron.Core
         }
 
         /// <summary>Tiap versi database punya folder data sendiri - tabel sistem MySQL 5.7 dan 8.0 tidak saling baca.</summary>
+        /// <summary>
+        /// Folder data MySQL untuk paket ini. TIDAK PERNAH dipakai bersama paket lain.
+        ///
+        /// Dulu cukup data\&lt;nama folder&gt;. Kedua MariaDB XAMPP bernama "mysql" -
+        /// 10.1.36 dan 10.1.38 - jadi keduanya menulis ke satu folder data, dan
+        /// dua versi di satu folder data adalah jalan menuju basis data rusak.
+        ///
+        /// Urutannya:
+        ///   1. folder yang TERCATAT milik paket ini (penanda .phoron-pemilik);
+        ///   2. folder kuncinya, selama belum dimiliki paket lain - untuk paket
+        ///      yang selama ini dipakai, itu folder lamanya sendiri;
+        ///   3. kalau folder kuncinya ternyata milik paket lain (urutan folder bin
+        ///      berubah), folder bertanda asal yang hanya bisa jadi miliknya.
+        /// Tidak ada data yang dipindah atau dihapus.
+        /// </summary>
         public static string MySqlDataDir(BinPackage mysql)
         {
-            return Path.Combine(Paths.Data, mysql.Id);
+            var polos = Path.Combine(Paths.Data, mysql.Id);
+            var bertanda = Path.Combine(Paths.Data, mysql.Id + "@" + BinScanner.TandaAsal(mysql.SourceRoot));
+            foreach (var d in new[] { polos, bertanda })
+                if (SamaJalur(PemilikData(d), mysql.Path)) return d;
+            var kunci = Path.Combine(Paths.Data, mysql.Kunci);
+            if (PemilikData(kunci) == null) return kunci;
+            return bertanda;
+        }
+
+        const string BerkasPemilik = ".phoron-pemilik";
+
+        /// <summary>Jalur paket MySQL pemilik folder data ini, atau null bila belum tercatat.</summary>
+        public static string PemilikData(string folderData)
+        {
+            try
+            {
+                var f = Path.Combine(folderData, BerkasPemilik);
+                if (!File.Exists(f)) return null;
+                var isi = File.ReadAllText(f).Trim();
+                return isi.Length > 0 ? isi : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Catat pemilik folder data - sekali saja, saat mysqld sudah jalan di
+        /// atasnya. Berkas di akar folder data tidak dianggap basis data oleh
+        /// MySQL maupun MariaDB; yang dianggap basis data hanya subfolder.
+        /// </summary>
+        public static void CatatPemilikData(string folderData, BinPackage mysql)
+        {
+            try
+            {
+                if (mysql == null || !Directory.Exists(folderData)) return;
+                var f = Path.Combine(folderData, BerkasPemilik);
+                if (!File.Exists(f)) File.WriteAllText(f, mysql.Path);
+            }
+            catch { /* penanda penjaga, bukan syarat jalan */ }
+        }
+
+        static bool SamaJalur(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
+            return string.Equals(a.TrimEnd('\\', '/'), b.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
         }
 
         // ---------------------------------------------------------------- Nginx

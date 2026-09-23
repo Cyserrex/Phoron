@@ -625,6 +625,10 @@ namespace Phoron.Core
                 if (p.HasExited) return false;
                 if (!PortCheck.IsFree(profile.MySqlPort))
                 {
+                    // Folder data ini sekarang TERCATAT milik paket ini - lihat
+                    // ConfigWriter.MySqlDataDir. Tanpa catatan, MySQL lain yang
+                    // kebetulan bernama folder sama bisa menempatinya kelak.
+                    ConfigWriter.CatatPemilikData(dataDir, mysql);
                     Say("MySQL " + mysql.Version + " jalan di port " + profile.MySqlPort + " (PID " + p.Id + ").");
                     return Selesaikan(ServiceKind.Db, g, p);
                 }

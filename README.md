@@ -1,13 +1,16 @@
 # Phoron
 
 **A local web development environment for Windows — Apache or Nginx, PHP, and
-MySQL — built around one idea: a complete stack is a _profile_, and switching
-between profiles takes one click.**
+MySQL — where every site can run its own PHP version, and a complete stack is a
+_profile_ you switch in one click.**
 
-Run PHP 5.6 on Apache VC11 for a legacy project this morning, then PHP 8.3 on
-Apache VS16 five seconds later. Pick the profile, press **Switch**. Every
-generated config file — `httpd.conf`, `php.ini`, `my.ini`, virtual hosts, the
-Windows hosts file — is rewritten for that profile, and the services restart.
+Keep a CodeIgniter 2 app on PHP 5.6 and a Laravel app on PHP 8.3 open side by
+side: each site picks its PHP, and both run at the same time. Profiles hold the
+rest of the environment — the web server and its version, the MySQL version,
+ports, project folders. When you need a different database or server, pick the
+profile and press **Switch**: every generated config file — `httpd.conf`,
+`php.ini`, `my.ini`, virtual hosts, the Windows hosts file — is rewritten, and the
+services restart.
 
 ![Home](docs/beranda.png)
 ![Profiles](docs/profil.png)
@@ -33,7 +36,10 @@ Windows hosts file — is rewritten for that profile, and the services restart.
   `bin` folder**. It scans its own `bin` *and* `C:\laragon\bin` (and any folder you
   add), and writes every generated file under its own `etc\`. You can share
   Laragon's PHP, Apache and MySQL builds without the two tools overwriting each
-  other.
+  other. When two folders share a name — the same PHP build in Phoron's and
+  Laragon's `bin`, or the `php`/`mysql` folders of two XAMPP installs — every
+  list shows where each one comes from, your choice is stored by full path, and
+  each MySQL keeps its own data folder.
 - **Fast by default, and still safe for coding.** OPcache is on out of the box —
   one CodeIgniter request went from **34.8 ms to 17.0 ms**. It's tuned so a file
   you save takes effect on the very next request, with no restart and no stale
@@ -203,6 +209,15 @@ Things to know:
   Bearer tokens keep working.
 - For Oracle, each pool gets an Instant Client whose version matches its `oci8`
   extension (`oci8_19` needs client 19 or newer) placed first on its `PATH`.
+- **PHP 5.x serves one request at a time** in this mode. Its `php-cgi` ignores
+  `PHP_FCGI_CHILDREN` on Windows and runs as a single process (PHP 7 and 8 start
+  the two workers as expected). Pages still work; simultaneous requests to that
+  site simply queue. It also means less RAM than the figure above.
+- Every PHP build is listed with the `bin` folder it comes from, so two copies
+  of the same version (in Phoron's and Laragon's `bin`) or two XAMPP `php`
+  folders can be told apart — and the one you pick is the one that runs.
+- 32-bit PHP works here too, even with a 64-bit Apache: the pool is a separate
+  process.
 - Needs Apache 2.4.26 or newer. On older Apache the choice is kept but not
   applied, and Phoron tells you why.
 
@@ -480,7 +495,7 @@ Windows 10/11).
 ```
 build.bat              Release build -> dist\Phoron.exe (single file, ~3 MB)
 build.bat run          Debug build, then run it
-build.bat test         test harness (657 tests)
+build.bat test         test harness (683 tests)
 build.bat live         end-to-end: starts real Apache & MySQL
 build.bat clean
 build_installer.bat    exe + installer (needs Inno Setup 6; downloads HeidiSQL)

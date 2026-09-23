@@ -6,7 +6,7 @@ namespace Phoron.Core
     public static class AppInfo
     {
         public const string Name = "Phoron";
-        public const string Version = "1.35.0";
+        public const string Version = "1.35.1";
 
         // set_version.ps1 hanya menyentuh baris Version di atas, jadi keterangan
         // di bawah ini aman dari penulisan ulang saat menaikkan nomor rilis.
@@ -61,6 +61,38 @@ namespace Phoron.Core
         public string ApacheModuleDll;
         /// <summary>Dari root bin mana paket ini ditemukan - dipakai UI untuk menandai bin pinjaman.</summary>
         public string SourceRoot = "";
+
+        string _kunci;
+
+        /// <summary>
+        /// Identitas UNIK paket ini di antara semua yang dipindai.
+        ///
+        /// Nama folder (Id) tidak unik: php-8.3.12-... ada di bin Phoron DAN bin
+        /// Laragon, dan XAMPP di C:\ maupun D:\ sama-sama punya folder "php",
+        /// "apache", dan "mysql" - dengan versi yang BERBEDA. Dulu hanya Id yang
+        /// dipakai, jadi memilih PHP 5.6.38 x86 dari C:\xampp diam-diam
+        /// menjalankan 5.6.40 dari D:\xampp, dan kedua MariaDB XAMPP berbagi
+        /// SATU folder data.
+        ///
+        /// Paket PERTAMA dari kembarannya - yang selama ini dipilih Find - tetap
+        /// memakai Id polos, supaya folder php.ini dan folder datanya tidak
+        /// berpindah. Kembarannya diberi tanda asal: "mysql@C-xampp".
+        /// </summary>
+        public string Kunci
+        {
+            get { return string.IsNullOrEmpty(_kunci) ? Id : _kunci; }
+            set { _kunci = value; }
+        }
+
+        /// <summary>Ada paket sejenis lain dengan nama folder yang sama.</summary>
+        public bool Kembar;
+
+        /// <summary>
+        /// Yang disimpan ke profil untuk menunjuk paket ini: nama folder bila unik
+        /// - berkas profil tetap bisa dibawa ke komputer lain - dan jalur lengkap
+        /// bila kembar, sebab nama folder saja tidak bisa membedakannya.
+        /// </summary>
+        public string NilaiSimpan { get { return Kembar ? Path : Id; } }
 
         public Version Parsed
         {

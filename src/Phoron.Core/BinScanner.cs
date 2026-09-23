@@ -35,11 +35,52 @@ namespace Phoron.Core
                     found.Add(pkg);
                 }
             }
-            return found
+            var urut = found
                 .OrderBy(p => p.Kind)
                 .ThenByDescending(p => p.Parsed)
                 .ThenBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+            TandaiKembar(urut);
+            return urut;
+        }
+
+        /// <summary>
+        /// Beri tiap paket kunci yang unik - lihat BinPackage.Kunci.
+        ///
+        /// Urutan daftar menentukan siapa yang "pertama": itulah paket yang selama
+        /// ini dikembalikan Engine.Find untuk nama folder itu, dan dialah yang
+        /// mempertahankan Id polos sebagai kuncinya.
+        /// </summary>
+        public static void TandaiKembar(List<BinPackage> daftar)
+        {
+            foreach (var kelompok in daftar.GroupBy(p => p.Kind + "|" + (p.Id ?? "").ToLowerInvariant()))
+            {
+                var anggota = kelompok.ToList();
+                if (anggota.Count < 2) continue;
+                var dipakai = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < anggota.Count; i++)
+                {
+                    var p = anggota[i];
+                    p.Kembar = true;
+                    var kunci = i == 0 ? p.Id : p.Id + "@" + TandaAsal(p.SourceRoot);
+                    // Dua kembaran dari folder bin yang SAMA (folder bertingkat):
+                    // tanda asalnya sama, jadi diberi nomor.
+                    if (!dipakai.Add(kunci)) { kunci = kunci + "-" + (i + 1); dipakai.Add(kunci); }
+                    p.Kunci = kunci;
+                }
+            }
+        }
+
+        /// <summary>"C:\Phoron\bin" -> "C-Phoron-bin". Aman dipakai sebagai nama folder.</summary>
+        public static string TandaAsal(string root)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var c in root ?? "")
+                sb.Append(char.IsLetterOrDigit(c) || c == '.' || c == '_' ? c : '-');
+            var t = sb.ToString();
+            while (t.Contains("--")) t = t.Replace("--", "-");
+            t = t.Trim('-');
+            return t.Length > 0 ? t : "bin";
         }
 
         /// <summary>

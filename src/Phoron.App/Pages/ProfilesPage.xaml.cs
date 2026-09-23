@@ -133,10 +133,10 @@ namespace Phoron.App.Pages
             _loading = true;
             TxtNama.Text = p.Name;
             Pilih(CmbWeb, p.WebServer);
-            PilihPkg(CmbPhp, p.PhpId);
-            PilihPkg(CmbApache, p.ApacheId);
-            PilihPkg(CmbNginx, p.NginxId);
-            PilihPkg(CmbMysql, p.MySqlId);
+            PilihPkg(CmbPhp, BinKind.Php, p.PhpId);
+            PilihPkg(CmbApache, BinKind.Apache, p.ApacheId);
+            PilihPkg(CmbNginx, BinKind.Nginx, p.NginxId);
+            PilihPkg(CmbMysql, BinKind.MySql, p.MySqlId);
             TxtPortHttp.Text = p.HttpPort.ToString();
             TxtPortHttps.Text = p.HttpsPort.ToString();
             TxtPortMysql.Text = p.MySqlPort.ToString();
@@ -182,16 +182,21 @@ namespace Phoron.App.Pages
         /// Sama dengan janji Engine.Pakai: berkas profil TIDAK diubah hanya
         /// karena komputer ini kebetulan tidak punya versi yang sama. Pengguna
         /// tetap bebas memilih versi lain - saat itulah ID-nya berganti.
+        ///
+        /// Dicocokkan lewat Engine.Find dan JALUR paketnya, bukan teks Id: nama
+        /// folder bisa kembar (bin Phoron dan bin Laragon, XAMPP di C:\ dan D:\),
+        /// dan dulu memilih salinan kedua diam-diam menjalankan yang pertama.
         /// </summary>
-        static void PilihPkg(ComboBox box, string id)
+        void PilihPkg(ComboBox box, BinKind jenis, string id)
         {
             var semula = box.ItemsSource as List<Row>;
             if (semula == null) return;
 
             // Baris pengganti milik profil yang dibuka SEBELUMNYA dibuang dulu.
             var rows = semula.Where(r => r.IdHilang == null).ToList();
-            var cocok = rows.FirstOrDefault(r => r.Pkg != null
-                            && string.Equals(r.Pkg.Id, id, StringComparison.OrdinalIgnoreCase));
+            var paket = _e.Find(jenis, id);
+            var cocok = paket == null ? null : rows.FirstOrDefault(r => r.Pkg != null
+                            && string.Equals(r.Pkg.Path, paket.Path, StringComparison.OrdinalIgnoreCase));
             if (cocok == null && !string.IsNullOrWhiteSpace(id))
             {
                 cocok = new Row
@@ -212,7 +217,9 @@ namespace Phoron.App.Pages
         {
             var row = box.SelectedItem as Row;
             if (row == null) return "";
-            if (row.Pkg != null) return row.Pkg.Id;
+            // Nama folder bila unik, jalur lengkap bila kembar - lihat
+            // BinPackage.NilaiSimpan.
+            if (row.Pkg != null) return row.Pkg.NilaiSimpan;
             return row.IdHilang ?? "";
         }
 
@@ -338,7 +345,7 @@ namespace Phoron.App.Pages
             var rincian = new List<string>();
             if (apache != null)
             {
-                PilihPkg(CmbApache, apache.Id);
+                PilihPkg(CmbApache, BinKind.Apache, apache.NilaiSimpan);
                 rincian.Add("Apache " + apache.Version + " (" + apache.Arch
                             + (apache.Compiler.Length > 0 ? " " + apache.Compiler : "") + ") dari " + apache.SourceRoot);
             }
@@ -346,7 +353,7 @@ namespace Phoron.App.Pages
 
             if (mysql != null)
             {
-                PilihPkg(CmbMysql, mysql.Id);
+                PilihPkg(CmbMysql, BinKind.MySql, mysql.NilaiSimpan);
                 rincian.Add("MySQL " + mysql.Version + " dari " + mysql.SourceRoot);
             }
 
@@ -492,15 +499,15 @@ namespace Phoron.App.Pages
             var p = new Profile { Name = "Profil baru" };
             if (php != null)
             {
-                p.PhpId = php.Id;
+                p.PhpId = php.NilaiSimpan;
                 var apache = ProfileStore.PickApache(php, _e.Of(BinKind.Apache));
-                if (apache != null) p.ApacheId = apache.Id;
+                if (apache != null) p.ApacheId = apache.NilaiSimpan;
                 // Sama seperti profil bawaan: lahir dengan daftar ekstensi yang
                 // masuk akal, bukan kosong.
                 p.PhpExtensions = ConfigWriter.EkstensiDisarankan(php);
             }
             var db = _e.Of(BinKind.MySql).FirstOrDefault();
-            if (db != null) p.MySqlId = db.Id;
+            if (db != null) p.MySqlId = db.NilaiSimpan;
             p.FileName = ProfileStore.UniqueFileName(p.Name);
             ProfileStore.Save(p);
             _e.Reload();

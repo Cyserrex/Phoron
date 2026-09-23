@@ -287,11 +287,38 @@ namespace Phoron.Core
 
         // ------------------------------------------------------------- Resolusi
 
+        /// <summary>
+        /// Paket yang ditunjuk sebuah nilai profil - nama folder, atau jalur
+        /// lengkap untuk paket yang nama foldernya kembar (lihat
+        /// BinPackage.NilaiSimpan).
+        ///
+        /// Jalur yang tidak ada di komputer ini - profil dibawa dari komputer
+        /// lain - jatuh ke nama folder terakhirnya, sehingga penyesuaian antar
+        /// perangkat tetap bekerja seperti dulu.
+        /// </summary>
         public BinPackage Find(BinKind kind, string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
+            if (id.IndexOf('\\') >= 0 || id.IndexOf('/') >= 0)
+            {
+                var tepat = Packages.FirstOrDefault(p => p.Kind == kind && SamaJalur(p.Path, id));
+                if (tepat != null) return tepat;
+                id = Path.GetFileName(id.TrimEnd('\\', '/'));
+                if (string.IsNullOrEmpty(id)) return null;
+            }
             return Packages.FirstOrDefault(p => p.Kind == kind
                 && string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        /// <summary>Dua nilai profil menunjuk paket yang sama (atau sama-sama kosong).</summary>
+        public bool SamaPaket(BinKind kind, string a, string b)
+        {
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b))
+                return string.IsNullOrEmpty(a) && string.IsNullOrEmpty(b);
+            var pa = Find(kind, a);
+            var pb = Find(kind, b);
+            if (pa == null || pb == null) return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+            return SamaJalur(pa.Path, pb.Path);
         }
 
         public IEnumerable<BinPackage> Of(BinKind kind) { return Packages.Where(p => p.Kind == kind); }
@@ -430,15 +457,16 @@ namespace Phoron.Core
                 if (situs == null) continue;
                 var php = Find(BinKind.Php, kv.Value);
                 if (php == null) continue;   // dilaporkan Penyesuaian()
-                // Sama dengan PHP profil: mod_php-nya sudah melayani.
-                if (Php != null && string.Equals(php.Id, Php.Id, StringComparison.OrdinalIgnoreCase)) continue;
+                // Sama dengan PHP profil: mod_php-nya sudah melayani. Dibandingkan
+                // lewat JALUR - dua paket bisa bernama folder sama padahal berbeda.
+                if (Php != null && SamaJalur(php.Path, Php.Path)) continue;
 
                 ConfigWriter.Kolam k;
-                if (!perVersi.TryGetValue(php.Id, out k))
+                if (!perVersi.TryGetValue(php.Path, out k))
                 {
                     var sumber = Profiles.FirstOrDefault(p =>
-                        string.Equals(p.PhpId, php.Id, StringComparison.OrdinalIgnoreCase)
-                        && p.PhpExtensions.Count > 0);
+                        p.PhpExtensions.Count > 0 && Find(BinKind.Php, p.PhpId) != null
+                        && SamaJalur(Find(BinKind.Php, p.PhpId).Path, php.Path));
                     k = new ConfigWriter.Kolam
                     {
                         Php = php,
@@ -449,7 +477,7 @@ namespace Phoron.Core
                             ? new Dictionary<string, string>(sumber.PhpIniOverrides, StringComparer.OrdinalIgnoreCase)
                             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                     };
-                    perVersi[php.Id] = k;
+                    perVersi[php.Path] = k;
                     hasil.Add(k);
                 }
                 k.Situs.Add(situs);
@@ -581,13 +609,15 @@ namespace Phoron.Core
             foreach (var d in dipakai)
             {
                 if (string.IsNullOrEmpty(d.Id)) continue;
+                // Jalur lengkap menunjuk tepat satu paket - tidak ada yang ambigu.
+                if (d.Id.IndexOf('\\') >= 0 || d.Id.IndexOf('/') >= 0) continue;
                 var cocok = Packages.Where(p => p.Kind == d.Jenis
                     && string.Equals(p.Id, d.Id, StringComparison.OrdinalIgnoreCase)).ToList();
                 if (cocok.Count < 2) continue;
                 pesan.Add("Nama folder \"" + d.Id + "\" ada di lebih dari satu folder bin ("
                           + string.Join(", ", cocok.Select(c => c.SourceRoot))
                           + "). Yang dipakai adalah " + cocok[0].Path
-                          + "; ganti nama salah satunya supaya tidak ambigu.");
+                          + "; pilih ulang di halaman Profil untuk mengunci salinan yang Anda maksud.");
             }
             return pesan;
         }
@@ -826,8 +856,7 @@ namespace Phoron.Core
         public IDictionary<string, string> ToolEnv(Site situs = null)
         {
             var php = situs != null ? PhpUntuk(situs) : Php;
-            bool milikProfil = php != null && Php != null
-                               && string.Equals(php.Id, Php.Id, StringComparison.OrdinalIgnoreCase);
+            bool milikProfil = php != null && Php != null && SamaJalur(php.Path, Php.Path);
             var parts = new List<string>();
             if (php != null) parts.Add(php.Path);
             if (MySql != null) parts.Add(Path.Combine(MySql.Path, "bin"));

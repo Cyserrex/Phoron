@@ -170,9 +170,9 @@ namespace Phoron.Core
                 var p = new Profile
                 {
                     Name = "PHP " + php.Version + (apache != null ? " + Apache " + apache.Version : ""),
-                    PhpId = php.Id,
-                    ApacheId = apache != null ? apache.Id : "",
-                    MySqlId = mysql != null ? mysql.Id : "",
+                    PhpId = php.NilaiSimpan,
+                    ApacheId = apache != null ? apache.NilaiSimpan : "",
+                    MySqlId = mysql != null ? mysql.NilaiSimpan : "",
                     WebServer = "apache",
                     // Diisi sejak awal, bukan dibiarkan kosong: profil tanpa
                     // ekstensi menghasilkan PHP yang mati di pemanggilan fungsi

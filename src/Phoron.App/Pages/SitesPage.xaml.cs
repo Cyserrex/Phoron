@@ -32,7 +32,10 @@ namespace Phoron.App.Pages
         /// <summary>Satu pilihan di kotak PHP. Id kosong = ikut PHP profil.</summary>
         public class PilihanPhp
         {
+            /// <summary>Yang disimpan ke profil - BinPackage.NilaiSimpan.</summary>
             public string Id { get; set; }
+            /// <summary>Jalur paketnya, untuk mencocokkan pilihan tersimpan.</summary>
+            public string Jalur { get; set; }
             public string Teks { get; set; }
             public override string ToString() { return Teks; }
         }
@@ -110,14 +113,21 @@ namespace Phoron.App.Pages
                     Teks = Lang.T("Ikut profil") + (profil != null ? " (" + profil.Version + ")" : ""),
                 },
             };
-            var semua = _e.Of(BinKind.Php).OrderByDescending(x => x.Parsed).ToList();
-            foreach (var p in semua)
-                daftar.Add(new PilihanPhp { Id = p.Id, Teks = LabelPhp(p, semua) });
+            // Urutan paket persis seperti di Engine: versi tertinggi dulu, lalu
+            // urutan folder bin. Nilai yang disimpan tiap pilihan adalah
+            // NilaiSimpan - jalur lengkap bila nama foldernya kembar - jadi
+            // salinan di bin Laragon dan di bin Phoron benar-benar dua pilihan.
+            foreach (var p in _e.Of(BinKind.Php))
+                daftar.Add(new PilihanPhp { Id = p.NilaiSimpan, Jalur = p.Path, Teks = LabelPhp(p) });
 
             string simpan = null;
             if (_e.Active != null && b.Situs != null) _e.Active.PhpPerSitus.TryGetValue(b.Situs.Path, out simpan);
+            // Dicari lewat Engine.Find, bukan dicocokkan teksnya: pilihan lama
+            // tersimpan sebagai nama folder, yang baru bisa berupa jalur.
+            var paketSimpan = string.IsNullOrEmpty(simpan) ? null : _e.Find(BinKind.Php, simpan);
             var pilih = string.IsNullOrEmpty(simpan) ? daftar[0]
-                      : daftar.FirstOrDefault(x => string.Equals(x.Id, simpan, StringComparison.OrdinalIgnoreCase));
+                      : paketSimpan == null ? null
+                      : daftar.FirstOrDefault(x => string.Equals(x.Jalur, paketSimpan.Path, StringComparison.OrdinalIgnoreCase));
             if (pilih == null)
             {
                 pilih = new PilihanPhp { Id = simpan, Teks = Lang.T("{0} - tidak ada di komputer ini", simpan) };
@@ -127,23 +137,29 @@ namespace Phoron.App.Pages
             b.PhpTerpilih = pilih;
 
             var dipakai = _e.PhpUntuk(b.Situs);
+            bool milikProfil = dipakai != null && _e.Php != null
+                               && string.Equals(dipakai.Path, _e.Php.Path, StringComparison.OrdinalIgnoreCase);
             b.KeteranganPhp = dipakai == null ? ""
-                : "PHP " + dipakai.Version + " - php.ini: "
-                  + Path.Combine(ConfigWriter.FolderPhpIni(dipakai,
-                        _e.Php != null && dipakai.Id == _e.Php.Id && _e.Settings.PhpIniKeFolderPhp), "php.ini");
+                : "PHP " + dipakai.Version + " - " + dipakai.Path + Environment.NewLine
+                  + "php.ini: " + Path.Combine(ConfigWriter.FolderPhpIni(dipakai,
+                        milikProfil && _e.Settings.PhpIniKeFolderPhp), "php.ini");
         }
 
         /// <summary>
-        /// "8.3.12 · x64". Toolset dan TS/NTS sengaja tidak ditulis: situs yang
-        /// memilih versi sendiri dilayani php-cgi sebagai proses terpisah, jadi
-        /// keduanya tidak berpengaruh - dan label panjang terpotong di kolomnya.
-        /// Nama folder baru ditambahkan bila dua paket akan tampak sama.
+        /// "8.3.12 · x64 — C:\laragon\bin": versi, arsitektur, dan folder bin
+        /// asalnya - pola yang sama dengan halaman Profil. Toolset dan TS/NTS
+        /// tidak ditulis: situs yang memilih versi sendiri dilayani php-cgi
+        /// sebagai proses terpisah, jadi keduanya tidak berpengaruh.
+        ///
+        /// Folder bin asal SELALU ditulis. Nama folder PHP bisa kembar - di bin
+        /// Phoron dan bin Laragon, atau "php" milik XAMPP di C:\ dan D:\ - dan
+        /// dulu dua pilihan tampak sama persis tanpa ada cara membedakannya.
         /// </summary>
-        static string LabelPhp(BinPackage p, List<BinPackage> semua)
+        static string LabelPhp(BinPackage p)
         {
             var teks = p.Version + (string.IsNullOrEmpty(p.Arch) ? "" : " · " + p.Arch);
-            bool kembar = semua.Count(x => x.Version == p.Version && x.Arch == p.Arch) > 1;
-            return kembar ? teks + " · " + p.Id : teks;
+            if (!string.IsNullOrEmpty(p.SourceRoot)) teks += "   —   " + p.SourceRoot;
+            return teks;
         }
 
         /// <summary>
@@ -162,7 +178,10 @@ namespace Phoron.App.Pages
 
             string lama;
             _e.Active.PhpPerSitus.TryGetValue(b.Situs.Path, out lama);
-            if (string.Equals(lama ?? "", pilih.Id ?? "", StringComparison.OrdinalIgnoreCase)) return;
+            // Dibandingkan sebagai PAKET, bukan teks: pilihan lama berupa nama
+            // folder dan pilihan di kotak berupa jalur bisa menunjuk paket yang
+            // sama. Tanpa ini, sekadar membuka halaman menulis ulang profil.
+            if (_e.SamaPaket(BinKind.Php, lama, pilih.Id)) return;
 
             if (string.IsNullOrEmpty(pilih.Id)) _e.Active.PhpPerSitus.Remove(b.Situs.Path);
             else _e.Active.PhpPerSitus[b.Situs.Path] = pilih.Id;
@@ -177,7 +196,8 @@ namespace Phoron.App.Pages
             // php_value dan php_flag di .htaccess hanya dimengerti mod_php. Di
             // bawah FastCGI keduanya diabaikan TANPA SUARA - setelan yang selama
             // ini dipakai aplikasi lenyap begitu saja.
-            bool lewatKolam = dipakai != null && (_e.Php == null || dipakai.Id != _e.Php.Id);
+            bool lewatKolam = dipakai != null && (_e.Php == null
+                || !string.Equals(dipakai.Path, _e.Php.Path, StringComparison.OrdinalIgnoreCase));
             if (lewatKolam)
             {
                 var berkas = PhpValueDiHtaccess(b.Situs);
