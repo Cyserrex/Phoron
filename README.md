@@ -124,14 +124,14 @@ starts from zero.
 You can check the file yourself instead of relying on SmartScreen:
 
 ```powershell
-Get-FileHash Phoron-1.34.0-Setup.exe -Algorithm SHA256
+Get-FileHash Phoron-1.35.1-Setup.exe -Algorithm SHA256
 ```
 
 Compare the result with `SHA256SUMS.txt` on the release. With the GitHub CLI you
 can go further and prove where the file came from:
 
 ```powershell
-gh attestation verify Phoron-1.34.0-Setup.exe --repo Cyserrex/Phoron
+gh attestation verify Phoron-1.35.1-Setup.exe --repo Cyserrex/Phoron
 ```
 
 That answers the question that actually matters: was this file produced by
