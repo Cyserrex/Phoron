@@ -12,6 +12,15 @@
                 <ui:ControlsDictionary/>
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Gaya ComboBox WPF UI menyembunyikan scrollbar daftarnya. Tanpa
+                 scrollbar, satu-satunya cara menggulir dengan klik adalah
+                 menekan lalu menyeret isi daftar - dan ComboBox WPF menjawab
+                 seretan yang keluar dari tepi atas dengan melompat ke item
+                 paling atas, lalu MEMILIHNYA saat tombol dilepas. -->
+            <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            </Style>
+
             <!-- Judul seksi di dalam halaman. -->
             <Style x:Key="Judul" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="20"/>

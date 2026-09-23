@@ -92,6 +92,7 @@ namespace Phoron.Tests
                 UjiLayananBertabrakan();
                 UjiPhpPerSitus();
                 UjiPaketKembar();
+                UjiDropdown();
                 UjiHsts();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
