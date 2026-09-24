@@ -558,13 +558,13 @@ namespace Phoron.App.Pages
 
         void BtnSsl_Click(object sender, RoutedEventArgs e)
         {
-            // Sertifikat yang sudah ada TIDAK dibuat ulang begitu saja: membuat
-            // ulang berarti sertifikat yang sudah dipercayai orang jadi tidak
-            // cocok lagi, dan peringatan browser justru kembali muncul.
+            // Yang dipercayai adalah CA-nya, jadi membuat ulang sertifikat situs
+            // tidak membatalkan kepercayaan itu - CA yang sama dipakai lagi.
             if (SslTool.Exists && !SslTool.IsTrusted) { PercayaiSertifikat(); return; }
             if (SslTool.Exists
-                && !AppState.Ask("Sertifikat sudah ada dan sudah tepercaya. Buat ulang? "
-                                 + "Sertifikat lama akan berhenti berlaku dan harus dipercayai lagi."))
+                && !AppState.Ask("Sertifikat sudah ada dan CA-nya sudah tepercaya. Buat ulang "
+                                 + "sertifikat situs? CA yang sama dipakai lagi, jadi tidak perlu "
+                                 + "dipercayai ulang."))
                 return;
 
             var apache = _e.Apache;
@@ -574,12 +574,12 @@ namespace Phoron.App.Pages
             _e.Apply();
             _e.Say("Sertifikat SSL dibuat di etc\\ssl.");
             RefreshState();
-            PercayaiSertifikat();
+            if (!SslTool.IsTrusted) PercayaiSertifikat();
         }
 
         void PercayaiSertifikat()
         {
-            if (!AppState.Ask("Pasang sertifikat ke Trusted Root Windows supaya browser tidak "
+            if (!AppState.Ask("Pasang CA Phoron ke Trusted Root Windows supaya browser tidak "
                               + "memberi peringatan?")) return;
 
             var t = SslTool.Trust();
@@ -595,7 +595,7 @@ namespace Phoron.App.Pages
             // Windows, jadi "sudah terpasang" saja bukan jawaban lengkap bagi
             // pengguna Firefox - dan diam soal ini membuat orang mengira
             // pemasangannya gagal.
-            AppState.Info("Sertifikat terpasang di Trusted Root Windows. Tutup dan buka ulang browser.\n\n"
+            AppState.Info("CA Phoron terpasang di Trusted Root Windows. Tutup dan buka ulang browser.\n\n"
                           + "Chrome dan Edge langsung ikut. Firefox memakai daftar sertifikatnya "
                           + "sendiri: buka about:config, setel security.enterprise_roots.enabled "
                           + "jadi true, lalu jalankan ulang Firefox.\n\n"

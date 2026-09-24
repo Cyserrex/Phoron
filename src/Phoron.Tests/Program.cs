@@ -113,6 +113,7 @@ namespace Phoron.Tests
                 UjiCatatanDitutup();
                 UjiBantuan();
                 UjiHsts();
+                UjiSertifikat();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
                 UjiSqlLepasLolos();

@@ -1415,6 +1415,17 @@ namespace Phoron.Core
         public static int VersiKonfigWeb { get { return System.Threading.Volatile.Read(ref _versiWeb); } }
         public static int VersiKonfigDb { get { return System.Threading.Volatile.Read(ref _versiDb); } }
 
+        /// <summary>
+        /// Berkas yang dibaca web server berubah di luar WriteIfChanged -
+        /// misalnya sertifikat SSL yang dibuat ulang. httpd memuat sertifikat
+        /// hanya saat menyala, jadi tanpa ini Apache terus menyajikan yang lama
+        /// dan tidak ada tanda perlu dinyalakan ulang.
+        /// </summary>
+        public static void TandaiWebBerubah()
+        {
+            System.Threading.Interlocked.Increment(ref _versiWeb);
+        }
+
         static void CatatBerubah(string path)
         {
             // Beranda Phoron berupa berkas PHP biasa: berlaku pada permintaan
