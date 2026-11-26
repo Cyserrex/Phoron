@@ -302,6 +302,15 @@ namespace Phoron.App
             // melanggan peristiwa Engine dan baru melepasnya di Unloaded.
             // Pelanggan yang tertinggal membuat Engine menahan halaman itu -
             // dan seluruh jendela di atasnya - tetap hidup.
+            //
+            // Alasan KEDUA, sama pentingnya: kotak teks di Profil, Ekstensi,
+            // Situs, Versi, dan Pengaturan baru menyimpan isinya saat LostFocus.
+            // Menekan X tidak memindahkan fokus, jadi isian yang sedang diketik
+            // dulu selamat hanya karena jendelanya disembunyikan. Melepas halaman
+            // mengeluarkan kotak yang sedang fokus dari pohon visual, dan WPF
+            // memicu LostFocus-nya saat itu juga - isiannya tersimpan sebelum
+            // jendela dibuang. Dibuktikan lewat UI Automation pada 1.38.0:
+            // TxtDbPengguna, TxtCatatan, dan TxtPortMysql tersimpan sesudah X.
             Host.Content = null;
         }
     }

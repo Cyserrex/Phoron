@@ -30,9 +30,16 @@ namespace Phoron.Tests
             Ok("Jendela tidak melanggan peristiwa Engine",
                !mw.Contains("StateChanged +=") && !mw.Contains(".Log +="),
                "pelanggan menahan jendela tetap hidup selama Engine hidup");
+            // Dilepas di Closing, BUKAN Closed: sesudah Closed pohon visualnya
+            // sudah hancur, LostFocus tidak lagi menyala, dan isian kotak teks
+            // yang sedang diketik saat X ditekan hilang tanpa jejak.
+            var tutup = Potong(mw, "void OnClosing(", "\n        }");
             Ok("Halaman dilepas sebelum jendela hancur",
-               mw.Contains("Host.Content = null;"),
+               tutup.Contains("Host.Content = null;"),
                "Unloaded halaman tidak menyala dan langganannya tertinggal");
+            Ok("Isian yang sedang diketik tersimpan saat jendela ditutup",
+               tutup.Contains("Host.Content = null;") && !mw.Contains("Closed += (s, e) => Host.Content = null"),
+               "LostFocus kotak teks tidak menyala, isian yang belum disimpan hilang");
             Ok("Ikon baki milik Pengendali, bukan jendela",
                pg.Contains("new Forms.NotifyIcon") && !mw.Contains("NotifyIcon"), "");
             Ok("Program memulai lewat Pengendali",
