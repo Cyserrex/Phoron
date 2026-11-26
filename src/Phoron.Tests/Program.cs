@@ -114,6 +114,7 @@ namespace Phoron.Tests
                 UjiBantuan();
                 UjiHsts();
                 UjiSertifikat();
+                UjiJendelaDibuang();
                 UjiSqlBerbaris();
                 UjiSqlUrai();
                 UjiSqlLepasLolos();
@@ -349,7 +350,7 @@ namespace Phoron.Tests
             Ok("Engine tidak lagi dibuat sebagai penginisialisasi medan",
                !jendela.Contains("readonly Engine _engine = new Engine()"));
             Ok("MainWindow menerima Engine dari luar",
-               jendela.Contains("public MainWindow(Engine engine)"));
+               jendela.Contains("public MainWindow(Engine engine"));
         }
 
         static void UjiPutaranLog()

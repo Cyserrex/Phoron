@@ -86,7 +86,7 @@ namespace Phoron.App
             app.InitializeComponent();
             // Tanpa ini, mulai dalam keadaan tersembunyi berarti tidak ada jendela
             // terbuka sama sekali, dan WPF akan menutup aplikasinya seketika.
-            // Penutupan sekarang jadi urusan MainWindow yang memanggil Shutdown().
+            // Penutupan sekarang jadi urusan Pengendali yang memanggil Shutdown().
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             // Engine dibuat DI SINI, bukan sebagai penginisialisasi medan di
             // MainWindow. Penginisialisasi medan jalan sebelum badan konstruktor
@@ -107,15 +107,15 @@ namespace Phoron.App
                 return KeluarGalat;
             }
 
-            var win = new MainWindow(engine);
-            app.MainWindow = win;
-            if (!keTray) win.Show();
+            // Pengendali, bukan jendela, yang memiliki umur aplikasi: ikon baki
+            // dan sinyal antarproses harus tetap hidup selagi jendelanya dibuang.
+            new Pengendali(engine).Mulai(!keTray);
             return app.Run();
         }
 
         /// <summary>
         /// Nama event yang ditunggu instans yang sedang berjalan (lihat
-        /// MainWindow.PasangSinyalTampil). Disetel salinan kedua untuk meminta
+        /// Pengendali.PasangSinyalTampil). Disetel salinan kedua untuk meminta
         /// jendelanya dimunculkan dari baki sistem.
         /// </summary>
         public const string NamaSinyalTampil = "Phoron.Tampilkan";
@@ -133,7 +133,7 @@ namespace Phoron.App
         static bool BangunkanYangSudahJalan()
         {
             // Mutex dibuat di awal start, sedangkan sinyalnya baru dipasang saat
-            // MainWindow terbentuk. Di antara keduanya ada celah beberapa ratus
+            // Pengendali dimulai. Di antara keduanya ada celah beberapa ratus
             // milidetik: klik kedua yang jatuh tepat di situ harus menunggu
             // sebentar, bukan langsung menyerah.
             for (int coba = 0; coba < 20; coba++)

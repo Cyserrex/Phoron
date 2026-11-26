@@ -60,8 +60,9 @@ namespace Phoron.Tests
                sm.Contains("\"MySQLShutdown\" + pid"),
                "hanya mysqladmin tanpa sandi - gagal begitu root diberi sandi");
 
-            // Shutdown Windows: hanya saat sesi BENAR-BENAR berakhir.
-            var mw = BacaSumber("Phoron.App", "MainWindow.xaml.cs");
+            // Shutdown Windows: hanya saat sesi BENAR-BENAR berakhir. Pendengarnya
+            // tinggal di Pengendali sejak jendela utama dibuang saat ditutup.
+            var mw = BacaSumber("Phoron.App", "Pengendali.cs");
             if (mw != null)
             {
                 Ok("Layanan tidak dimatikan pada WM_QUERYENDSESSION",

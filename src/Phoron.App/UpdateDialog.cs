@@ -86,8 +86,7 @@ namespace Phoron.App
                 // menunggu pemasang memaksanya. Jalur normal itulah yang meminta
                 // mysqladmin shutdown; dihentikan paksa, InnoDB harus memulihkan
                 // diri saat start berikutnya.
-                var utama = Application.Current.MainWindow as MainWindow;
-                if (utama != null) utama.TutupUntukPembaruan();
+                if (Pengendali.Ini != null) Pengendali.Ini.Keluar();
                 else { e.Services.StopAll(); e.Node.StopAll(); Application.Current.Shutdown(); }
             }
             catch (Exception ex)
