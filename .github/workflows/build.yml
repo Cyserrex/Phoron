@@ -19,7 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Nomor versi ditulis di enam berkas. Rilis diterbitkan otomatis
       # berdasarkan angka di Models.cs, jadi satu berkas yang tertinggal akan
@@ -58,7 +58,7 @@ jobs:
           Write-Host "Semua berkas memakai $version."
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -77,14 +77,14 @@ jobs:
     runs-on: windows-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Riwayat penuh, bukan satu commit terakhir: changelog di bawah
           # disusun dari commit sejak tag sebelumnya, dan keduanya tidak ada
           # pada kloning dangkal.
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "8.0.x"
 
@@ -97,7 +97,7 @@ jobs:
         run: .\build_installer.bat
 
       - name: Unggah exe
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Phoron-exe
           path: |
@@ -105,7 +105,7 @@ jobs:
             dist/Phoron.exe.config
 
       - name: Unggah installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Phoron-installer
           path: installer/Output/*.exe
@@ -219,7 +219,7 @@ jobs:
       # penting: apakah berkas ini utuh dan dari sumber yang benar.
       - name: Bukti asal-usul build
         if: steps.rilis.outputs.publish == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/Phoron.exe
@@ -227,7 +227,7 @@ jobs:
 
       - name: Terbitkan rilis
         if: steps.rilis.outputs.publish == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.rilis.outputs.tag }}
           name: Phoron ${{ needs.test.outputs.version }}
