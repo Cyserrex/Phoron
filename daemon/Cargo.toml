@@ -1,0 +1,17 @@
+[workspace]
+members = ["inti"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+# Daemon ini hidup sepanjang hari di baki: ukuran dan RAM lebih penting
+# daripada beberapa persen kecepatan.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

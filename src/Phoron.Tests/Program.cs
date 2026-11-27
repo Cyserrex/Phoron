@@ -28,6 +28,8 @@ namespace Phoron.Tests
                 return LiveTest.Jalankan();
             if (args.Length > 0 && args[0].Equals("ui", StringComparison.OrdinalIgnoreCase))
                 return UjiAsapUi.Jalankan();
+            if (args.Length > 1 && args[0].Equals("setara", StringComparison.OrdinalIgnoreCase))
+                return UjiSetara.Jalankan(args[1]);
 
             // Dipanggil oleh UjiObjekAntarProses: harness ini menjalankan dirinya
             // sendiri dengan hak Low, dan anak itu melapor lewat kode keluar.
