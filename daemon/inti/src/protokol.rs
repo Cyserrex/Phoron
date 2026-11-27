@@ -204,8 +204,16 @@ pub enum Kabar {
     Log(BarisLogJarak),
     /// Proyek Node mulai/berhenti.
     Node(StatusNode),
-    /// Satu baris keluaran proyek Node.
-    NodeKeluaran { path: String, baris: String },
+    /// Satu baris keluaran proyek Node. `baris` selalu terisi (teks apa
+    /// adanya; untuk baris buatan Phoron berisi teks Indonesia). `pesan` terisi
+    /// hanya untuk baris buatan Phoron sendiri ("-- dihentikan --", galat
+    /// keluar, peringatan HSTS): UI menerjemahkannya dengan Lang.T.
+    NodeKeluaran {
+        path: String,
+        baris: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pesan: Option<Pesan>,
+    },
     /// Setelan, profil, atau paket berubah (dari klien lain, menu baki, atau
     /// sesudah MuatUlang/GantiProfil): UI membaca ulang berkasnya.
     PerluMuatUlang,

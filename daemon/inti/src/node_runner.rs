@@ -129,7 +129,8 @@ struct Berjalan {
 struct Data {
     jalan: HashMap<String, Arc<Berjalan>>,
     /// Proyek yang terakhir BERHENTI karena portnya dipakai proses lain.
-    bentrok: HashMap<String, i32>,
+    /// Port bentrok jalan terakhir per proyek: (folder asli, port).
+    bentrok: HashMap<String, (String, i32)>,
     riwayat: HashMap<String, VecDeque<BarisNode>>,
 }
 
@@ -194,7 +195,7 @@ impl NodeRunner {
     /// Port yang membuat proyek ini gagal start terakhir kali; 0 bila tidak
     /// ada.
     pub fn port_bentrok(&self, folder: &str) -> i32 {
-        self.data().bentrok.get(&kunci(folder)).copied().unwrap_or(0)
+        self.data().bentrok.get(&kunci(folder)).map(|b| b.1).unwrap_or(0)
     }
 
     /// Port yang ditawarkan untuk proyek yang gagal karena portnya terpakai:
@@ -222,9 +223,21 @@ impl NodeRunner {
                 path: b.folder.clone(),
                 berjalan: !b.selesai.load(Ordering::SeqCst),
                 url: b.url.lock().unwrap().clone(),
-                port_bentrok: d.bentrok.get(k).and_then(|p| u16::try_from(*p).ok()),
+                port_bentrok: d.bentrok.get(k).and_then(|p| u16::try_from(p.1).ok()),
             })
             .collect();
+        // Proyek yang berhenti KARENA bentrok sudah keluar dari peta jalan,
+        // padahal justru dialah yang butuh tawaran "Jalankan di port N".
+        for (k, (folder, p)) in &d.bentrok {
+            if !d.jalan.contains_key(k) {
+                v.push(StatusNode {
+                    path: folder.clone(),
+                    berjalan: false,
+                    url: None,
+                    port_bentrok: u16::try_from(*p).ok(),
+                });
+            }
+        }
         v.sort_by(|a, b| a.path.cmp(&b.path));
         v
     }
@@ -423,7 +436,7 @@ impl Inti {
         let bentrok = b.bentrok.load(Ordering::SeqCst);
         if kode != 0 && bentrok != 0 {
             let p = catat_bentrok(bentrok, port);
-            self.data().bentrok.insert(kunci(&b.folder), p);
+            self.data().bentrok.insert(kunci(&b.folder), (b.folder.clone(), p));
         }
         let baris = if kode == 0 {
             Pesan::baru("-- proses berakhir (kode 0) --")
@@ -867,7 +880,12 @@ mod uji {
         // Tawaran: port bebas sesudah port bentrok.
         let t = r.port_tawaran(&app.path, &[]).unwrap();
         assert!(t > port);
-        assert!(r.status_semua().is_empty());
+        // Proyek yang berhenti karena bentrok tetap dilaporkan, beserta
+        // portnya, supaya UI bisa menawarkan "Jalankan di port N".
+        let st = r.status_semua();
+        assert_eq!(st.len(), 1);
+        assert!(!st[0].berjalan);
+        assert_eq!(st[0].port_bentrok, Some(port));
         let _ = fs::remove_dir_all(&d);
     }
 

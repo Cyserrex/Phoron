@@ -183,7 +183,10 @@ mod winhttp {
 pub fn hari_dari_max_age(nilai: &str) -> i64 {
     for bagian in nilai.split(';') {
         let b = bagian.trim();
-        if b.len() < 7 || !b[..7].eq_ignore_ascii_case("max-age") {
+        // Dibandingkan per byte, bukan diiris sebagai str: header datang dari
+        // server pengembangan orang, dan memotong di tengah aksara multibyte
+        // akan panic - dengan panic=abort itu mematikan seluruh daemon.
+        if !b.as_bytes().get(..7).is_some_and(|a| a.eq_ignore_ascii_case(b"max-age")) {
             continue;
         }
         let Some(i) = b.find('=') else { continue };
@@ -221,6 +224,14 @@ pub fn keluhan(nama: &str, _url: &str, nilai_header: Option<&str>) -> Option<Vec
 mod uji {
     use super::*;
     use std::io::{Read, Write};
+
+    #[test]
+    fn max_age_dengan_aksara_non_ascii_tidak_panic() {
+        // Byte ke-7 jatuh di tengah aksara multibyte: dulu panic.
+        assert_eq!(hari_dari_max_age("abcdeféé; max-age=86400"), 1);
+        assert_eq!(hari_dari_max_age("ééééé"), 0);
+        assert_eq!(hari_dari_max_age("MAX-AGE=172800"), 2);
+    }
 
     #[test]
     fn hanya_https_dan_nama_localhost() {
