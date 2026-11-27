@@ -128,6 +128,8 @@ namespace Phoron.Tests
                 UjiTanpaAksaraKendali();
                 UjiLanggananHalamanBasisData();
                 UjiLabelTidakBentrok();
+                UjiGagalDiam(sandbox);
+                UjiBlokHosts(sandbox);
             }
             catch (Exception ex)
             {

@@ -65,15 +65,23 @@ namespace Phoron.App.Pages
             // terpampang - sampai orang kebetulan berpindah tab dan kembali.
             // Layar yang menampilkan keadaan yang sudah lewat lebih buruk
             // daripada layar yang mengatakan tidak tahu.
-            _e.Services.StateChanged += OnLayananBerubah;
-            AppState.Changed += OnProfilBerubah;
+            // Dipasang di Loaded supaya selalu berpasangan dengan Unloaded:
+            // halaman yang tidak pernah tampil tidak menerima Unloaded, jadi
+            // langganan dari konstruktor akan bocor.
             Unloaded += (s, e) =>
             {
                 _e.Services.StateChanged -= OnLayananBerubah;
                 AppState.Changed -= OnProfilBerubah;
             };
 
-            Loaded += (s, e) => MuatAsync();
+            Loaded += (s, e) =>
+            {
+                _e.Services.StateChanged -= OnLayananBerubah;
+                AppState.Changed -= OnProfilBerubah;
+                _e.Services.StateChanged += OnLayananBerubah;
+                AppState.Changed += OnProfilBerubah;
+                MuatAsync();
+            };
         }
 
         /// <summary>

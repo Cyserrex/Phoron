@@ -116,10 +116,8 @@ namespace Phoron.Core
             }
 
             var lines = awal.ToList();
-            int b = lines.FindIndex(l => l.Trim() == Begin);
-            int e = lines.FindIndex(l => l.Trim() == End);
-            if (b >= 0 && e > b) lines.RemoveRange(b, e - b + 1);
-            else if (b >= 0) lines.RemoveAt(b);
+            foreach (var r in RentangBlok(lines).OrderByDescending(r => r.Key))
+                lines.RemoveRange(r.Key, r.Value - r.Key + 1);
 
             // Buang ekor baris kosong supaya blok tidak makin turun tiap sinkron.
             while (lines.Count > 0 && lines[lines.Count - 1].Trim().Length == 0)
@@ -174,16 +172,82 @@ namespace Phoron.Core
             AtomicFile.WriteAllLines(Paths.HostsFile, lines, new UTF8Encoding(false));
         }
 
+        /// <summary>
+        /// Baris yang persis berbentuk entri tulisan Phoron: "127.0.0.1" atau
+        /// "::1", satu tab, satu nama.
+        /// </summary>
+        static bool EntriPhoron(string l)
+        {
+            var t = l ?? "";
+            int tab = t.IndexOf('\t');
+            if (tab < 0 || t.IndexOf('\t', tab + 1) >= 0 || t.IndexOf(' ') >= 0) return false;
+            var ip = t.Substring(0, tab);
+            return (ip == "127.0.0.1" || ip == "::1") && tab + 1 < t.Length;
+        }
+
+        /// <summary>
+        /// Rentang baris (awal, akhir, inklusif) yang milik Phoron.
+        ///
+        /// Dulu cukup "baris Begin pertama sampai baris End pertama" - dengan End
+        /// dicari dari ATAS berkas, bukan sesudah Begin. Begitu satu penanda
+        /// terhapus tangan, entri lama jadi yatim: Sync menambah blok baru di
+        /// bawahnya setiap kali, berkasnya terus memanjang, dan situs yang sudah
+        /// dihapus tidak pernah keluar dari hosts. Sekarang:
+        /// - Begin ... End yang berpasangan, berapa pun jumlahnya;
+        /// - Begin tanpa End: Begin itu plus entri berbentuk Phoron sesudahnya;
+        /// - End tanpa Begin: End itu plus entri berbentuk Phoron sebelumnya.
+        /// Dipakai bersama oleh Sync dan DiLuarBlok, jadi penjaga "jangan buang
+        /// baris orang lain" selalu sepakat dengan apa yang dibuang.
+        /// </summary>
+        public static List<KeyValuePair<int, int>> RentangBlok(IList<string> lines)
+        {
+            var hasil = new List<KeyValuePair<int, int>>();
+            int n = lines.Count, batasBawah = 0, i = 0;
+            Func<int, string> t = k => (lines[k] ?? "").Trim();
+            while (i < n)
+            {
+                if (t(i) == Begin)
+                {
+                    int j = i + 1;
+                    while (j < n && t(j) != End && t(j) != Begin) j++;
+                    if (j < n && t(j) == End)
+                    {
+                        hasil.Add(new KeyValuePair<int, int>(i, j));
+                        i = j + 1;
+                    }
+                    else
+                    {
+                        int k = i + 1;
+                        while (k < n && EntriPhoron(lines[k])) k++;
+                        hasil.Add(new KeyValuePair<int, int>(i, k - 1));
+                        i = k;
+                    }
+                    batasBawah = i;
+                }
+                else if (t(i) == End)
+                {
+                    int k = i - 1;
+                    while (k >= batasBawah && EntriPhoron(lines[k])) k--;
+                    hasil.Add(new KeyValuePair<int, int>(k + 1, i));
+                    i++;
+                    batasBawah = i;
+                }
+                else i++;
+            }
+            return hasil;
+        }
+
         /// <summary>Baris bermakna di LUAR blok Phoron; inilah milik orang lain.</summary>
         static IEnumerable<string> DiLuarBlok(IEnumerable<string> lines)
         {
-            var dalam = false;
-            foreach (var l in lines ?? Enumerable.Empty<string>())
+            var daftar = (lines ?? Enumerable.Empty<string>()).ToList();
+            var milik = new bool[daftar.Count];
+            foreach (var r in RentangBlok(daftar))
+                for (int k = r.Key; k <= r.Value; k++) milik[k] = true;
+            for (int k = 0; k < daftar.Count; k++)
             {
-                var t = (l ?? "").Trim();
-                if (t == Begin) { dalam = true; continue; }
-                if (t == End) { dalam = false; continue; }
-                if (dalam || t.Length == 0) continue;
+                var t = (daftar[k] ?? "").Trim();
+                if (milik[k] || t.Length == 0) continue;
                 yield return t;
             }
         }

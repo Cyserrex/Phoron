@@ -701,7 +701,13 @@ namespace Phoron.Core
             }
 
             var mysqld = Path.Combine(mysql.Path, "bin", "mysqld.exe");
-            var p = Spawn(mysqld, "--defaults-file=\"" + myIni + "\" --console", mysql.Path, null, "mysql");
+            // --console membuat mysqld MENGABAIKAN log-error di my.ini (dibuktikan
+            // pada MySQL 8.0.30: berkasnya tidak pernah dibuat). --console tetap
+            // dipakai supaya galatnya sampai ke panel Aktivitas seketika, dan
+            // salinan lengkapnya ditulis Phoron sendiri ke mysql-error.log -
+            // berkas yang disebut pesan galat dan dibaca halaman Log.
+            var p = Spawn(mysqld, "--defaults-file=\"" + myIni + "\" --console", mysql.Path, null, "mysql",
+                          MysqlErrorLog);
             if (p == null) { SetState(ServiceKind.Db, ServiceState.Gagal); return false; }
             PasangDb(p);
             _dbPaket = mysql;
@@ -870,8 +876,46 @@ namespace Phoron.Core
             return Directory.Exists(Path.Combine(dataDir, "mysql"));
         }
 
+        /// <summary>
+        /// Tabel sistem yang hanya ada setelah inisialisasi berjalan cukup jauh:
+        /// mysql.ibd (MySQL 8), mysql\user.frm / user.MYD (MySQL 5.x, MariaDB
+        /// lama), mysql\global_priv.* (MariaDB 10.4+). Folder mysql\ saja tidak
+        /// cukup - ia dibuat di awal, jadi init yang terputus juga meninggalkannya.
+        /// </summary>
+        public static bool TabelSistemAda(string dataDir)
+        {
+            var m = Path.Combine(dataDir, "mysql");
+            return File.Exists(Path.Combine(dataDir, "mysql.ibd"))
+                || File.Exists(Path.Combine(m, "user.frm"))
+                || File.Exists(Path.Combine(m, "user.MYD"))
+                || File.Exists(Path.Combine(m, "global_priv.frm"))
+                || File.Exists(Path.Combine(m, "global_priv.MAD"));
+        }
+
+        /// <summary>
+        /// Apakah inisialisasi boleh dianggap berhasil.
+        ///
+        /// Dulu cukup "kode keluar 0 ATAU folder mysql\ ada". Init yang dibunuh
+        /// karena batas waktu atau terputus antivirus sudah sempat membuat
+        /// mysql\, jadi dianggap berhasil - lalu setiap start sesudahnya gagal,
+        /// dan tidak ada yang mencoba menyiapkannya lagi. Sekarang: terputus
+        /// selalu gagal; kode keluar bukan 0 hanya dimaafkan bila tabel sistemnya
+        /// benar-benar ada (mysql_install_db MariaDB kadang keluar bukan 0
+        /// sesudah selesai).
+        /// </summary>
+        public static bool InitBerhasil(Shell.RunResult res, string dataDir)
+        {
+            if (res.TimedOut || res.Dibatalkan) return false;
+            if (res.ExitCode == 0) return true;
+            return TabelSistemAda(dataDir);
+        }
+
         bool Initialize(BinPackage mysql, string myIni, string dataDir)
         {
+            // Hanya folder yang KOSONG sebelum init yang boleh disingkirkan bila
+            // init gagal. Folder yang sudah berisi apa pun bukan buatan kita.
+            bool kosongSebelumnya = !Directory.Exists(dataDir)
+                || !Directory.EnumerateFileSystemEntries(dataDir).Any();
             Directory.CreateDirectory(dataDir);
             var bin = Path.Combine(mysql.Path, "bin");
             var installDb = Path.Combine(bin, "mysql_install_db.exe");
@@ -887,17 +931,40 @@ namespace Phoron.Core
                 res = Shell.Run(Path.Combine(bin, "mysqld.exe"),
                     "--defaults-file=\"" + myIni + "\" --initialize-insecure --console", bin, 300000);
             }
-            if (!res.Ok && !IsInitialized(dataDir))
+            // Keluaran init juga ikut --console, jadi disalin dengan cara yang sama.
+            if (!string.IsNullOrEmpty(res.All)) LogFile.Tambah(MysqlErrorLog, res.All);
+            if (InitBerhasil(res, dataDir)) return true;
+
+            Say("Gagal menyiapkan folder data"
+                + (res.TimedOut ? " (melewati batas waktu)" : "") + ":\n" + res.All);
+            // Sisa init yang gagal membuat percobaan berikutnya tertolak
+            // ("data directory is not empty") atau, lebih buruk, dikira sudah
+            // siap. Dipindah, tidak dihapus - siapa tahu ada yang ingin melihatnya.
+            if (kosongSebelumnya && Directory.Exists(dataDir))
             {
-                Say("Gagal menyiapkan folder data:\n" + res.All);
-                return false;
+                var sisih = dataDir.TrimEnd('\\') + ".gagal-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                try
+                {
+                    Directory.Move(dataDir, sisih);
+                    Say("Sisa percobaan yang gagal dipindah ke " + sisih
+                        + " - start berikutnya akan menyiapkan folder data dari awal.");
+                }
+                catch (Exception ex)
+                {
+                    Say("Sisa percobaan yang gagal tidak bisa dipindah (" + ex.Message + "). Kosongkan "
+                        + dataDir + " sebelum mencoba lagi.");
+                }
             }
-            return true;
+            return false;
         }
 
         // --------------------------------------------------------------- Utilitas
 
-        Process Spawn(string exe, string args, string workDir, IDictionary<string, string> env, string tag)
+        /// <summary>Salinan keluaran mysqld. Lihat catatan di StartDbAsync.</summary>
+        public static string MysqlErrorLog { get { return Path.Combine(Paths.Logs, "mysql-error.log"); } }
+
+        Process Spawn(string exe, string args, string workDir, IDictionary<string, string> env, string tag,
+                      string salinKe = null)
         {
             var psi = new ProcessStartInfo(exe, args)
             {
@@ -914,6 +981,7 @@ namespace Phoron.Core
                 DataReceivedEventHandler baca = (s, e) =>
                 {
                     if (string.IsNullOrWhiteSpace(e.Data)) return;
+                    if (salinKe != null) LogFile.Tambah(salinKe, e.Data);
                     if (LogRinci || Penting(e.Data)) Say("[" + tag + "] " + e.Data);
                 };
                 p.OutputDataReceived += baca;

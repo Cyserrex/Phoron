@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 
@@ -51,13 +53,27 @@ namespace Phoron.Core
         /// jadi kepercayaan yang sudah dipasang tetap berlaku. Mengembalikan
         /// pesan kesalahan, atau null bila berhasil.
         /// </summary>
-        public static string Generate(BinPackage apache, string siteSuffix)
+        public static string Generate(BinPackage apache, string siteSuffix,
+                                      IEnumerable<string> akhiranLain = null)
         {
             var openssl = FindOpenSsl(apache);
             if (openssl == null) return "openssl.exe tidak ditemukan di paket Apache yang dipilih.";
 
-            var suffix = string.IsNullOrWhiteSpace(siteSuffix) ? "test" : siteSuffix.Trim().TrimStart('.');
+            var suffix = Akhiran(siteSuffix);
             Directory.CreateDirectory(Paths.EtcSsl);
+
+            // CA tanpa batasan nama (buatan Phoron sebelum 1.39), atau yang tidak
+            // mencakup akhiran ini, dibuang BESERTA kuncinya. Kunci itulah yang
+            // berbahaya: siapa pun yang bisa membacanya bisa menerbitkan
+            // sertifikat untuk situs apa saja yang dipercaya seluruh mesin.
+            // Sertifikat lamanya mungkin masih ada di Trusted Root, tapi tanpa
+            // kunci ia tidak bisa menandatangani apa pun lagi - dan Trust()
+            // berikutnya membuangnya lewat BuangAkarLama.
+            if (File.Exists(CaCrtPath) && !CaMencakup(suffix))
+            {
+                try { File.Delete(CaKeyPath); } catch { }
+                try { File.Delete(CaCrtPath); } catch { }
+            }
             Directory.CreateDirectory(Paths.Tmp);
             var kerja = Path.GetDirectoryName(openssl);
 
@@ -86,6 +102,11 @@ namespace Phoron.Core
                 ca.AppendLine("basicConstraints = critical, CA:TRUE, pathlen:0");
                 ca.AppendLine("keyUsage = critical, keyCertSign, cRLSign");
                 ca.AppendLine("subjectKeyIdentifier = hash");
+                // Batasan nama: CA ini HANYA sah untuk akhiran situs Phoron,
+                // localhost, dan loopback. pathlen:0 tidak membatasi nama apa
+                // pun - tanpa ini kunci di disk cukup untuk memalsukan
+                // sertifikat google.com yang diterima setiap browser di mesin ini.
+                ca.AppendLine("nameConstraints = " + BatasanNama(suffix, akhiranLain));
                 File.WriteAllText(caCnf, ca.ToString(), new UTF8Encoding(false));
 
                 var resCa = JalankanOpenSsl(openssl, kerja, caCnf,
@@ -259,6 +280,72 @@ namespace Phoron.Core
                 catch { }
             }
             return false;
+        }
+
+        static string Akhiran(string siteSuffix)
+        {
+            return string.IsNullOrWhiteSpace(siteSuffix) ? "test" : siteSuffix.Trim().Trim('.').ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Nilai nameConstraints untuk CA baru: akhiran aktif, akhiran profil
+        /// lain (supaya berganti profil tidak memaksa CA dibuat dan dipercayai
+        /// ulang), "test", localhost, dan alamat loopback. "DNS:test" mencakup
+        /// test itu sendiri dan semua nama di bawahnya (RFC 5280 4.2.1.10).
+        /// </summary>
+        public static string BatasanNama(string siteSuffix, IEnumerable<string> akhiranLain = null)
+        {
+            var semua = new List<string> { Akhiran(siteSuffix), "test", "localhost" };
+            if (akhiranLain != null)
+                foreach (var a in akhiranLain)
+                    if (!string.IsNullOrWhiteSpace(a)) semua.Add(Akhiran(a));
+            var sb = new StringBuilder("critical");
+            foreach (var a in semua.Distinct(StringComparer.OrdinalIgnoreCase))
+                sb.Append(", permitted;DNS:").Append(a);
+            sb.Append(", permitted;IP:127.0.0.1/255.255.255.255");
+            sb.Append(", permitted;IP:0:0:0:0:0:0:0:1/FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF:FFFF");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Apakah CA yang ada punya batasan nama dan batasan itu mencakup
+        /// akhiran ini. CA tanpa batasan sama sekali selalu false.
+        /// </summary>
+        public static bool CaMencakup(string siteSuffix)
+        {
+            if (!File.Exists(CaCrtPath)) return false;
+            try
+            {
+                using (var ca = new X509Certificate2(CaCrtPath))
+                {
+                    var ext = ca.Extensions.Cast<X509Extension>()
+                                .FirstOrDefault(x => x.Oid.Value == "2.5.29.30");
+                    if (ext == null) return false;
+                    return BatasanMemuat(ext.Format(false), Akhiran(siteSuffix));
+                }
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Teks hasil Format() dari CryptoAPI, mis. "Permitted=Subtrees[1]...
+        /// DNS Name=test, ...". Dicocokkan per nama utuh, jadi "test" tidak
+        /// ikut cocok dengan "testing".
+        /// </summary>
+        public static bool BatasanMemuat(string teks, string akhiran)
+        {
+            if (string.IsNullOrEmpty(teks)) return false;
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(teks, @"DNS Name=([^\s,]+)"))
+                if (string.Equals(m.Groups[1].Value.TrimStart('.'), akhiran, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        /// <summary>Sertifikat perlu dibuat (ulang) untuk akhiran ini.</summary>
+        public static bool PerluDibuat(string siteSuffix)
+        {
+            return !Exists || !CaMencakup(siteSuffix);
         }
 
         /// <summary>Pasang CA ke Trusted Root Windows. Butuh hak admin.</summary>

@@ -34,17 +34,26 @@ namespace Phoron.App.Pages
         public NodePage()
         {
             InitializeComponent();
-            _e.Node.Output += OnOutput;
-            _e.Node.StateChanged += OnState;
-            _e.Node.UrlFound += OnUrl;
-            Unloaded += (s, ev) =>
+            // Dipasang di Loaded supaya selalu berpasangan dengan Unloaded:
+            // halaman yang tidak pernah tampil tidak menerima Unloaded, jadi
+            // langganan dari konstruktor akan bocor.
+            Loaded += (s, ev) =>
             {
-                _e.Node.Output -= OnOutput;
-                _e.Node.StateChanged -= OnState;
-                _e.Node.UrlFound -= OnUrl;
+                Lepas();
+                _e.Node.Output += OnOutput;
+                _e.Node.StateChanged += OnState;
+                _e.Node.UrlFound += OnUrl;
             };
+            Unloaded += (s, ev) => Lepas();
             IsiNode();
             Isi();
+        }
+
+        void Lepas()
+        {
+            _e.Node.Output -= OnOutput;
+            _e.Node.StateChanged -= OnState;
+            _e.Node.UrlFound -= OnUrl;
         }
 
         // ------------------------------------------------------------- Tampilan

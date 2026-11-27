@@ -52,6 +52,32 @@ namespace Phoron.Core
         }
 
         /// <summary>
+        /// Nilai yang ditulis ke berkas saat menyimpan, tanpa pernah membuang
+        /// sandi yang tersimpan hanya karena DPAPI sedang gagal.
+        ///
+        /// Buka() mengembalikan kosong bila gagal, dan Tutup() juga. Tanpa
+        /// penjaga ini, satu kali gagal membuka (profil pengguna belum lengkap
+        /// saat login, folder disalin dari mesin lain) membuat penyimpanan
+        /// berikutnya - yang terjadi sendiri saat berganti profil atau mengecek
+        /// pembaruan - menimpa sandi tersandi itu dengan teks kosong. Selamanya.
+        ///
+        /// Aturannya: bila sandi di memori masih sama dengan yang terbaca saat
+        /// dimuat, bentuk tersandinya ditulis ulang apa adanya. Bila diganti
+        /// tapi gagal disandi, yang lama dipertahankan - lebih baik sandi lama
+        /// daripada tidak ada sandi sama sekali.
+        /// </summary>
+        public static string TutupUntukSimpan(string teks, string tersandiSaatMuat, string terbukaSaatMuat)
+        {
+            teks = teks ?? "";
+            tersandiSaatMuat = tersandiSaatMuat ?? "";
+            if (tersandiSaatMuat.Length > 0 && teks == (terbukaSaatMuat ?? ""))
+                return tersandiSaatMuat;
+            var baru = Tutup(teks);
+            if (baru.Length == 0 && teks.Length > 0) return tersandiSaatMuat;
+            return baru;
+        }
+
+        /// <summary>
         /// Kembalikan teks aslinya. Mengembalikan kosong bila nilainya berasal
         /// dari akun atau mesin lain - itu keadaan yang wajar, misalnya setelah
         /// folder Phoron disalin, dan bukan kerusakan.

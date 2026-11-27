@@ -20,12 +20,22 @@ namespace Phoron.App.Pages
         public DashboardPage()
         {
             InitializeComponent();
-            _e.Log += OnLog;
+            // Berlangganan di Loaded, BUKAN di konstruktor. Unloaded hanya datang
+            // untuk elemen yang pernah Loaded. Saat jendela dibuat ulang dari baki
+            // dengan tab lain, halaman ini dibuat lalu langsung diganti sebelum
+            // sempat tampil - langganan dari konstruktor tidak pernah dilepas,
+            // dan Engine memegang halaman yatim itu selamanya, tetap menggambar
+            // ulang log walau Phoron hanya ada di baki.
+            Loaded += (s, ev) =>
+            {
+                _e.Log -= OnLog;
+                _e.Log += OnLog;
+                // Riwayat yang sudah ada digambar seketika. Halaman ini dibuat
+                // ulang tiap kali navigasi berpindah, jadi tanpa ini panel
+                // Aktivitas selalu tampak kosong sepulang dari tab lain.
+                GambarLog();
+            };
             Unloaded += (s, ev) => _e.Log -= OnLog;
-            // Riwayat yang sudah ada digambar seketika. Halaman ini dibuat ulang
-            // tiap kali navigasi berpindah, jadi tanpa ini panel Aktivitas selalu
-            // tampak kosong sepulang dari tab lain.
-            GambarLog();
             LoadProfiles();
             RefreshState();
         }
@@ -569,7 +579,8 @@ namespace Phoron.App.Pages
 
             var apache = _e.Apache;
             if (apache == null) { AppState.Warn("Butuh paket Apache (openssl.exe ada di dalamnya)."); return; }
-            var err = SslTool.Generate(apache, _e.Active != null ? _e.Active.SiteSuffix : "test");
+            var err = SslTool.Generate(apache, _e.Active != null ? _e.Active.SiteSuffix : "test",
+                                      _e.Profiles.Select(x => x.SiteSuffix));
             if (err != null) { AppState.Warn(err); return; }
             _e.Apply();
             _e.Say("Sertifikat SSL dibuat di etc\\ssl.");

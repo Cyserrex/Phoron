@@ -634,13 +634,20 @@ namespace Phoron.Core
         List<string> PastikanSertifikat()
         {
             var pesan = new List<string>();
-            if (SslTool.Exists) return pesan;
+            if (!SslTool.PerluDibuat(Active.SiteSuffix)) return pesan;
             var apache = Apache;
             if (apache == null || Active.WebServer == "nginx") return pesan;
             if (SslTool.FindOpenSsl(apache) == null) return pesan;   // paket tanpa openssl: diam saja
 
-            var err = SslTool.Generate(apache, Active.SiteSuffix);
+            // CA lama tanpa batasan nama diganti di sini, sekali. Kepercayaannya
+            // ikut hilang, jadi pengguna perlu menekan "Percayai" lagi.
+            bool gantiCa = SslTool.Exists;
+            var err = SslTool.Generate(apache, Active.SiteSuffix, Profiles.Select(x => x.SiteSuffix));
             if (err != null) pesan.Add("HTTPS tidak aktif - " + err);
+            else if (gantiCa)
+                pesan.Add("CA HTTPS Phoron dibuat ulang supaya hanya sah untuk akhiran situs Phoron (*."
+                          + SiteScanner.Suffix(Active) + ") dan localhost. "
+                          + "Percayai sertifikatnya lagi lewat Beranda.");
             else Say("Sertifikat HTTPS dibuat untuk *." + SiteScanner.Suffix(Active)
                      + " (pasang ke Trusted Root lewat Beranda agar browser tidak memperingatkan).");
             return pesan;

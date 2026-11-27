@@ -217,10 +217,28 @@ namespace Phoron.App
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Gagal menaikkan hak akses: " + ex.Message, "Phoron",
-                    MessageBoxButton.OK, MessageBoxImage.Error);
+                // Lazimnya UAC dibatalkan (Win32Exception 1223). Mutexnya sudah
+                // ditutup di atas, dan Phoron ini tetap berjalan - tanpa
+                // mengambilnya lagi, klik ikon berikutnya menyalakan Phoron
+                // KEDUA yang berebut port 80 dan 3306 dengan yang ini.
+                AmbilMutexLagi();
+                bool dibatalkan = ex is System.ComponentModel.Win32Exception
+                                  && ((System.ComponentModel.Win32Exception)ex).NativeErrorCode == 1223;
+                if (!dibatalkan)
+                    MessageBox.Show("Gagal menaikkan hak akses: " + ex.Message, "Phoron",
+                        MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
+        }
+
+        static void AmbilMutexLagi()
+        {
+            try
+            {
+                bool baru;
+                _single = ObjekAntarProses.BuatMutex("Phoron.SingleInstance", true, out baru);
+            }
+            catch { }
         }
     }
 }

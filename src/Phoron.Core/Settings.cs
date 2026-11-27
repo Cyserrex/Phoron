@@ -104,6 +104,11 @@ namespace Phoron.Core
         /// </summary>
         public string DbSandi = "";
 
+        // Bentuk tersandi dan terbuka dari sandi saat dimuat - lihat
+        // Rahasia.TutupUntukSimpan.
+        string _sandiTersandiSaatMuat = "";
+        string _sandiTerbukaSaatMuat = "";
+
         /// <summary>Dari mana setelan ini berasal - menentukan apakah aman ditimpa.</summary>
         public enum Sumber { Baru, Terbaca, Rusak, TidakTerbaca }
 
@@ -177,7 +182,9 @@ namespace Phoron.Core
             s.Editor = ini.Get("umum", "editor", "");
             s.DbPengguna = ini.Get("basisdata", "pengguna", "root");
             s.HeidiSql = ini.Get("basisdata", "heidisql", "");
-            s.DbSandi = Rahasia.Buka(ini.Get("basisdata", "sandi", ""));
+            s._sandiTersandiSaatMuat = ini.Get("basisdata", "sandi", "");
+            s.DbSandi = Rahasia.Buka(s._sandiTersandiSaatMuat);
+            s._sandiTerbukaSaatMuat = s.DbSandi;
             return s;
         }
 
@@ -256,7 +263,10 @@ namespace Phoron.Core
             ini.Set("basisdata", "pengguna", string.IsNullOrEmpty(DbPengguna) ? "root" : DbPengguna);
             ini.Set("basisdata", "heidisql", HeidiSql ?? "");
             // Tersandi, tidak pernah sebagai teks biasa - lihat Rahasia.
-            ini.Set("basisdata", "sandi", Rahasia.Tutup(DbSandi));
+            var sandiTersandi = Rahasia.TutupUntukSimpan(DbSandi, _sandiTersandiSaatMuat, _sandiTerbukaSaatMuat);
+            ini.Set("basisdata", "sandi", sandiTersandi);
+            _sandiTersandiSaatMuat = sandiTersandi;
+            _sandiTerbukaSaatMuat = DbSandi ?? "";
             ini.Save(Paths.SettingsFile,
                 "Setelan Phoron. Berkas ini juga jadi penanda akar instalasi -\njangan dipindah dari folder Phoron.");
         }
