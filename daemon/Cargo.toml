@@ -13,5 +13,15 @@ license = "MIT"
 opt-level = "s"
 lto = true
 codegen-units = 1
-panic = "abort"
+# unwind, bukan abort: phorond memegang layanan sepanjang hari, jadi panik
+# di satu perintah (bug Engine) harus menjadi Galat untuk perintah itu saja
+# (catch_unwind di pipa/baki), bukan menjatuhkan seluruh daemon dan
+# meninggalkan httpd/mysqld tanpa induk. Panik yang tidak tertangkap pun masih
+# bisa menempuh jalur keluar rapi. Biayanya tabel unwind dan landing pad:
+# phorond.exe release naik dari sekitar 400 KiB ke sekitar 850 KiB.
+panic = "unwind"
+# Di windows-msvc nama fungsi untuk backtrace hanya ada di PDB, bukan di exe,
+# jadi strip penuh tidak mengurangi apa pun yang bisa dipakai berkas crash;
+# backtrace-nya tetap menyebut modul dan alamat, dan utas + pesan panik yang
+# paling berguna tetap tertulis.
 strip = true

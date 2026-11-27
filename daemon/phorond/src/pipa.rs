@@ -9,12 +9,22 @@
 //! lain sampai klien mengirim sesuatu. Dengan OVERLAPPED masing-masing utas
 //! menunggu I/O-nya sendiri.
 //!
-//! Keamanan: deskriptor keamanan bawaan (argumen NULL) - hanya pengguna yang
-//! sama, SYSTEM, dan Administrators yang bisa membuka pipe; klien jarak jauh
-//! ditolak (`PIPE_REJECT_REMOTE_CLIENTS`).
+//! Keamanan: deskriptor eksplisit (`keamanan.rs`) - akses penuh hanya untuk
+//! SID pengguna saat ini, SYSTEM, dan Administrators, tanpa Everyone/anonymous,
+//! berlabel integritas Medium supaya UI berhak biasa tetap bisa menyambung ke
+//! daemon yang ber-Administrator. Klien jarak jauh ditolak
+//! (`PIPE_REJECT_REMOTE_CLIENTS`). Klien yang tidak mengirim `halo` dalam
+//! [`BATAS_HALO`] diputus, supaya tidak menahan dua utas tanpa batas.
+//!
+//! Panik di utas pipe tidak menjatuhkan daemon: panik di dalam Pelaksana
+//! menjadi `Galat::Gagal` (`pelaksana::tangani_aman`), panik di bagian lain
+//! utas klien hanya memutus klien itu, dan panik di utas penerima sambungan
+//! (tanpa utas itu daemon menjadi tuli) menempuh jalur keluar rapi.
 
+use crate::keamanan::{sa_atau_null, Deskriptor, Label};
 use crate::nama::lebar;
-use crate::pelaksana::Pelaksana;
+use crate::pelaksana::{aman, tangani_aman, Pelaksana};
+use crate::siklus::{self, Alasan};
 use crate::penyiar::{Keluaran, Penyiar, PANJANG_ANTREAN};
 use phoron_inti::protokol::{
     baris, urai, Galat, IsiJawaban, Jawaban, Perintah, Permintaan, Pesan, BATAS_BARIS, VERSI_PROTOKOL,
@@ -42,6 +52,8 @@ const PENYANGGA: u32 = 64 * 1024;
 /// Satu WriteFile yang tidak selesai selama ini berarti klien berhenti
 /// membaca; klien itu diputus supaya utas penulisnya tidak tertahan selamanya.
 const BATAS_TULIS: Duration = Duration::from_secs(5);
+/// Klien yang tersambung tapi belum mengirim `halo` selama ini diputus.
+pub(crate) const BATAS_HALO: Duration = Duration::from_secs(10);
 
 /// Satu ujung pipe milik server untuk satu klien.
 pub(crate) struct Pipa {
@@ -137,7 +149,7 @@ fn ov_baru(acara: &Acara) -> OVERLAPPED {
     ov
 }
 
-fn buat_instans(nama: &[u16], pertama: bool) -> Result<HANDLE, u32> {
+fn buat_instans(nama: &[u16], pertama: bool, d: &Option<Deskriptor>) -> Result<HANDLE, u32> {
     let mut mode = PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED;
     if pertama {
         // Bila pipe bernama sama sudah ada (milik proses lain), gagal di sini
@@ -153,7 +165,7 @@ fn buat_instans(nama: &[u16], pertama: bool) -> Result<HANDLE, u32> {
             PENYANGGA,
             PENYANGGA,
             0,
-            std::ptr::null(),
+            sa_atau_null(d),
         )
     };
     if h == INVALID_HANDLE_VALUE { Err(unsafe { GetLastError() }) } else { Ok(h) }
@@ -164,17 +176,24 @@ fn buat_instans(nama: &[u16], pertama: bool) -> Result<HANDLE, u32> {
 /// berjalan di utas latar sampai proses keluar.
 pub fn mulai(nama_pipe: &str, pelaksana: Arc<dyn Pelaksana>, penyiar: Penyiar) -> Result<(), u32> {
     let nama = lebar(nama_pipe);
-    let pertama = buat_instans(&nama, true)?;
+    let pertama = buat_instans(&nama, true, &Deskriptor::baru(Label::Sedang))?;
     let pertama = pertama as isize;
     std::thread::Builder::new()
         .name("pipa-terima".into())
-        .spawn(move || terima_terus(nama, pertama as HANDLE, pelaksana, penyiar))
+        .spawn(move || {
+            if aman(|| terima_terus(nama, pertama as HANDLE, pelaksana, penyiar)).is_none() {
+                // Tanpa utas ini tidak ada UI yang bisa menyambung lagi.
+                crate::baki::minta_keluar_karena(Alasan::Panik);
+            }
+        })
         .map_err(|_| 0u32)?;
     Ok(())
 }
 
 fn terima_terus(nama: Vec<u16>, mut h: HANDLE, pelaksana: Arc<dyn Pelaksana>, penyiar: Penyiar) {
     static NOMOR: AtomicU64 = AtomicU64::new(1);
+    // Deskriptor dibuat sekali; kernel menyalin isinya untuk tiap instans.
+    let deskriptor = Deskriptor::baru(Label::Sedang);
     let acara = match Acara::baru() {
         Some(a) => a,
         None => return,
@@ -196,7 +215,7 @@ fn terima_terus(nama: Vec<u16>, mut h: HANDLE, pelaksana: Arc<dyn Pelaksana>, pe
         }
         // Instans berikutnya. Bila gagal (sumber daya habis), coba lagi pelan.
         h = loop {
-            match buat_instans(&nama, false) {
+            match buat_instans(&nama, false, &deskriptor) {
                 Ok(b) => break b,
                 Err(_) => std::thread::sleep(Duration::from_secs(1)),
             }
@@ -210,14 +229,22 @@ fn layani(id: u64, pipa: Arc<Pipa>, pelaksana: Arc<dyn Pelaksana>, penyiar: Peny
     let ok_tulis = std::thread::Builder::new()
         .name(format!("pipa-tulis-{id}"))
         .stack_size(64 * 1024)
-        .spawn(move || utas_penulis(p_tulis, rx));
+        .spawn(move || {
+            let p = p_tulis.clone();
+            if aman(|| utas_penulis(p_tulis, rx)).is_none() {
+                p.putus();
+                p.tandai_penulis_selesai();
+            }
+        });
     if ok_tulis.is_err() {
         return;
     }
     let _ = std::thread::Builder::new()
         .name(format!("pipa-baca-{id}"))
         .spawn(move || {
-            utas_pembaca(id, &pipa, &tx, &*pelaksana, &penyiar);
+            if aman(|| utas_pembaca(id, &pipa, &tx, &*pelaksana, &penyiar)).is_none() {
+                pipa.putus();
+            }
             penyiar.lepas(id);
             // Penulis menuntaskan sisa antrean lalu berhenti saat semua
             // pengirim (tx di sini dan di Penyiar) sudah dilepas.
@@ -270,12 +297,24 @@ fn utas_pembaca(id: u64, pipa: &Arc<Pipa>, tx: &SyncSender<Keluaran>, pelaksana:
     // Posisi yang sudah diperiksa tidak berisi '\n'; baris panjang yang
     // datang sepotong-sepotong tidak dipindai ulang dari awal.
     let mut periksa_dari = 0usize;
+    let tenggat_halo = Instant::now() + BATAS_HALO;
     loop {
+        // Sebelum halo setiap baca dibatasi sisa tenggat; sesudahnya tanpa
+        // batas (UI boleh diam berjam-jam sambil menunggu kabar).
+        let batas = if keadaan.sudah_halo {
+            None
+        } else {
+            let sisa = tenggat_halo.saturating_duration_since(Instant::now());
+            if sisa.is_zero() {
+                return;
+            }
+            Some(sisa)
+        };
         let mut ov = ov_baru(&acara);
         let mulai = unsafe {
             ReadFile(pipa.h(), potong.as_mut_ptr(), potong.len() as u32, std::ptr::null_mut(), &mut ov)
         };
-        let n = match tuntaskan(pipa.h(), &mut ov, mulai, None) {
+        let n = match tuntaskan(pipa.h(), &mut ov, mulai, batas) {
             Ok(0) | Err(_) => return,
             Ok(n) => n as usize,
         };
@@ -357,7 +396,7 @@ fn proses_baris(
             Arah::Putus
         }
         Perintah::Halo { .. } => {
-            let isi = pelaksana.tangani(p.perintah);
+            let isi = tangani_aman(pelaksana, p.perintah);
             let berhasil = matches!(isi, IsiJawaban::Ok { .. });
             if !kirim(tx, p.id, isi) {
                 return Arah::Putus;
@@ -376,14 +415,34 @@ fn proses_baris(
             Arah::Putus
         }
         Perintah::Keluar => {
-            // Jawaban masuk antrean SEBELUM Pamit (antreannya sama), jadi UI
-            // menerima "ok" lalu "pamit", berurutan.
+            // Gerbang ditutup dulu: perintah yang datang sesudah klien ini
+            // menerima "ok" sudah pasti ditolak. Jawaban masuk antrean SEBELUM
+            // Pamit (antreannya sama), jadi UI menerima "ok" lalu "pamit".
+            siklus::tutup_gerbang(Alasan::Biasa);
             kirim(tx, p.id, IsiJawaban::Ok { hasil: serde_json::Value::Null, peringatan: Vec::new() });
             crate::baki::minta_keluar();
             Arah::Lanjut
         }
+        Perintah::MulaiUlangAdmin => {
+            if siklus::gerbang_tertutup() {
+                kirim(tx, p.id, gagal(siklus::PESAN_DITUTUP));
+                return Arah::Lanjut;
+            }
+            // Dialog UAC menahan utas klien ini saja sampai dijawab.
+            match crate::admin::mulai_ulang(pelaksana) {
+                Ok(()) => {
+                    siklus::tutup_gerbang(Alasan::MulaiUlang);
+                    kirim(tx, p.id, IsiJawaban::Ok { hasil: serde_json::Value::Null, peringatan: Vec::new() });
+                    crate::baki::minta_keluar_karena(Alasan::MulaiUlang);
+                }
+                Err(pesan) => {
+                    kirim(tx, p.id, IsiJawaban::Galat { galat: Galat::Gagal { pesan } });
+                }
+            }
+            Arah::Lanjut
+        }
         perintah => {
-            let isi = pelaksana.tangani(perintah);
+            let isi = tangani_aman(pelaksana, perintah);
             if kirim(tx, p.id, isi) { Arah::Lanjut } else { Arah::Putus }
         }
     }

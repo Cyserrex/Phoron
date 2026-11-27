@@ -7,10 +7,15 @@
 //! dimulai ulang dan ikonnya harus dipasang lagi. Jendela tingkat atas juga
 //! menerima `WM_ENDSESSION` (log off/matikan komputer) dan `WM_CLOSE`
 //! (`taskkill` tanpa `/f`), yang keduanya diarahkan ke jalur keluar rapi.
+//!
+//! Prosedur jendela membungkus isinya dengan `catch_unwind`: panik tidak boleh
+//! menyeberang ke DispatchMessageW (itu abort tanpa ampun). Panik di sana
+//! menempuh jalur keluar rapi dengan kode `KELUAR_PANIK`.
 
 use crate::nama::{lebar, Nama};
-use crate::pelaksana::{ItemMenu, Pelaksana};
+use crate::pelaksana::{aman, tangani_aman, ItemMenu, Pelaksana};
 use crate::penyiar::Penyiar;
+use crate::siklus::{self, Alasan};
 use phoron_inti::protokol::{Kabar, Perintah};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
@@ -34,6 +39,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 const WM_IKON: u32 = WM_APP + 1;
 /// Permintaan keluar dari utas lain (pipe, sinyal pemasang).
 const WM_KELUAR: u32 = WM_APP + 2;
+/// Hanya uji: buat utas utama panik di dalam prosedur jendela.
+const WM_UJI_PANIK: u32 = WM_APP + 3;
 
 const ID_IKON: u32 = 1;
 const ID_BUKA: usize = 1;
@@ -60,8 +67,14 @@ static SEDANG_KELUAR: AtomicBool = AtomicBool::new(false);
 static IKON_TERPASANG: AtomicBool = AtomicBool::new(false);
 
 /// Minta daemon keluar lewat jalur rapi. Aman dipanggil dari utas mana pun,
-/// juga sebelum jendela baki ada (permintaannya diingat).
+/// juga sebelum jendela baki ada (permintaannya diingat). Gerbang keluar
+/// langsung ditutup: perintah baru tidak sampai lagi ke Pelaksana.
 pub fn minta_keluar() {
+    minta_keluar_karena(Alasan::Biasa);
+}
+
+pub fn minta_keluar_karena(alasan: Alasan) {
+    siklus::tutup_gerbang(alasan);
     KELUAR_DIMINTA.store(true, Ordering::SeqCst);
     let h = JENDELA.load(Ordering::SeqCst);
     if h != 0 {
@@ -92,6 +105,26 @@ pub fn hapus_ikon() {
     d.hWnd = JENDELA.load(Ordering::SeqCst) as HWND;
     d.uID = ID_IKON;
     unsafe { Shell_NotifyIconW(NIM_DELETE, &d) };
+}
+
+/// Hanya uji (`PelaksanaUji`): minta utas utama panik di prosedur jendela.
+pub fn uji_panik_utama() {
+    let h = JENDELA.load(Ordering::SeqCst);
+    if h != 0 {
+        unsafe { PostMessageW(h as HWND, WM_UJI_PANIK, 0, 0) };
+    }
+}
+
+/// Dipakai `main` sesudah panik di utas utama di luar prosedur jendela:
+/// tempuh jalur keluar rapi bila baki sudah berjalan, lalu keluar dengan
+/// `KELUAR_PANIK`.
+pub fn keluar_sesudah_panik() -> ! {
+    siklus::tutup_gerbang(Alasan::Panik);
+    if BERSAMA.get().is_some() {
+        keluar_rapi();
+    }
+    hapus_ikon();
+    std::process::exit(siklus::KELUAR_PANIK);
 }
 
 fn bersama() -> &'static Bersama {
@@ -133,21 +166,30 @@ fn pasang_ikon(hwnd: HWND) {
 }
 
 /// Jalur keluar tunggal: menu Keluar, perintah `keluar`, sinyal pemasang,
-/// WM_CLOSE, dan akhir sesi Windows semuanya berakhir di sini.
-fn keluar_rapi() -> ! {
+/// WM_CLOSE, akhir sesi Windows, mulai ulang sebagai Administrator, dan panik
+/// di utas utama semuanya berakhir di sini. Tidak kembali, KECUALI bila jalur
+/// keluar sudah berjalan: itu terjadi bila `sebelum_keluar` memompa pesan
+/// (SendMessage lintas utas, COM STA, dialog) dan WM_KELUAR/WM_CLOSE yang
+/// masih antre di-dispatch lagi di utas utama. Pemanggil lalu cukup kembali
+/// ke loop pesan; jalur yang pertama yang akan mengakhiri proses.
+fn keluar_rapi() {
     if SEDANG_KELUAR.swap(true, Ordering::SeqCst) {
-        // Tidak terjadi di utas utama (dipanggil hanya dari wndproc), tapi
-        // jangan sampai dua jalur keluar berjalan bersamaan.
-        loop {
-            std::thread::park();
-        }
+        return;
     }
+    siklus::tutup_gerbang(Alasan::Biasa);
     let b = bersama();
-    b.pelaksana.sebelum_keluar();
-    b.penyiar.siar(&Kabar::Pamit);
+    if aman(|| b.pelaksana.sebelum_keluar()).is_none() {
+        siklus::tutup_gerbang(Alasan::Panik);
+    }
+    // Saat digantikan daemon ber-Administrator, UI tidak boleh menerima Pamit
+    // (UI ikut keluar karenanya); sambungan putus biasa membuatnya menyambung
+    // ulang ke daemon yang baru.
+    if !siklus::tanpa_pamit() {
+        b.penyiar.siar(&Kabar::Pamit);
+    }
     b.penyiar.tutup_semua(BATAS_PAMIT);
     hapus_ikon();
-    std::process::exit(0);
+    std::process::exit(siklus::kode_keluar());
 }
 
 fn tambah_butir(menu: HMENU, butir: &[ItemMenu], perintah: &mut Vec<Perintah>) {
@@ -198,7 +240,7 @@ fn tampilkan_menu(hwnd: HWND) {
         SetMenuDefaultItem(menu, ID_BUKA as u32, 0);
         AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null());
     }
-    let butir = b.pelaksana.menu_baki();
+    let butir = aman(|| b.pelaksana.menu_baki()).unwrap_or_default();
     if !butir.is_empty() {
         tambah_butir(menu, &butir, &mut perintah);
         unsafe { AppendMenuW(menu, MF_SEPARATOR, 0, std::ptr::null()) };
@@ -228,13 +270,15 @@ fn tampilkan_menu(hwnd: HWND) {
         0 => {}
         ID_BUKA => buka_ui(),
         ID_KELUAR => keluar_rapi(),
-        id if id >= ID_PELAKSANA => {
+        // Sesudah gerbang keluar ditutup butir menu diabaikan (menu bisa saja
+        // sedang terbuka saat sinyal keluar datang).
+        id if id >= ID_PELAKSANA && !siklus::gerbang_tertutup() => {
             if let Some(p) = perintah.get(id - ID_PELAKSANA).cloned() {
                 // Menyalakan layanan bisa makan detik; loop pesan (dan ikon
                 // baki) tidak boleh beku selama itu.
                 let pelaksana = b.pelaksana.clone();
                 let _ = std::thread::Builder::new().name("menu-baki".into()).spawn(move || {
-                    let _ = pelaksana.tangani(p);
+                    let _ = tangani_aman(&*pelaksana, p);
                 });
             }
         }
@@ -243,6 +287,24 @@ fn tampilkan_menu(hwnd: HWND) {
 }
 
 unsafe extern "system" fn prosedur(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    match std::panic::catch_unwind(|| prosedur_isi(hwnd, msg, wparam, lparam)) {
+        Ok(r) => r,
+        Err(_) => {
+            // Berkas crash sudah ditulis panic hook.
+            siklus::tutup_gerbang(Alasan::Panik);
+            if SEDANG_KELUAR.load(Ordering::SeqCst) {
+                // Panik DI DALAM jalur keluar (mis. saat menyiarkan Pamit):
+                // jalur itu tidak akan selesai lagi, jadi akhiri di sini.
+                hapus_ikon();
+                std::process::exit(siklus::KELUAR_PANIK);
+            }
+            keluar_rapi();
+            0
+        }
+    }
+}
+
+fn prosedur_isi(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_IKON => {
             match lparam as u32 {
@@ -252,21 +314,24 @@ unsafe extern "system" fn prosedur(hwnd: HWND, msg: u32, wparam: WPARAM, lparam:
             }
             0
         }
-        WM_KELUAR => keluar_rapi(),
-        WM_CLOSE => keluar_rapi(),
+        WM_KELUAR | WM_CLOSE => {
+            keluar_rapi();
+            0
+        }
         WM_ENDSESSION => {
             if wparam != 0 {
                 keluar_rapi();
             }
             0
         }
+        WM_UJI_PANIK if bersama().nama.uji() => panic!("panik uji di utas utama"),
         m if m != 0 && m == TASKBAR_CREATED.load(Ordering::SeqCst) => {
             // Explorer dimulai ulang: semua ikon baki lenyap bersamanya.
             IKON_TERPASANG.store(false, Ordering::SeqCst);
             pasang_ikon(hwnd);
             0
         }
-        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+        _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }
 
@@ -341,4 +406,5 @@ pub fn jalankan(b: Bersama, buka: bool) -> ! {
         }
     }
     keluar_rapi();
+    std::process::exit(siklus::kode_keluar());
 }

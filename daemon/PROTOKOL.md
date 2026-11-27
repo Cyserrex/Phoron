@@ -5,12 +5,17 @@ untuk sisi C#.
 
 ## Sambungan
 
-- Named pipe `\\.\pipe\phoron`, dua arah, mode byte. Hanya pengguna Windows
-  yang sama yang bisa membukanya (DACL bawaan pembuat pipe).
+- Named pipe `\\.\pipe\phoron`, dua arah, mode byte. Deskriptor keamanannya
+  eksplisit: akses penuh hanya untuk SID pengguna yang menjalankan daemon,
+  SYSTEM, dan Administrators (tanpa Everyone/anonymous), label integritas
+  Medium. Jadi UI tanpa hak admin tetap bisa menyambung ke daemon yang
+  ber-Administrator. Mutex `Phoron.Daemon` sama; sinyal
+  `Phoron.KeluarSekarang` berlabel Low (seperti UI WPF lama).
 - Satu pesan = satu baris JSON UTF-8 diakhiri `\n`. Baris > 4 MiB ditolak.
 - Satu daemon melayani banyak klien sekaligus (UI, menu baki tidak perlu pipe).
 - Pesan pertama klien WAJIB `halo`. Daemon menjawab `protokol_beda` bila
   versinya lain; UI lalu menampilkan pesan "Phoron perlu dipasang ulang".
+- Klien yang tersambung tapi belum mengirim `halo` dalam 10 detik diputus.
 - Pesan pertama selain `halo` dijawab `gagal` lalu sambungan diputus. Baris
   rusak SESUDAH `halo` dijawab `tidak_terbaca` (dengan `id` bila terbaca,
   selain itu `id` 0) dan sambungan tetap hidup.
@@ -20,7 +25,14 @@ untuk sisi C#.
   sinkron Windows menjalankan baca dan tulis satu per satu, jadi baca yang
   menunggu kabar akan menahan pengiriman permintaan.
 - Nama uji: env `PHORON_NAMA_UJI` atau `phorond --pipe-uji <akhiran>` memberi
-  akhiran pada pipe, mutex, dan sinyal keluar.
+  akhiran pada pipe, mutex, dan sinyal keluar. Env `PHORON_PIPE` (atau
+  `--pipe <nama>`) mengganti nama pipe utuh (tanpa `\\.\pipe\`); tanpa
+  akhiran eksplisit, nama itu juga menurunkan akhiran mutex dan sinyal
+  (`phoron-uji-x` -> `Phoron.Daemon-uji-x`), supaya daemon uji UI tidak
+  bertabrakan dengan Phoron yang sedang dipakai.
+- Perintah yang panik di dalam daemon dijawab `gagal` (kunci "Perintah {0}
+  gagal karena galat tak terduga di Phoron. ..." dengan nama perintahnya);
+  berkas `logs\crash-phorond-*.txt` ditulis dan daemon tetap hidup.
 
 ## UI -> daemon: Permintaan
 
@@ -39,7 +51,7 @@ kunci `data`.
 | `muat_ulang` | - | - |
 | `simpan_setelan` | `{setelan: Settings}` | - |
 | `ubah_setelan` | `{perubahan: {medan: nilai, ...}}` hanya medan yang diubah | - (dipakai UI; mencegah menimpa perubahan dari menu baki) |
-| `mulai_ulang_admin` | - | - (daemon baru ber-Administrator; layanan hidup dinyalakan lagi) |
+| `mulai_ulang_admin` | - | - (daemon baru ber-Administrator; layanan hidup dinyalakan lagi; lihat Siklus hidup). UAC dibatalkan = `gagal` "Hak Administrator tidak diberikan." |
 | `terapkan` | - | - (peringatan di `peringatan`) |
 | `ganti_profil` | `{file_name, restart}` | - |
 | `nyalakan_semua` / `matikan_semua` | - | - |
@@ -112,8 +124,32 @@ Bedakan jawaban dan kabar dari ada tidaknya kunci `id`.
 ## Siklus hidup
 
 - `phorond.exe` memegang ikon baki dan layanan; hidup sepanjang hari. Mutex
-  `Phoron.Daemon`; sinyal bernama `Phoron.KeluarSekarang` (dipakai pemasang)
-  membuatnya keluar dengan rapi.
+  `Phoron.Daemon`; event bernama `Phoron.KeluarSekarang` (AUTO-reset, sama
+  seperti UI WPF lama; dipakai pemasang) membuatnya keluar dengan rapi.
+- Dalam mode daemon UI TIDAK menunggu `Phoron.KeluarSekarang` (event
+  auto-reset hanya membangunkan satu penunggu). Daemon yang menunggunya; UI
+  ikut keluar karena menerima kabar `pamit`.
+- Jalur keluar tunggal (perintah `keluar`, menu Keluar, sinyal pemasang,
+  `taskkill` tanpa `/f` = WM_CLOSE, akhir sesi Windows, panik di utas utama):
+  gerbang ditutup -> `sebelum_keluar` (Engine mematikan layanan) -> kabar
+  `pamit` -> antrean klien dikuras (maks 2 detik) -> ikon baki dihapus ->
+  proses berakhir. Begitu gerbang ditutup, perintah baru (termasuk `halo`
+  dari sambungan baru) dijawab `gagal` "Phoron sedang ditutup." dan butir
+  menu baki diabaikan.
+- Kode keluar phorond: 0 rapi, 2 pipe tidak bisa dibuat, 101 sesudah panik
+  yang tidak tertangkap (tetap lewat jalur keluar rapi bila sempat).
+- `mulai_ulang_admin`: daemon menanyakan layanan yang hidup ke Engine, lalu
+  menjalankan phorond.exe yang sama lewat UAC (`runas`) dengan
+  `--baki --tunggu-pid <pid lama> --nyalakan <a|b|..>` (plus `--akar`,
+  `--pipe-uji`, `--pipe` bila dipakai; env tidak ikut ke proses yang
+  dinaikkan haknya). Berhasil: jawab ok, lalu jalur keluar TANPA `pamit`;
+  UI melihat sambungan putus biasa dan menyambung ulang. Daemon baru menunggu
+  proses lama berakhir (maks 30 detik) sebelum mengambil mutex, lalu
+  menyalakan lagi daftar itu sesudah pipenya siap.
+- `phorond.exe --sinkron-hosts [<akar>]`: pembantu ber-Administrator, padanan
+  `Phoron.exe --sinkron-hosts`. Menulis blok hosts semua situs lalu keluar
+  dengan kode 0 (berhasil), 2 (tidak berhak), 3 (galat). Tanpa mutex, baki,
+  maupun pipe.
 - `Phoron.exe` (WPF) hanya hidup saat jendela terbuka. Saat mulai: sambung ke
   pipe; bila tidak ada daemon, jalankan `phorond.exe` dari folder yang sama dan
   tunggu pipe-nya (maks 10 detik). Menutup jendela = UI keluar; daemon tetap.

@@ -12,9 +12,16 @@ use std::io::{Read, Write};
 use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
+use windows_sys::Win32::Foundation::{CloseHandle, LocalFree, HANDLE};
+use windows_sys::Win32::Security::Authorization::{
+    ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo, SDDL_REVISION_1, SE_KERNEL_OBJECT,
+};
+use windows_sys::Win32::Security::{DACL_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+use windows_sys::Win32::Storage::FileSystem::READ_CONTROL;
 use windows_sys::Win32::System::Pipes::PeekNamedPipe;
-use windows_sys::Win32::System::Threading::{OpenEventW, SetEvent, EVENT_MODIFY_STATE};
+use windows_sys::Win32::System::Threading::{OpenEventW, OpenMutexW, SetEvent, EVENT_MODIFY_STATE};
 
 const PROTOKOL: u32 = 2;
 /// Pamit menunggu utas utama daemon, yang bisa sesaat tertahan oleh
@@ -35,16 +42,56 @@ struct Daemon {
     akhiran: String,
 }
 
+/// Kunci teks galat dari daemon (salinan konstanta di phorond).
+const PESAN_DITUTUP: &str = "Phoron sedang ditutup.";
+
 impl Daemon {
     fn mulai(akhiran: &str) -> Daemon {
-        let akar = std::env::temp_dir().join(format!("phorond{akhiran}"));
+        Daemon::mulai_dengan(akhiran, &[], &[])
+    }
+
+    /// Daemon dengan PelaksanaUji (lihat pelaksana.rs) dan env tambahan.
+    fn mulai_uji(akhiran: &str, env: &[(&str, &str)], arg: &[&str]) -> Daemon {
+        let mut semua = vec![("PHORON_UJI_PELAKSANA", "1")];
+        semua.extend_from_slice(env);
+        Daemon::mulai_dengan(akhiran, &semua, arg)
+    }
+
+    /// Tiap daemon mendapat folder akar sendiri: Drop menghapusnya, dan daemon
+    /// kedua bernama sama tidak boleh menghapus akar milik yang pertama.
+    fn mulai_dengan(akhiran: &str, env: &[(&str, &str)], arg: &[&str]) -> Daemon {
+        static NOMOR: AtomicU32 = AtomicU32::new(0);
+        let n = NOMOR.fetch_add(1, Ordering::SeqCst);
+        let akar = std::env::temp_dir().join(format!("phorond{akhiran}-{n}"));
         let _ = std::fs::create_dir_all(&akar);
-        let anak = Command::new(env!("CARGO_BIN_EXE_phorond"))
-            .args(["--baki", "--pipe-uji", akhiran, "--akar"])
-            .arg(&akar)
-            .spawn()
-            .expect("phorond tidak bisa dijalankan");
+        let mut c = Command::new(env!("CARGO_BIN_EXE_phorond"));
+        c.args(["--baki", "--akar"]).arg(&akar).env_remove("PHORON_PIPE").env_remove("PHORON_NAMA_UJI");
+        // Tanpa PHORON_PIPE di env, akhiran selalu lewat --pipe-uji.
+        if !env.iter().any(|(k, _)| *k == "PHORON_PIPE") {
+            c.args(["--pipe-uji", akhiran]);
+        }
+        c.args(arg);
+        for (k, v) in env {
+            c.env(k, v);
+        }
+        let anak = c.spawn().expect("phorond tidak bisa dijalankan");
         Daemon { anak, akar, akhiran: akhiran.to_string() }
+    }
+
+    fn ada(&self, berkas: &str) -> bool {
+        self.akar.join(berkas).is_file()
+    }
+
+    /// Tunggu berkas penanda muncul; isinya.
+    fn tunggu_berkas(&self, berkas: &str, batas: Duration) -> Option<String> {
+        let sampai = Instant::now() + batas;
+        while Instant::now() < sampai {
+            if let Ok(s) = std::fs::read_to_string(self.akar.join(berkas)) {
+                return Some(s);
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        None
     }
 
     /// Tunggu proses berakhir; kode keluarnya, atau None bila melewati batas.
@@ -186,10 +233,14 @@ impl Klien {
     }
 
     fn halo(&mut self) {
-        let id = self.kirim("halo", Some(json!({"versi_ui": "uji", "protokol": PROTOKOL})));
-        let j = self.jawaban(id, &mut Vec::new());
+        let j = self.coba_halo();
         assert_eq!(j["status"], "ok", "{j}");
         assert_eq!(j["hasil"]["protokol"], PROTOKOL);
+    }
+
+    fn coba_halo(&mut self) -> Value {
+        let id = self.kirim("halo", Some(json!({"versi_ui": "uji", "protokol": PROTOKOL})));
+        self.jawaban(id, &mut Vec::new())
     }
 
     /// Tunggu sampai pipe putus (daemon menutup ujungnya).
@@ -325,7 +376,7 @@ fn halo_wajib_dan_protokol_beda_ditolak() {
 #[test]
 fn keluar_memamitkan_semua_klien_lalu_proses_berakhir() {
     let ak = akhiran("keluar");
-    let mut d = Daemon::mulai(&ak);
+    let mut d = Daemon::mulai_uji(&ak, &[], &[]);
     let mut a = Klien::sambung(&ak);
     let mut b = Klien::sambung(&ak);
     a.halo();
@@ -343,6 +394,7 @@ fn keluar_memamitkan_semua_klien_lalu_proses_berakhir() {
     assert_eq!(a.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
     assert_eq!(b.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
     assert_eq!(keluar, Some(0), "phorond tidak berhenti");
+    assert!(d.ada("sebelum_keluar.txt"), "sebelum_keluar tidak dipanggil");
 }
 
 #[test]
@@ -369,4 +421,219 @@ fn instans_tunggal_dan_sinyal_keluar_pemasang() {
     assert_eq!(a.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
     assert_eq!(d.tunggu_keluar(Duration::from_secs(10)), Some(0));
     eprintln!("sinyal keluar -> proses berakhir: {:?}", mulai.elapsed());
+}
+
+fn galat_gagal(j: &Value) -> String {
+    assert_eq!(j["status"], "galat", "{j}");
+    assert_eq!(j["galat"]["jenis"], "gagal", "{j}");
+    j["galat"]["pesan"]["kunci"].as_str().unwrap_or("").to_string()
+}
+
+#[test]
+fn panik_satu_perintah_jadi_galat_dan_daemon_tetap_hidup() {
+    let ak = akhiran("panik");
+    let d = Daemon::mulai_uji(&ak, &[], &[]);
+    let mut a = Klien::sambung(&ak);
+    a.halo();
+
+    let id = a.kirim("catat", Some(catat("uji:panik")));
+    let j = a.jawaban(id, &mut Vec::new());
+    let kunci = galat_gagal(&j);
+    assert!(kunci.contains("galat tak terduga"), "{j}");
+    assert_eq!(j["galat"]["pesan"]["args"][0], "catat");
+
+    // Daemon tetap menjawab, juga untuk klien baru.
+    let id = a.kirim("keadaan", None);
+    assert_eq!(a.jawaban(id, &mut Vec::new())["status"], "ok");
+    let mut b = Klien::sambung(&ak);
+    b.halo();
+
+    let logs = d.akar.join("logs");
+    let crash: Vec<_> = std::fs::read_dir(&logs)
+        .map(|r| r.filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("crash-phorond-")).collect())
+        .unwrap_or_default();
+    assert!(!crash.is_empty(), "berkas crash tidak ditulis di {}", logs.display());
+    let isi = std::fs::read_to_string(crash[0].path()).unwrap();
+    assert!(isi.contains("panik uji di tangani"), "{isi}");
+}
+
+#[test]
+fn panik_di_utas_utama_tetap_keluar_rapi() {
+    let ak = akhiran("panikutama");
+    let mut d = Daemon::mulai_uji(&ak, &[], &[]);
+    let mut a = Klien::sambung(&ak);
+    a.halo();
+    let id = a.kirim("catat", Some(catat("uji:panik-utama")));
+    let mut kabar = Vec::new();
+    assert_eq!(a.jawaban(id, &mut kabar)["status"], "ok");
+    let pamit = kabar.into_iter().chain(std::iter::from_fn(|| a.pesan(BATAS_PAMIT))).find(|v| v["kabar"] == "pamit");
+    assert!(pamit.is_some(), "pamit tidak datang sesudah panik utas utama");
+    assert_eq!(d.tunggu_keluar(Duration::from_secs(10)), Some(101));
+    assert!(d.ada("sebelum_keluar.txt"), "sebelum_keluar tidak dipanggil");
+}
+
+#[test]
+fn gerbang_keluar_menolak_perintah_dan_sambungan_baru() {
+    let ak = akhiran("gerbang");
+    // sebelum_keluar ditahan 2 detik supaya ada jendela waktu untuk menguji.
+    let mut d = Daemon::mulai_uji(&ak, &[("PHORON_UJI_TAHAN_KELUAR", "2000")], &[]);
+    let mut a = Klien::sambung(&ak);
+    let mut b = Klien::sambung(&ak);
+    a.halo();
+    b.halo();
+
+    let id = a.kirim("keluar", None);
+    assert_eq!(a.jawaban(id, &mut Vec::new())["status"], "ok");
+
+    let id = b.kirim("nyalakan_web", None);
+    assert_eq!(galat_gagal(&b.jawaban(id, &mut Vec::new())), PESAN_DITUTUP);
+
+    let mut c = Klien::sambung(&ak);
+    assert_eq!(galat_gagal(&c.coba_halo()), PESAN_DITUTUP);
+    assert!(c.tunggu_putus(Duration::from_secs(5)), "klien baru seharusnya diputus");
+
+    assert_eq!(a.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
+    assert_eq!(b.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
+    assert_eq!(d.tunggu_keluar(Duration::from_secs(10)), Some(0));
+    assert!(d.ada("sebelum_keluar.txt"));
+}
+
+#[test]
+fn klien_tanpa_halo_diputus_sesudah_10_detik() {
+    let ak = akhiran("diam");
+    let _d = Daemon::mulai(&ak);
+    let mulai = Instant::now();
+    let mut a = Klien::sambung(&ak);
+    let mut b = Klien::sambung(&ak);
+    b.halo();
+    assert!(a.tunggu_putus(Duration::from_secs(20)), "klien diam tidak diputus");
+    let lama = mulai.elapsed();
+    assert!(lama >= Duration::from_secs(9), "diputus terlalu cepat: {lama:?}");
+    // Klien yang sudah halo tidak terkena tenggat.
+    let id = b.kirim("keadaan", None);
+    assert_eq!(b.jawaban(id, &mut Vec::new())["status"], "ok");
+}
+
+#[test]
+fn tunggu_pid_lalu_nyalakan_awal() {
+    let ak = akhiran("tunggupid");
+    // Proses "daemon lama" tiruan: hidup sekitar 2 detik.
+    let mut lama = Command::new("ping").args(["-n", "3", "127.0.0.1"]).stdout(std::process::Stdio::null()).spawn().unwrap();
+    let pid = lama.id().to_string();
+    let mulai = Instant::now();
+    let d = Daemon::mulai_uji(&ak, &[], &["--tunggu-pid", &pid, "--nyalakan", "web|db"]);
+    let mut a = Klien::sambung(&ak);
+    let siap = mulai.elapsed();
+    assert!(lama.try_wait().unwrap().is_some(), "daemon tidak menunggu proses lama");
+    assert!(siap >= Duration::from_millis(1500), "pipe siap sebelum proses lama berakhir: {siap:?}");
+    a.halo();
+    assert_eq!(d.tunggu_berkas("nyalakan_awal.txt", Duration::from_secs(10)).as_deref(), Some("web|db"));
+    let _ = lama.wait();
+}
+
+#[test]
+fn pipe_dari_env_phoron_pipe() {
+    let ak = akhiran("envpipe");
+    let nama = format!("phoron{ak}");
+    let _d = Daemon::mulai_dengan(&ak, &[("PHORON_PIPE", &nama)], &[]);
+    let mut a = Klien::sambung(&ak);
+    a.halo();
+    // Mutex dan sinyal ikut berakhiran (Drop memakai sinyal Phoron.KeluarSekarang<ak>).
+    let m = unsafe { OpenMutexW(READ_CONTROL, 0, lebar(&format!("Phoron.Daemon{ak}")).as_ptr()) };
+    assert!(!m.is_null(), "mutex tidak berakhiran nama pipe");
+    unsafe { CloseHandle(m) };
+}
+
+fn baca_sddl(h: HANDLE) -> String {
+    let bagian = DACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
+    unsafe {
+        let mut psd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        let n = std::ptr::null_mut();
+        let acl = std::ptr::null_mut();
+        assert_eq!(GetSecurityInfo(h, SE_KERNEL_OBJECT, bagian, n, n, acl, acl, &mut psd), 0);
+        let mut teks: *mut u16 = std::ptr::null_mut();
+        let ok = ConvertSecurityDescriptorToStringSecurityDescriptorW(psd, SDDL_REVISION_1, bagian, &mut teks, std::ptr::null_mut());
+        LocalFree(psd);
+        assert!(ok != 0);
+        let mut len = 0;
+        while *teks.add(len) != 0 {
+            len += 1;
+        }
+        let s = String::from_utf16_lossy(std::slice::from_raw_parts(teks, len));
+        LocalFree(teks.cast());
+        s
+    }
+}
+
+/// DACL hanya berisi izin untuk SID pengguna, SYSTEM, dan Administrators.
+fn periksa_sddl(s: &str, label: &str) {
+    let i = s.find("S:").unwrap_or_else(|| panic!("tanpa label: {s}"));
+    let (dacl, sacl) = s.split_at(i);
+    assert!(dacl.starts_with("D:"), "{s}");
+    for ace in dacl.split('(').skip(1) {
+        let medan: Vec<&str> = ace.trim_end_matches(')').split(';').collect();
+        assert_eq!(medan[0], "A", "{s}");
+        let sid = *medan.last().unwrap();
+        assert!(sid == "SY" || sid == "BA" || sid.starts_with("S-1-5-21-") || sid.starts_with("S-1-12-"), "SID tak terduga {sid}: {s}");
+    }
+    assert!(!dacl.contains(";WD)") && !dacl.contains(";AN)"), "{s}");
+    assert!(sacl.contains(&format!("(ML;;NW;;;{label})")), "label bukan {label}: {s}");
+}
+
+#[test]
+fn pipe_mutex_dan_sinyal_berizin_eksplisit() {
+    let ak = akhiran("izin");
+    let _d = Daemon::mulai(&ak);
+    let a = Klien::sambung(&ak);
+    periksa_sddl(&baca_sddl(a.f.as_raw_handle() as HANDLE), "ME");
+
+    let m = unsafe { OpenMutexW(READ_CONTROL, 0, lebar(&format!("Phoron.Daemon{ak}")).as_ptr()) };
+    assert!(!m.is_null());
+    periksa_sddl(&baca_sddl(m), "ME");
+    unsafe { CloseHandle(m) };
+
+    let e = unsafe { OpenEventW(READ_CONTROL, 0, lebar(&format!("Phoron.KeluarSekarang{ak}")).as_ptr()) };
+    assert!(!e.is_null());
+    periksa_sddl(&baca_sddl(e), "LW");
+    unsafe { CloseHandle(e) };
+}
+
+#[test]
+fn wm_close_dari_taskkill_keluar_rapi() {
+    let ak = akhiran("taskkill");
+    let mut d = Daemon::mulai_uji(&ak, &[], &[]);
+    let mut a = Klien::sambung(&ak);
+    a.halo();
+    let st = Command::new("taskkill")
+        .args(["/PID", &d.anak.id().to_string()])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(st.success(), "taskkill tanpa /f gagal");
+    assert_eq!(a.pesan(BATAS_PAMIT).expect("pamit tidak datang")["kabar"], "pamit");
+    assert_eq!(d.tunggu_keluar(Duration::from_secs(10)), Some(0));
+    assert!(d.ada("sebelum_keluar.txt"));
+}
+
+#[test]
+fn sinkron_hosts_tanpa_admin_keluar_dengan_kode_tidak_berhak() {
+    if phoron_inti::tulis::is_admin() {
+        // Ber-Administrator, pembantu ini SUNGGUH menulis hosts sistem.
+        eprintln!("dilewati: uji berjalan sebagai Administrator");
+        return;
+    }
+    let akar = std::env::temp_dir().join(format!("phorond-sinkron-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&akar);
+    let mut anak = Command::new(env!("CARGO_BIN_EXE_phorond")).arg("--sinkron-hosts").arg(&akar).spawn().unwrap();
+    let sampai = Instant::now() + Duration::from_secs(10);
+    let kode = loop {
+        if let Some(s) = anak.try_wait().unwrap() {
+            break s.code();
+        }
+        assert!(Instant::now() < sampai, "--sinkron-hosts tidak berakhir");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let _ = std::fs::remove_dir_all(&akar);
+    assert_eq!(kode, Some(phoron_inti::hosts::KELUAR_TIDAK_BERHAK));
 }
