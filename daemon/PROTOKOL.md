@@ -11,6 +11,16 @@ untuk sisi C#.
 - Satu daemon melayani banyak klien sekaligus (UI, menu baki tidak perlu pipe).
 - Pesan pertama klien WAJIB `halo`. Daemon menjawab `protokol_beda` bila
   versinya lain; UI lalu menampilkan pesan "Phoron perlu dipasang ulang".
+- Pesan pertama selain `halo` dijawab `gagal` lalu sambungan diputus. Baris
+  rusak SESUDAH `halo` dijawab `tidak_terbaca` (dengan `id` bila terbaca,
+  selain itu `id` 0) dan sambungan tetap hidup.
+- Klien yang berhenti membaca (antrean kabar penuh, atau satu tulisan tidak
+  selesai dalam 5 detik) diputus; UI menyambung ulang lalu meminta `keadaan`.
+- Sisi C#: buka pipe dengan `PipeOptions.Asynchronous`. Pada pegangan
+  sinkron Windows menjalankan baca dan tulis satu per satu, jadi baca yang
+  menunggu kabar akan menahan pengiriman permintaan.
+- Nama uji: env `PHORON_NAMA_UJI` atau `phorond --pipe-uji <akhiran>` memberi
+  akhiran pada pipe, mutex, dan sinyal keluar.
 
 ## UI -> daemon: Permintaan
 
