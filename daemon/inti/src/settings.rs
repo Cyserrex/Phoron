@@ -60,8 +60,9 @@ pub struct Settings {
     pub editor: String,
     pub db_pengguna: String,
     pub heidi_sql: String,
-    /// Sandi MySQL dalam bentuk terbuka. Di phoron.ini selalu tersandi.
-    #[serde(skip)]
+    /// Sandi MySQL dalam bentuk terbuka. Di phoron.ini selalu tersandi. Ikut
+    /// dikirim lewat pipe: pipe hanya bisa dibuka pengguna yang sama.
+    #[serde(default)]
     pub db_sandi: String,
 
     #[serde(skip)]

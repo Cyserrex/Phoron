@@ -14,12 +14,12 @@
 //! (kunci teks Indonesia + argumen), UI yang memanggil `Lang.T` - sama seperti
 //! sekarang, jadi kamus terjemahan tetap satu dan tetap di C#.
 
-use crate::model::{BinPackage, Profile, ServiceState};
+use crate::model::ServiceState;
 use crate::settings::Settings;
 use serde::{Deserialize, Serialize};
 
 /// Naik setiap kali bentuk pesan berubah tanpa kompatibilitas mundur.
-pub const VERSI_PROTOKOL: u32 = 1;
+pub const VERSI_PROTOKOL: u32 = 2;
 
 pub const NAMA_PIPE: &str = r"\\.\pipe\phoron";
 
@@ -51,21 +51,34 @@ pub struct Permintaan {
     pub perintah: Perintah,
 }
 
-/// Perintah UI ke daemon. Daftar ini tumbuh mengikuti tahap port; yang belum
-/// diterapkan daemon dijawab `Galat::BelumAda`, bukan diam.
+/// Perintah UI ke daemon (protokol v2).
+///
+/// Pembagian kerja: UI tetap MEMBACA berkas sendiri (profil, paket, situs,
+/// apps.ini) karena isinya identik antara versi C# dan Rust. Yang dikirim ke
+/// daemon hanya AKSI - menyalakan, mematikan, menulis config, menjalankan Node -
+/// dan penulisan phoron.ini: daemon satu-satunya penulis berkas itu, supaya
+/// dua proses tidak saling menimpa setelan. Profil dan apps.ini boleh ditulis
+/// UI; sesudahnya UI mengirim `MuatUlang`.
+///
+/// Perintah yang belum diterapkan dijawab `Galat::BelumAda`, bukan diam.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "perintah", content = "data", rename_all = "snake_case")]
 pub enum Perintah {
     /// Jabat tangan pertama: UI menyebut versinya, daemon menolak bila
-    /// protokolnya tidak sepadan.
+    /// protokolnya tidak sepadan. Hasil: `HasilHalo`.
     Halo { versi_ui: String, protokol: u32 },
-    /// Keadaan lengkap untuk mengisi layar.
+    /// Keadaan lengkap untuk mengisi layar. Hasil: `Keadaan`.
     Keadaan,
-    Setelan,
+    /// Baca ulang phoron.ini, profil, apps.ini, dan pindai ulang bin/situs
+    /// (Engine.Reload). Dikirim UI sesudah menulis profil/apps.ini.
+    MuatUlang,
+    /// Simpan setelan global; daemon menulis phoron.ini lalu memuat ulang.
     SimpanSetelan { setelan: Settings },
-    DaftarProfil,
-    SimpanProfil { profil: Profile },
-    HapusProfil { file_name: String },
+    /// Tulis ulang semua config profil aktif (Engine.Apply). Peringatan ikut
+    /// di `peringatan` jawaban.
+    Terapkan,
+    /// Pindah profil (Engine.SwitchAsync); `restart` = nyalakan ulang layanan
+    /// yang sedang hidup.
     GantiProfil { file_name: String, restart: bool },
     NyalakanSemua,
     MatikanSemua,
@@ -73,7 +86,24 @@ pub enum Perintah {
     MatikanWeb,
     NyalakanDb,
     MatikanDb,
-    /// Daemon ikut berhenti: semua layanan dimatikan dengan rapi.
+    /// Jalankan proyek Node terdaftar; `port_sekali` > 0 = port untuk sekali
+    /// jalan ini saja ("Jalankan di port N"). Hasil: URL awal bila sudah ada.
+    JalankanNode { path: String, port_sekali: u16 },
+    HentikanNode { path: String },
+    HentikanSemuaNode,
+    /// Riwayat keluaran satu proyek Node. Hasil: daftar baris.
+    RiwayatNode { path: String },
+    /// Riwayat log Aktivitas. Hasil: daftar `BarisLogJarak`.
+    RiwayatLog,
+    /// Proses lain yang memegang port profil. Hasil: daftar `port::Usage`.
+    SisaProses,
+    /// Hentikan proses lain itu. Peringatan berisi yang tidak bisa dihentikan.
+    HentikanSisa,
+    /// Catat situs PHP yang baru dibuka (untuk "situs terakhir").
+    CatatSitusDibuka { path: String },
+    /// Tulis log Aktivitas dari UI (Engine.Say di sisi UI).
+    Catat { pesan: Pesan },
+    /// Daemon ikut berhenti: semua layanan dimatikan dengan rapi, lalu Kabar::Pamit.
     Keluar,
 }
 
@@ -128,15 +158,42 @@ pub struct StatusLayanan {
     pub galat_db: Option<Pesan>,
 }
 
+/// Satu baris log Aktivitas; `waktu` dalam format "o" UTC.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BarisLogJarak {
+    pub waktu: String,
+    pub pesan: Pesan,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StatusNode {
+    pub path: String,
+    pub berjalan: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Port yang bentrok pada jalan terakhir (untuk tawaran "Jalankan di port N").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port_bentrok: Option<u16>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Keadaan {
     pub status: StatusLayanan,
-    pub profil_aktif: Option<Profile>,
-    pub profil: Vec<Profile>,
-    pub paket: Vec<BinPackage>,
+    /// file_name profil aktif; kosong bila belum ada profil.
+    pub profil_aktif: String,
+    pub node: Vec<StatusNode>,
+    /// Config web/db di cakram lebih baru daripada yang dipakai layanan yang
+    /// sedang hidup: tampilkan tanda "perlu dinyalakan ulang".
+    pub perlu_restart_web: bool,
+    pub perlu_restart_db: bool,
+    /// Peringatan penerapan config terakhir (Engine.LastBuild).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub peringatan_terapkan: Vec<Pesan>,
     /// Keluhan saat memuat (berkas cacat, profil dilewati).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub masalah_muat: Vec<Pesan>,
+    /// Hak Administrator daemon (hosts dan sertifikat butuh ini).
+    pub admin: bool,
 }
 
 /// Kabar daemon ke semua klien, tanpa diminta.
@@ -144,11 +201,15 @@ pub struct Keadaan {
 #[serde(tag = "kabar", content = "data", rename_all = "snake_case")]
 pub enum Kabar {
     Status(StatusLayanan),
-    /// Satu baris log Aktivitas; `waktu` dalam format "o" UTC.
-    Log { waktu: String, pesan: Pesan },
-    /// Profil atau setelan berubah dari klien lain/menu baki: muat ulang.
+    Log(BarisLogJarak),
+    /// Proyek Node mulai/berhenti.
+    Node(StatusNode),
+    /// Satu baris keluaran proyek Node.
+    NodeKeluaran { path: String, baris: String },
+    /// Setelan, profil, atau paket berubah (dari klien lain, menu baki, atau
+    /// sesudah MuatUlang/GantiProfil): UI membaca ulang berkasnya.
     PerluMuatUlang,
-    /// Daemon akan berhenti; UI sebaiknya ikut keluar.
+    /// Daemon akan berhenti; UI ikut keluar.
     Pamit,
 }
 
@@ -200,10 +261,10 @@ mod uji {
         });
         assert!(matches!(urai::<DariDaemon>(&j).unwrap(), DariDaemon::Jawaban(_)));
 
-        let k = baris(&Kabar::Log {
+        let k = baris(&Kabar::Log(BarisLogJarak {
             waktu: "2026-11-27T07:50:29.0000000Z".into(),
             pesan: Pesan::dengan("Menghentikan {0}", &["httpd"]),
-        });
+        }));
         assert!(matches!(urai::<DariDaemon>(&k).unwrap(), DariDaemon::Kabar(_)));
     }
 
