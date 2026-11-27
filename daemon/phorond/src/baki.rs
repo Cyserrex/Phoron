@@ -192,7 +192,25 @@ fn keluar_rapi() {
     std::process::exit(siklus::kode_keluar());
 }
 
-fn tambah_butir(menu: HMENU, butir: &[ItemMenu], perintah: &mut Vec<Perintah>) {
+/// Yang dijalankan saat sebuah butir menu dipilih.
+#[derive(Clone)]
+enum Aksi {
+    Perintah(Perintah),
+    Buka(String),
+}
+
+/// Buka alamat/folder dengan aplikasi bawaan Windows.
+fn buka_target(target: &str) {
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let op = lebar("open");
+    let t = lebar(target);
+    unsafe {
+        ShellExecuteW(std::ptr::null_mut(), op.as_ptr(), t.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL);
+    }
+}
+
+fn tambah_butir(menu: HMENU, butir: &[ItemMenu], perintah: &mut Vec<Aksi>) {
     for b in butir {
         match b {
             ItemMenu::Pemisah => unsafe {
@@ -207,9 +225,15 @@ fn tambah_butir(menu: HMENU, butir: &[ItemMenu], perintah: &mut Vec<Perintah>) {
                     f |= MF_CHECKED;
                 }
                 let id = ID_PELAKSANA + perintah.len();
-                perintah.push(p.clone());
+                perintah.push(Aksi::Perintah(p.clone()));
                 let w = lebar(teks);
                 unsafe { AppendMenuW(menu, f, id, w.as_ptr()) };
+            }
+            ItemMenu::Buka { teks, target } => {
+                let id = ID_PELAKSANA + perintah.len();
+                perintah.push(Aksi::Buka(target.clone()));
+                let w = lebar(teks);
+                unsafe { AppendMenuW(menu, MF_STRING, id, w.as_ptr()) };
             }
             ItemMenu::Sub { teks, isi } => {
                 let sub = unsafe { CreatePopupMenu() };
@@ -233,8 +257,8 @@ fn tampilkan_menu(hwnd: HWND) {
         return;
     }
     let mut perintah = Vec::new();
-    let buka = lebar("Buka Phoron");
-    let keluar = lebar("Keluar");
+    let buka = lebar(&aman(|| b.pelaksana.teks("Buka Phoron")).unwrap_or_else(|| "Buka Phoron".into()));
+    let keluar = lebar(&aman(|| b.pelaksana.teks("Keluar")).unwrap_or_else(|| "Keluar".into()));
     unsafe {
         AppendMenuW(menu, MF_STRING, ID_BUKA, buka.as_ptr());
         SetMenuDefaultItem(menu, ID_BUKA as u32, 0);
@@ -273,13 +297,17 @@ fn tampilkan_menu(hwnd: HWND) {
         // Sesudah gerbang keluar ditutup butir menu diabaikan (menu bisa saja
         // sedang terbuka saat sinyal keluar datang).
         id if id >= ID_PELAKSANA && !siklus::gerbang_tertutup() => {
-            if let Some(p) = perintah.get(id - ID_PELAKSANA).cloned() {
-                // Menyalakan layanan bisa makan detik; loop pesan (dan ikon
-                // baki) tidak boleh beku selama itu.
-                let pelaksana = b.pelaksana.clone();
-                let _ = std::thread::Builder::new().name("menu-baki".into()).spawn(move || {
-                    let _ = tangani_aman(&*pelaksana, p);
-                });
+            match perintah.get(id - ID_PELAKSANA).cloned() {
+                Some(Aksi::Perintah(p)) => {
+                    // Menyalakan layanan bisa makan detik; loop pesan (dan ikon
+                    // baki) tidak boleh beku selama itu.
+                    let pelaksana = b.pelaksana.clone();
+                    let _ = std::thread::Builder::new().name("menu-baki".into()).spawn(move || {
+                        let _ = tangani_aman(&*pelaksana, p);
+                    });
+                }
+                Some(Aksi::Buka(t)) => buka_target(&t),
+                None => {}
             }
         }
         _ => {}

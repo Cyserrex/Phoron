@@ -61,6 +61,9 @@ pub enum ItemMenu {
     Pemisah,
     /// Sub-menu, mis. daftar proyek Node atau ganti profil.
     Sub { teks: String, isi: Vec<ItemMenu> },
+    /// Buka alamat atau folder dengan aplikasi bawaan Windows (ShellExecute
+    /// "open"): situs di browser, folder proyek di Explorer.
+    Buka { teks: String, target: String },
 }
 
 impl ItemMenu {
@@ -88,6 +91,12 @@ pub trait Pelaksana: Send + Sync + 'static {
     /// rapi, tulis log. Dipanggil sekali, di utas utama, sebelum
     /// `Kabar::Pamit` disiarkan dan ikon baki dihapus.
     fn sebelum_keluar(&self) {}
+
+    /// Teks menu bawaan daemon ("Buka Phoron", "Keluar") dalam bahasa
+    /// antarmuka pengguna. `kunci` = teks Indonesia.
+    fn teks(&self, kunci: &str) -> String {
+        kunci.to_string()
+    }
 
     /// Layanan yang sedang hidup, untuk dinyalakan lagi oleh daemon pengganti
     /// ber-Administrator (`MulaiUlangAdmin`). Bentuk tiap butir bebas milik

@@ -1298,6 +1298,37 @@ impl Engine {
         Ok(())
     }
 
+    /// Ubah HANYA medan setelan yang disebut, di atas setelan terkini.
+    ///
+    /// Inilah jalan UI menyimpan setelan. Mengirim salinan utuh berarti salinan
+    /// UI yang basi menimpa perubahan dari menu baki atau klien lain - mis.
+    /// menyimpan tema mengembalikan profil aktif ke profil lama. Baca-ubah-tulis
+    /// terjadi di bawah satu kunci tulis, jadi dua ubahan yang berpapasan tidak
+    /// saling menghapus. Medan yang tidak dikenal ditolak, bukan diabaikan:
+    /// salah eja nama kunci di UI harus ketahuan, bukan hilang diam-diam.
+    pub fn ubah_setelan(&self, perubahan: serde_json::Map<String, serde_json::Value>) -> Result<(), Pesan> {
+        {
+            let mut d = self.tulis();
+            let mut v = serde_json::to_value(&d.settings)
+                .map_err(|e| Pesan::dengan("Setelan tidak sah: {0}", &[&e.to_string()]))?;
+            let Some(obj) = v.as_object_mut() else {
+                return Err(Pesan::dengan("Setelan tidak sah: {0}", &["bukan objek"]));
+            };
+            for (k, nilai) in perubahan {
+                if !obj.contains_key(&k) {
+                    return Err(Pesan::dengan("Setelan {0} tidak dikenal.", &[&k]));
+                }
+                obj.insert(k, nilai);
+            }
+            let baru: Settings = serde_json::from_value(v)
+                .map_err(|e| Pesan::dengan("Setelan tidak sah: {0}", &[&e.to_string()]))?;
+            salin_setelan(&mut d.settings, baru);
+            d.settings.save().map_err(|e| galat_io("Setelan tidak bisa disimpan: {0}", &e))?;
+        }
+        self.muat_ulang();
+        Ok(())
+    }
+
     /// Keadaan lengkap untuk layar.
     pub fn keadaan(&self) -> Keadaan {
         let (profil_aktif, peringatan_terapkan, masalah_muat) = {
@@ -1364,6 +1395,11 @@ pub fn tangani(e: &Engine, perintah: Perintah) -> IsiJawaban {
             kosong()
         }
         Perintah::SimpanSetelan { setelan } => selesai(e.simpan_setelan(setelan)),
+        Perintah::UbahSetelan { perubahan } => selesai(e.ubah_setelan(perubahan)),
+        // Ditangani phorond sendiri (menjalankan ulang dirinya lewat UAC).
+        Perintah::MulaiUlangAdmin => {
+            IsiJawaban::Galat { galat: Galat::BelumAda { perintah: "mulai_ulang_admin".into() } }
+        }
         Perintah::Terapkan => match e.terapkan() {
             Ok(w) => ok(serde_json::Value::Null, w),
             Err(p) => gagal(p),
