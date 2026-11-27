@@ -65,7 +65,7 @@ daemon/
 | C | `HostsFile`, `HostsTool`, `SslTool`, `HstsPeriksa` | hosts, sertifikat | |
 | D | `ProcessJob`, `ServiceManager` (1.114) | start/stop, Job Object | |
 | D | `NodeRunner`, `Engine` (1.062), `LogFile`, `Crash` | orkestrasi, log | |
-| D | `phorond`: pipe server, baki, sinyal keluar, mutex | daemon | |
+| D | `phorond`: pipe server, baki, sinyal keluar, mutex | daemon (`phorond/`, Engine dipasang lewat trait `Pelaksana`) | kerangka selesai |
 | E | UI WPF jadi klien pipe | `Engine` diganti proxy | |
 | E | `Updater`, `Downloader`, `MySqlKlien`, `MySqlSkema` | sisa | |
 

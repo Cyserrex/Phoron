@@ -1,5 +1,5 @@
 [workspace]
-members = ["inti"]
+members = ["inti", "phorond"]
 resolver = "2"
 
 [workspace.package]
