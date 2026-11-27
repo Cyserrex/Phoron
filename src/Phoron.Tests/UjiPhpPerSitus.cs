@@ -61,6 +61,9 @@ namespace Phoron.Tests
             Directory.CreateDirectory(dirB);
             var situsA = new Site { Folder = "lama", Path = dirA, Root = www, HostName = "lama.test" };
             var situsB = new Site { Folder = "baru", Path = dirB, Root = www, HostName = "baru.test" };
+            var dirSpasi = Path.Combine(www, "my project");
+            Directory.CreateDirectory(dirSpasi);
+            var situsSpasi = new Site { Folder = "my project", Path = dirSpasi, Root = www, HostName = "my-project.test" };
 
             var profil = new Profile
             {
@@ -180,12 +183,16 @@ namespace Phoron.Tests
                                                 new ConfigWriter.Kolam
                                                 {
                                                     Php = ts, Ekstensi = new List<string> { "mbstring" },
-                                                    Situs = new List<Site> { situsB },
+                                                    Situs = new List<Site> { situsB, situsSpasi },
                                                 },
                                             });
                 var isiN = File.ReadAllText(rn.NginxConf);
+                // Folder berspasi tanpa kutip memberi location dua argumen, dan
+                // nginx -t menolak SELURUH berkas - web server tidak menyala.
+                Ok("Nginx: jalur situs berspasi dikutip",
+                   isiN.Contains("location ^~ \"/my project/\""), "location tanpa kutip untuk /my project/");
                 Ok("Nginx: situs lewat jalur diarahkan ke kolamnya",
-                   isiN.Contains("location ^~ /baru/") && isiN.Contains("fastcgi_pass   127.0.0.1:" + (rn.FastCgiPort + 1) + ";"),
+                   isiN.Contains("location ^~ \"/baru/\"") && isiN.Contains("fastcgi_pass   127.0.0.1:" + (rn.FastCgiPort + 1) + ";"),
                    "tidak ada location untuk /baru/");
                 var ujiN = Shell.Run(nginx.MainExe, "-t -c \"" + rn.NginxConf + "\" -p \"" + nginx.Path + "\"",
                                      nginx.Path, 30000);

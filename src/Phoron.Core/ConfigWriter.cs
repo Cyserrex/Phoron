@@ -1246,6 +1246,16 @@ namespace Phoron.Core
         }
 
         /// <summary>
+        /// Isi string berkutip ganda di konfigurasi nginx: garis miring terbalik
+        /// dan kutip ganda diloloskan, sisanya - spasi, ;, {, $ - aman di dalam
+        /// kutip.
+        /// </summary>
+        public static string KutipNginx(string teks)
+        {
+            return (teks ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"");
+        }
+
+        /// <summary>
         /// Ukuran ember hash nama server: pangkat dua terkecil yang memuat nama
         /// terpanjang berikut ruang lebih untuk keperluan dalam nginx sendiri.
         /// Dimulai dari 64, bukan 32, karena 32 adalah nilai baku yang justru
@@ -1345,7 +1355,12 @@ namespace Phoron.Core
                 {
                     if (!string.Equals((s.Root ?? "").TrimEnd('\\'), (akarUtama ?? "").TrimEnd('\\'),
                                        StringComparison.OrdinalIgnoreCase)) continue;
-                    sb.AppendLine("        location ^~ /" + s.Folder + "/ {   # PHP " + k.Php.Version);
+                    // URI dikutip: folder "my project" tanpa kutip memberi
+                    // location dua argumen, nginx -t menolak SELURUH berkas, dan
+                    // web server tidak menyala sama sekali - bukan hanya situs itu.
+                    // nginx mencocokkan URI yang sudah didekode, jadi "/my project/"
+                    // memang cocok dengan permintaan /my%20project/.
+                    sb.AppendLine("        location ^~ \"/" + KutipNginx(s.Folder) + "/\" {   # PHP " + k.Php.Version);
                     sb.AppendLine("            location ~ \\.php$ {");
                     sb.AppendLine("                fastcgi_pass   127.0.0.1:" + k.Port + ";");
                     sb.AppendLine("                fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;");
