@@ -24,6 +24,7 @@ namespace Phoron.Core.Jarak
                 { "minimize_to_tray", s.MinimizeToTray },
                 { "auto_vhost", s.AutoVhost },
                 { "opcache", s.Opcache },
+                { "akses_jaringan", s.AksesJaringan },
                 { "manage_hosts", s.ManageHosts },
                 { "php_ini_ke_folder_php", s.PhpIniKeFolderPhp },
                 { "log_rinci", s.LogRinci },

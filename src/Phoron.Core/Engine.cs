@@ -599,7 +599,7 @@ namespace Phoron.Core
                                            Settings.AutoVhost ? Sites : new List<Site>(),
                                            Settings.PhpIniKeFolderPhp, Settings.LogRinci,
                                            Settings.BerandaDiAkar, Settings.Opcache,
-                                           SusunKolam());
+                                           SusunKolam(), Settings.AksesJaringan);
             // Masalah folder proyek disampaikan bersama peringatan konfigurasi -
             // kalau tidak, satu folder yang salah ketik hanya berwujud situs yang
             // hilang dari daftar tanpa sebab yang terlihat.

@@ -2095,7 +2095,7 @@ namespace Phoron.Tests
                 var isi = File.ReadAllText(hasil.HttpdConf);
                 Ok(apache.Id + ": ServerRoot menunjuk paket yang dipilih",
                     isi.Contains(Paths.Fwd(apache.Path)));
-                Ok(apache.Id + ": port profil dipakai", isi.Contains("Listen 8080"));
+                Ok(apache.Id + ": port profil dipakai, hanya di 127.0.0.1", isi.Contains("Listen 127.0.0.1:8080"));
                 Ok(apache.Id + ": tidak ada Include ke luar milik pengelola lain",
                     !isi.Contains("C:/laragon/etc") && !isi.Contains("C:\\laragon\\etc"));
 

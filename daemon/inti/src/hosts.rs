@@ -664,7 +664,7 @@ mod uji {
     }
 
     /// Sandbox + berkas hosts sementara. JANGAN PERNAH hosts sistem.
-    fn siapkan(nama: &str) -> (std::sync::MutexGuard<'static, ()>, PathBuf, PathBuf) {
+    fn siapkan(nama: &str) -> (paths::FolderUji, PathBuf, PathBuf) {
         let (g, d) = paths::sandbox_uji(nama);
         let h = d.join("hosts");
         paths::set_hosts_file(Some(h.clone()));

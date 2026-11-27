@@ -152,7 +152,7 @@ namespace Phoron.Core.Jarak
         /// <summary>Isi "hasil": kamus, larik, teks, angka, atau null.</summary>
         public object Hasil;
         public List<Pesan> Peringatan = new List<Pesan>();
-        /// <summary>belum_ada, protokol_beda, tidak_terbaca, gagal; null bila Ok.</summary>
+        /// <summary>belum_ada, protokol_beda, tidak_terbaca, gagal, perlu_admin; null bila Ok.</summary>
         public string JenisGalat;
         public IDictionary<string, object> Galat;
 
@@ -177,6 +177,7 @@ namespace Phoron.Core.Jarak
             switch (JenisGalat)
             {
                 case "gagal":
+                case "perlu_admin":
                     var p = Pesan.Dari(Protokol.Ambil(Galat, "pesan"));
                     return p != null ? p.Teks() : Lang.T("Daemon Phoron menolak perintah ini.");
                 case "belum_ada":

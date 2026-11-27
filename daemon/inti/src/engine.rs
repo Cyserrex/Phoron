@@ -679,6 +679,7 @@ fn salin_setelan(ke: &mut Settings, dari: Settings) {
     ke.minimize_to_tray = dari.minimize_to_tray;
     ke.auto_vhost = dari.auto_vhost;
     ke.opcache = dari.opcache;
+    ke.akses_jaringan = dari.akses_jaringan;
     ke.manage_hosts = dari.manage_hosts;
     ke.php_ini_ke_folder_php = dari.php_ini_ke_folder_php;
     ke.log_rinci = dari.log_rinci;
@@ -976,6 +977,7 @@ impl Engine {
             log_akses: settings.log_rinci,
             beranda_di_akar: settings.beranda_di_akar,
             opcache: settings.opcache,
+            akses_jaringan: settings.akses_jaringan,
         };
         let situs_vhost: &[Site] = if settings.auto_vhost { &sites } else { &[] };
         let mut hasil = config::build(
@@ -1507,6 +1509,68 @@ impl Engine {
         }
     }
 
+    // ------------------------------------------- hosts dan sertifikat
+    //
+    // Dulu dikerjakan jendela sendiri. Dalam mode daemon yang dinaikkan ke
+    // Administrator adalah DAEMON, jadi selama penulisnya jendela, tombol
+    // "Pulihkan"/"Percayai" tetap gagal sesudah orang menekan "Jalankan
+    // sebagai Administrator".
+
+    /// Kembalikan hosts dari cadangan bernama `nama` di folder cadangan.
+    pub fn pulihkan_hosts(&self, nama: &str) -> Result<(), Galat> {
+        let Some(c) = hosts::daftar_cadangan().into_iter().find(|c| sama_abaikan_besar(&c.nama(), nama)) else {
+            return Err(Galat::Gagal { pesan: hosts::GalatHosts::CadanganTidakAda.pesan() });
+        };
+        hosts::pulihkan(&c.path).map_err(galat_hosts)
+    }
+
+    pub fn bersihkan_hosts(&self) -> Result<(), Galat> {
+        hosts::clear().map(drop).map_err(galat_hosts)
+    }
+
+    pub fn daftarkan_hosts(&self) -> Result<Vec<String>, Galat> {
+        hosts::daftarkan_semua().map_err(galat_hosts)
+    }
+
+    /// Buat (ulang) sertifikat untuk akhiran profil aktif; CA yang masih
+    /// mencakup akhiran itu dipakai lagi.
+    pub fn buat_sertifikat(&self) -> Result<(), Galat> {
+        let (packages, profiles, active) = {
+            let d = self.baca();
+            (d.packages.clone(), d.profiles.clone(), d.active.clone())
+        };
+        let apache = active.as_ref().and_then(|p| PaketProfil::dari(&packages, p).apache);
+        let Some(apache) = apache else {
+            return Err(Galat::Gagal { pesan: Pesan::baru("Butuh paket Apache (openssl.exe ada di dalamnya).") });
+        };
+        let suffix = active.as_ref().map(|p| p.site_suffix.as_str()).unwrap_or("test");
+        let lain: Vec<&str> = profiles.iter().map(|x| x.site_suffix.as_str()).collect();
+        {
+            // Terapkan juga bisa membuat sertifikat (pastikan_sertifikat).
+            let _g = kunci(&self.inti.kunci_terapkan);
+            ssl::generate(Some(&apache), suffix, &lain).map_err(|pesan| Galat::Gagal { pesan })?;
+        }
+        self.say(Pesan::baru("Sertifikat SSL dibuat di etc\\ssl."));
+        Ok(())
+    }
+
+    pub fn percayai_sertifikat(&self) -> Result<(), Galat> {
+        if ssl::exists() && !tulis::is_admin() {
+            return Err(Galat::PerluAdmin {
+                pesan: Pesan::baru("Memasang sertifikat ke Trusted Root butuh hak Administrator."),
+            });
+        }
+        ssl::trust().map_err(|pesan| Galat::Gagal { pesan })
+    }
+}
+
+fn galat_hosts(g: hosts::GalatHosts) -> Galat {
+    match g {
+        hosts::GalatHosts::TidakBerhak => {
+            Galat::PerluAdmin { pesan: Pesan::baru("Menyunting berkas hosts butuh hak Administrator.") }
+        }
+        lain => Galat::Gagal { pesan: lain.pesan() },
+    }
 }
 
 // ------------------------------------------------------------ protokol
@@ -1599,6 +1663,18 @@ pub fn tangani(e: &Engine, perintah: Perintah) -> IsiJawaban {
             e.say(pesan);
             kosong()
         }
+        Perintah::PulihkanHosts { nama } => jawab(e.pulihkan_hosts(&nama).map(|()| serde_json::Value::Null)),
+        Perintah::BersihkanHosts => jawab(e.bersihkan_hosts().map(|()| serde_json::Value::Null)),
+        Perintah::DaftarkanHosts => jawab(e.daftarkan_hosts().map(json)),
+        Perintah::BuatSertifikat => jawab(e.buat_sertifikat().map(|()| serde_json::Value::Null)),
+        Perintah::PercayaiSertifikat => jawab(e.percayai_sertifikat().map(|()| serde_json::Value::Null)),
+    }
+}
+
+fn jawab(r: Result<serde_json::Value, Galat>) -> IsiJawaban {
+    match r {
+        Ok(hasil) => ok(hasil, Vec::new()),
+        Err(galat) => IsiJawaban::Galat { galat },
     }
 }
 

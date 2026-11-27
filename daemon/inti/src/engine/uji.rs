@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 /// Sandbox dengan berkas hosts sendiri: Terapkan menyunting hosts bila
 /// "kelola hosts" menyala, dan berkas sistem tidak boleh tersentuh.
-fn sandbox(nama: &str) -> (MutexGuard<'static, ()>, PathBuf) {
+fn sandbox(nama: &str) -> (paths::FolderUji, PathBuf) {
     let (g, d) = paths::sandbox_uji(nama);
     fs::write(d.join("hosts"), "").unwrap();
     paths::set_hosts_file(Some(d.join("hosts")));
@@ -267,6 +267,36 @@ fn galat_hosts_dibungkus() {
     let p = pesan_galat_hosts(&hosts::GalatHosts::BarisHilang { jumlah: 3, contoh: "1.2.3.4 x".into() });
     assert!(config::teks(&p).starts_with("Gagal menyunting hosts: Penulisan berkas hosts dibatalkan: 3 baris"));
     assert_eq!(p.args, ["3", "1.2.3.4 x"]);
+}
+
+/// Pulihkan hanya menerima NAMA cadangan di folder cadangan: daemon bisa
+/// ber-Administrator, jadi jalur sembarang dari klien tidak boleh berakhir
+/// sebagai isi berkas hosts.
+#[test]
+fn hosts_lewat_daemon() {
+    let (_g, d) = sandbox("hosts-aksi");
+    setelan(&d, "");
+    let (e, _) = rekam();
+
+    let luar = d.join("luar.bak");
+    fs::write(&luar, "1.2.3.4 jahat\r\n").unwrap();
+    for nama in [luar.display().to_string(), "..\\luar.bak".into(), "".into()] {
+        assert!(matches!(e.pulihkan_hosts(&nama), Err(Galat::Gagal { .. })), "{nama}");
+    }
+    assert_eq!(fs::read_to_string(d.join("hosts")).unwrap(), "");
+
+    fs::write(hosts::folder_cadangan().join("hosts-20260101-000000.bak"), "127.0.0.1 asli\r\n").unwrap();
+    e.pulihkan_hosts("HOSTS-20260101-000000.bak").unwrap();
+    assert_eq!(fs::read_to_string(d.join("hosts")).unwrap(), "127.0.0.1 asli\r\n");
+
+    hosts::sync(["situs.test"]).unwrap();
+    assert!(fs::read_to_string(d.join("hosts")).unwrap().contains("situs.test"));
+    e.bersihkan_hosts().unwrap();
+    let isi = fs::read_to_string(d.join("hosts")).unwrap();
+    assert!(!isi.contains("situs.test") && isi.contains("127.0.0.1 asli"), "{isi}");
+
+    let j = serde_json::to_value(galat_hosts(hosts::GalatHosts::TidakBerhak)).unwrap();
+    assert_eq!(j["jenis"], "perlu_admin");
 }
 
 /// Teks halaman sambutan dari Engine.cs, diurai dari literal string C#-nya.

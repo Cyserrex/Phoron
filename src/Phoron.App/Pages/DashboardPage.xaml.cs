@@ -864,13 +864,10 @@ namespace Phoron.App.Pages
                 && !AppState.Ask(Lang.T("Sertifikat sudah ada dan CA-nya sudah tepercaya. Buat ulang sertifikat situs? CA yang sama dipakai lagi, jadi tidak perlu dipercayai ulang.")))
                 return;
 
-            var apache = _e.Apache;
-            if (apache == null) { AppState.Warn(Lang.T("Butuh paket Apache (openssl.exe ada di dalamnya).")); return; }
-            var err = SslTool.Generate(apache, _e.Active != null ? _e.Active.SiteSuffix : "test",
-                                      _e.Profiles.Select(x => x.SiteSuffix));
-            if (err != null) { AppState.Warn(err); return; }
+            // Lewat Engine: dalam mode daemon sertifikatnya dibuat daemon.
+            var h = _e.BuatSertifikat();
+            if (!h.Ok) { AppState.Warn(h.Galat); return; }
             _e.Apply();
-            _e.Say("Sertifikat SSL dibuat di etc\\ssl.");
             RefreshState();
             if (!SslTool.IsTrusted) PercayaiSertifikat();
         }
@@ -879,13 +876,13 @@ namespace Phoron.App.Pages
         {
             if (!AppState.Ask(Lang.T("Pasang CA Phoron ke Trusted Root Windows supaya browser tidak memberi peringatan?"))) return;
 
-            var t = SslTool.Trust();
-            if (t != null && t.Contains("Administrator"))
+            var h = _e.PercayaiSertifikat();
+            if (h.PerluAdmin)
             {
                 Program.RestartAsAdmin(Lang.T("Memasang sertifikat ke Trusted Root butuh hak Administrator."));
                 return;
             }
-            if (t != null) { AppState.Warn(t); return; }
+            if (!h.Ok) { AppState.Warn(h.Galat); return; }
 
             RefreshState();
             // Firefox punya daftar sertifikat sendiri dan tidak selalu ikut

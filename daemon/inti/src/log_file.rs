@@ -113,16 +113,13 @@ mod uji {
 
     /// Folder sementara sendiri; log tidak memakai akar Phoron jadi tidak
     /// perlu kunci sandbox.
-    fn folder(nama: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("phoron-rs-log-{}-{}", nama, std::process::id()));
-        let _ = fs::remove_dir_all(&d);
-        fs::create_dir_all(&d).unwrap();
-        d
+    fn folder(nama: &str) -> (crate::paths::FolderUji, PathBuf) {
+        crate::paths::folder_uji(&format!("log-{nama}"))
     }
 
     #[test]
     fn baris_diakhiri_crlf_utf8_tanpa_bom() {
-        let d = folder("format");
+        let (_f, d) = folder("format");
         let f = d.join("phoron.log");
         tambah(&f, "satu");
         tambah(&f, "Ünik ✓");
@@ -134,7 +131,7 @@ mod uji {
 
     #[test]
     fn berputar_saat_batas_tercapai() {
-        let d = folder("putar");
+        let (_f, d) = folder("putar");
         let f = d.join("phoron.log");
         // Satu byte di bawah batas: baris berikut masih masuk berkas yang sama.
         fs::write(&f, vec![b'a'; BATAS_BYTES as usize - 1]).unwrap();
@@ -149,7 +146,7 @@ mod uji {
 
     #[test]
     fn yang_tertua_dibuang() {
-        let d = folder("tertua");
+        let (_f, d) = folder("tertua");
         let f = d.join("x.log");
         fs::write(&f, "kini").unwrap();
         fs::write(ke(&f, 1), "satu").unwrap();
@@ -171,7 +168,7 @@ mod uji {
 
     #[test]
     fn banyak_utas_tidak_kehilangan_baris() {
-        let d = folder("utas");
+        let (_f, d) = folder("utas");
         let f = d.join("phoron.log");
         let utas: Vec<_> = (0..8)
             .map(|u| {
@@ -195,7 +192,7 @@ mod uji {
     #[test]
     fn menulis_saat_berkas_dibuka_pembaca() {
         use std::os::windows::fs::OpenOptionsExt;
-        let d = folder("pembaca");
+        let (_f, d) = folder("pembaca");
         let f = d.join("phoron.log");
         tambah(&f, "a");
         // Pembaca seperti halaman Log C#: FileShare.ReadWrite.
@@ -208,7 +205,7 @@ mod uji {
     #[test]
     fn rotasi_gagal_tetap_menulis() {
         use std::os::windows::fs::OpenOptionsExt;
-        let d = folder("gagal");
+        let (_f, d) = folder("gagal");
         let f = d.join("phoron.log");
         fs::write(&f, vec![b'a'; BATAS_BYTES as usize]).unwrap();
         // Pembaca tanpa izin hapus: berkas tidak bisa digeser.

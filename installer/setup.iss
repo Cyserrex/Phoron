@@ -177,6 +177,11 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
     Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
+; Upgrade di atas Phoron yang sedang hidup: daemonnya dihentikan di
+; PrepareToInstall, jadi dinyalakan lagi ke baki - juga pada pemasangan senyap,
+; yang melewati kotak "Jalankan sekarang" di bawah. Tanpa ini ikon baki hilang
+; sampai login berikutnya. runasoriginaluser: bukan sebagai Administrator.
+Filename: "{app}\phorond.exe"; Parameters: "--baki"; Flags: nowait runasoriginaluser; Check: PhoronTadinyaHidup
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:JalankanSekarang}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
@@ -536,6 +541,15 @@ function CloseHandle(hObject: LongWord): Boolean; external 'CloseHandle@kernel32
 const
   EVENT_MODIFY_STATE = $0002;
 
+var
+  { Phoron (jendela atau daemon) hidup saat pemasangan dimulai. }
+  TadinyaHidup: Boolean;
+
+function PhoronTadinyaHidup(): Boolean;
+begin
+  Result := TadinyaHidup;
+end;
+
 /// Tunggu sampai Phoron benar-benar berakhir, paling lama detik yang diminta.
 function TungguPhoronBerakhir(detik: Integer): Boolean;
 var
@@ -705,6 +719,7 @@ begin
 
   if CheckForMutexes('Phoron.SingleInstance,Phoron.Daemon') then
   begin
+    TadinyaHidup := True;
     port := PortPhoronTerpakai();
     if port = '' then
       port := CustomMessage('TanpaPort') + #13#10

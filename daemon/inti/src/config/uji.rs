@@ -69,7 +69,7 @@ fn httpd_conf_dari_bawaan_vendor() {
     let r = build(&profil(&d), Some(&php), Some(&ap), None, None, &[], &Opsi::default(), Vec::new()).unwrap();
     let h = isi(r.httpd_conf.as_ref().unwrap());
     let srv = fwd(&ap.path);
-    assert!(h.contains(&format!("Define SRVROOT \"{srv}\"\r\nServerRoot \"{srv}\"\r\nListen 80\r\n")));
+    assert!(h.contains(&format!("Define SRVROOT \"{srv}\"\r\nServerRoot \"{srv}\"\r\nListen 127.0.0.1:80\r\n")));
     assert_eq!(h.matches("\nListen ").count(), 1, "Listen hanya sekali");
     assert!(!h.contains("C:/laragon"), "Include mutlak dibuang");
     assert!(h.contains("IncludeOptional conf/extra/*.conf"), "Include relatif dipertahankan");
@@ -132,20 +132,26 @@ fn log_vendor_tidak_tersalin() {
     let _ = fs::remove_dir_all(&d);
 }
 
-/// Uji yang menyalakan server mendengarkan hanya di 127.0.0.1; bentuk asli
-/// tetap port saja (setara dengan C#).
+/// Bawaan: web server hanya di 127.0.0.1. "Bisa diakses dari jaringan"
+/// membukanya ke semua antarmuka - kecuali di uji yang menyalakan server
+/// sungguhan. MySQL selalu lokal.
 #[test]
-fn dengar_lokal_hanya_untuk_uji() {
+fn dengar_lokal_kecuali_akses_jaringan() {
     let (_g, d) = paths::sandbox_uji("cfg-dengar");
     fs::create_dir_all(d.join("www")).unwrap();
     let ap = apache_palsu(&d.join("bin"), "2.4.54", CONF);
     let m = BinPackage::baru(BinKind::MySql, "mysql-8", &jalur(&d.join(r"bin\mysql-8")), "8.0.30");
     let p = Profile { http_port: 8085, mysql_port: 3309, mysql_id: m.id.clone(), ..profil(&d) };
+    let my = "[mysqld]\r\nport=3309\r\nbind-address=127.0.0.1\r\n";
     build(&p, None, Some(&ap), Some(&m), None, &[], &Opsi::default(), Vec::new()).unwrap();
+    assert!(isi(&paths::etc_apache().join("httpd.conf")).contains("\r\nListen 127.0.0.1:8085\r\n"));
+    assert!(isi(&paths::etc_mysql().join("my.ini")).contains(my));
+    let jaringan = Opsi { akses_jaringan: true, ..Opsi::default() };
+    build(&p, None, Some(&ap), Some(&m), None, &[], &jaringan, Vec::new()).unwrap();
     assert!(isi(&paths::etc_apache().join("httpd.conf")).contains("\r\nListen 8085\r\n"));
-    assert!(!isi(&paths::etc_mysql().join("my.ini")).contains("bind-address"));
+    assert!(isi(&paths::etc_mysql().join("my.ini")).contains(my), "MySQL tetap lokal");
     uji_dengar_lokal(true);
-    build(&p, None, Some(&ap), Some(&m), None, &[], &Opsi::default(), Vec::new()).unwrap();
+    build(&p, None, Some(&ap), Some(&m), None, &[], &jaringan, Vec::new()).unwrap();
     uji_dengar_lokal(false);
     assert!(isi(&paths::etc_apache().join("httpd.conf")).contains("\r\nListen 127.0.0.1:8085\r\n"));
     assert!(isi(&paths::etc_mysql().join("my.ini")).contains("[mysqld]\r\nport=3309\r\nbind-address=127.0.0.1\r\n"));
@@ -226,7 +232,7 @@ fn ssl_dan_vhost() {
     berkas(&ssl::key_path(), "x");
     let r = build(&profil(&d), None, Some(&ap), None, None, &s, &Opsi::default(), Vec::new()).unwrap();
     assert!(r.ssl_enabled);
-    assert!(isi(&paths::etc_apache().join("ssl.conf")).contains("    Listen 443"));
+    assert!(isi(&paths::etc_apache().join("ssl.conf")).contains("    Listen 127.0.0.1:443"));
     let v = isi(&paths::sites_enabled().join("auto.blog.test.conf"));
     assert!(v.contains("<VirtualHost *:80>") && !v.contains("SSLEngine"));
     assert!(!paths::sites_enabled().join("auto.lama.test.conf").exists(), "vhost basi dihapus");

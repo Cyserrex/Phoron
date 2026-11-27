@@ -76,6 +76,10 @@
                                  Content="{loc:T 'Tampilkan beranda Phoron di http://localhost/'}"/>
                 <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
                            Text="{loc:T 'Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri.'}"/>
+                <ui:ToggleSwitch x:Name="SwJaringan" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Bisa dibuka dari perangkat lain di jaringan'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                           Text="{loc:T 'Mati: Apache dan Nginx hanya melayani komputer ini (127.0.0.1), jadi situs tidak terbuka bagi orang lain di Wi-Fi yang sama dan Windows Firewall tidak bertanya. Nyalakan untuk mencoba situs dari HP lewat alamat IP komputer ini; Windows Firewall akan meminta izin sekali. MySQL selalu hanya untuk komputer ini. Berlaku sesudah web server dinyalakan ulang.'}"/>
                 </StackPanel>
             </Border>
 

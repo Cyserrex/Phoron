@@ -34,7 +34,7 @@ namespace Phoron.Tests
             public string Nama;
             public Profile Profil;
             public string Php = "", Apache = "", Nginx = "", MySql = "";
-            public bool KeFolderPhp, LogAkses = true, Beranda = true, Opcache = true;
+            public bool KeFolderPhp, LogAkses = true, Beranda = true, Opcache = true, Jaringan;
             public int Ulang = 1;
             public List<KolamUji> Kolam = new List<KolamUji>();
             public Action<string, string> Siapkan;   // (masuk, kerja)
@@ -192,7 +192,7 @@ namespace Phoron.Tests
             // 2. Apache + PHP 5 tanpa daftar ekstensi (diambil alih), sakelar dimatikan, tanpa MySQL.
             if (php5 != null && apacheUntuk(php5) != null)
             {
-                var k = new Kasus { Nama = "apache-php5", Php = Kunci(php5), Apache = Kunci(apacheUntuk(php5)), LogAkses = false, Beranda = false, Opcache = false };
+                var k = new Kasus { Nama = "apache-php5", Php = Kunci(php5), Apache = Kunci(apacheUntuk(php5)), LogAkses = false, Beranda = false, Opcache = false, Jaringan = true };
                 k.Siapkan = (masuk, kerja) => { Proyek(masuk); k.Profil = ProfilBaru("PHP 5 lama", kerja); };
                 daftar.Add(k);
             }
@@ -233,7 +233,7 @@ namespace Phoron.Tests
 
             // 5. Nginx palsu tanpa fastcgi_params, tanpa PHP, log akses mati.
             {
-                var k = new Kasus { Nama = "nginx-palsu", LogAkses = false };
+                var k = new Kasus { Nama = "nginx-palsu", LogAkses = false, Jaringan = true };
                 k.Siapkan = (masuk, kerja) =>
                 {
                     Proyek(masuk);
@@ -358,7 +358,7 @@ namespace Phoron.Tests
             kasusTxt.AppendLine("apache=" + k.Apache);
             kasusTxt.AppendLine("nginx=" + k.Nginx);
             kasusTxt.AppendLine("mysql=" + k.MySql);
-            kasusTxt.AppendLine("opsi=" + (k.KeFolderPhp ? 1 : 0) + (k.LogAkses ? 1 : 0) + (k.Beranda ? 1 : 0) + (k.Opcache ? 1 : 0));
+            kasusTxt.AppendLine("opsi=" + (k.KeFolderPhp ? 1 : 0) + (k.LogAkses ? 1 : 0) + (k.Beranda ? 1 : 0) + (k.Opcache ? 1 : 0) + (k.Jaringan ? 1 : 0));
             kasusTxt.AppendLine("ulang=" + k.Ulang);
             foreach (var x in k.Kolam)
                 kasusTxt.AppendLine("kolam=" + x.Php + "|" + x.Ekstensi + "|" + x.Timpa + "|" + x.Situs);
@@ -394,7 +394,7 @@ namespace Phoron.Tests
                     kolam.Add(kl);
                 }
                 r = ConfigWriter.Build(profil, Paket_(k.Php), Paket_(k.Apache), Paket_(k.MySql), Paket_(k.Nginx), sites,
-                                       k.KeFolderPhp, k.LogAkses, k.Beranda, k.Opcache, kolam);
+                                       k.KeFolderPhp, k.LogAkses, k.Beranda, k.Opcache, kolam, k.Jaringan);
             }
             File.WriteAllLines(Path.Combine(_akar, "hasil-cs-" + k.Nama + ".txt"), Hasil(r), new UTF8Encoding(false));
             Directory.CreateDirectory(Path.Combine(_akar, "csharp"));

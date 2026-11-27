@@ -152,11 +152,14 @@ pub struct Opsi {
     /// Beranda Phoron di http://localhost/.
     pub beranda_di_akar: bool,
     pub opcache: bool,
+    /// "Bisa diakses dari jaringan": Apache/Nginx mendengarkan di semua
+    /// antarmuka. Mati = hanya 127.0.0.1 (tanpa dialog Windows Firewall).
+    pub akses_jaringan: bool,
 }
 
 impl Default for Opsi {
     fn default() -> Self {
-        Opsi { php_ini_ke_folder_php: false, log_akses: true, beranda_di_akar: true, opcache: true }
+        Opsi { php_ini_ke_folder_php: false, log_akses: true, beranda_di_akar: true, opcache: true, akses_jaringan: false }
     }
 }
 
@@ -381,9 +384,10 @@ fn dengar_lokal() -> bool {
     false
 }
 
-/// Alamat Listen/listen untuk sebuah port.
-fn dengar(port: i32) -> String {
-    if dengar_lokal() { format!("127.0.0.1:{port}") } else { port.to_string() }
+/// Alamat Listen/listen untuk sebuah port: semua antarmuka hanya bila
+/// "Bisa diakses dari jaringan" menyala.
+fn dengar(jaringan: bool, port: i32) -> String {
+    if jaringan && !dengar_lokal() { port.to_string() } else { format!("127.0.0.1:{port}") }
 }
 
 /// `^;?\s*(zend_)?extension\s*=` tanpa peka besar-kecil.
@@ -510,7 +514,7 @@ fn write_apache(
         }
         if awal(t, "Listen ") {
             if !listen {
-                sb.baris(&format!("Listen {}", dengar(profile.http_port)));
+                sb.baris(&format!("Listen {}", dengar(opsi.akses_jaringan, profile.http_port)));
                 listen = true;
             }
             continue;
@@ -532,7 +536,7 @@ fn write_apache(
         sb.baris(line);
     }
     if !listen {
-        sb.baris(&format!("Listen {}", dengar(profile.http_port)));
+        sb.baris(&format!("Listen {}", dengar(opsi.akses_jaringan, profile.http_port)));
     }
 
     sb.kosong();
@@ -590,7 +594,7 @@ fn write_apache(
     write_if_changed(&conf, &sb.0)?;
 
     write_mod_php(apache, php, r)?;
-    write_ssl_conf(profile, r)?;
+    write_ssl_conf(profile, r, opsi.akses_jaringan)?;
     write_vhosts(profile, sites, opsi.beranda_di_akar)?;
     Ok(Some(conf))
 }
@@ -788,7 +792,7 @@ const KETERANGAN_FASTCGI: &[&str] = &[
     "# menjawab \"No input file specified\".",
 ];
 
-fn write_ssl_conf(profile: &Profile, r: &mut Hasil) -> io::Result<()> {
+fn write_ssl_conf(profile: &Profile, r: &mut Hasil, jaringan: bool) -> io::Result<()> {
     let crt = ssl::crt_path();
     let key = ssl::key_path();
     let mut sb = Teks::default();
@@ -796,7 +800,7 @@ fn write_ssl_conf(profile: &Profile, r: &mut Hasil) -> io::Result<()> {
     sb.baris("<IfModule ssl_module>");
     if crt.is_file() && key.is_file() {
         r.ssl_enabled = true;
-        sb.baris(&format!("    Listen {}", dengar(profile.https_port)));
+        sb.baris(&format!("    Listen {}", dengar(jaringan, profile.https_port)));
         sb.baris("    SSLCipherSuite HIGH:MEDIUM:!MD5:!RC4:!3DES");
         sb.baris("    SSLProtocol all -SSLv3");
         sb.baris(&format!("    SSLSessionCache \"shmcb:{}(512000)\"", fwd_p(&paths::tmp().join("ssl_scache"))));
@@ -1261,9 +1265,10 @@ pub fn write_my_ini(profile: &Profile, mysql: &BinPackage) -> io::Result<PathBuf
     sb.kosong();
     sb.baris("[mysqld]");
     sb.baris(&format!("port={}", profile.mysql_port));
-    if dengar_lokal() {
-        sb.baris("bind-address=127.0.0.1");
-    }
+    // Selalu lokal, apa pun "Bisa diakses dari jaringan": untuk mencoba situs
+    // dari HP cukup web server-nya, sedangkan MySQL pengembangan lazimnya
+    // root tanpa sandi - terbuka ke seisi Wi-Fi bukan bawaan yang pantas.
+    sb.baris("bind-address=127.0.0.1");
     sb.baris(&format!("basedir=\"{}\"", fwd(&mysql.path)));
     sb.baris(&format!("datadir=\"{}\"", fwd(&data_dir)));
     sb.baris(&format!("tmpdir=\"{}\"", fwd_p(&paths::tmp())));
@@ -1483,8 +1488,9 @@ fn write_nginx(
     sb.baris(&format!("    proxy_temp_path \"{}\";", fwd_p(&tmp.join("nginx-proxy"))));
     sb.baris(&format!("    fastcgi_temp_path \"{}\";", fwd_p(&tmp.join("nginx-fcgi"))));
     let lokasi = lokasi_kolam_nginx(r, &akar, &params);
+    let listen = dengar(opsi.akses_jaringan, profile.http_port);
     sb.0.push_str(&nginx_server(
-        profile.http_port,
+        &listen,
         "localhost",
         &doc_root,
         r.fastcgi_port,
@@ -1495,7 +1501,7 @@ fn write_nginx(
     for s in sites {
         let p = port_kolam(r, s);
         let port = if p > 0 { p } else { r.fastcgi_port };
-        sb.0.push_str(&nginx_server(profile.http_port, &s.host_name, &fwd(doc_root_situs(s)), port, &params, false, ""));
+        sb.0.push_str(&nginx_server(&listen, &s.host_name, &fwd(doc_root_situs(s)), port, &params, false, ""));
     }
     sb.baris("}");
     let path = dir.join("nginx.conf");
@@ -1525,7 +1531,7 @@ fn lokasi_kolam_nginx(r: &Hasil, akar_utama: &str, params: &str) -> String {
 }
 
 fn nginx_server(
-    port: i32,
+    listen: &str,
     name: &str,
     root: &str,
     fcgi_port: i32,
@@ -1535,7 +1541,7 @@ fn nginx_server(
 ) -> String {
     let mut sb = Teks::default();
     sb.baris("    server {");
-    sb.baris(&format!("        listen       {};", dengar(port)));
+    sb.baris(&format!("        listen       {listen};"));
     sb.baris(&format!("        server_name  {name};"));
     sb.baris(&format!("        root         \"{root}\";"));
     sb.baris("        index        index.php index.html index.htm;");

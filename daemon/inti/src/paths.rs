@@ -120,14 +120,39 @@ pub fn set_hosts_file(p: Option<PathBuf>) {
 #[cfg(test)]
 pub(crate) static KUNCI_UJI: Mutex<()> = Mutex::new(());
 
+/// Folder uji di %TEMP% yang dihapus begitu uji selesai (juga bila uji gagal:
+/// Drop tetap jalan saat panik dibentangkan). Dulu foldernya tertinggal satu
+/// per PID per uji, puluhan tiap `cargo test`. Bila ia memegang kunci akar,
+/// folder dihapus DULU, baru kuncinya lepas.
 #[cfg(test)]
-pub(crate) fn sandbox_uji(nama: &str) -> (std::sync::MutexGuard<'static, ()>, PathBuf) {
-    let g = KUNCI_UJI.lock().unwrap_or_else(|e| e.into_inner());
+pub(crate) struct FolderUji {
+    d: PathBuf,
+    _kunci: Option<std::sync::MutexGuard<'static, ()>>,
+}
+
+#[cfg(test)]
+impl Drop for FolderUji {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.d);
+    }
+}
+
+/// Folder uji kosong `phoron-rs-<nama>-<pid>` tanpa mengganti akar Phoron.
+#[cfg(test)]
+pub(crate) fn folder_uji(nama: &str) -> (FolderUji, PathBuf) {
     let d = std::env::temp_dir().join(format!("phoron-rs-{}-{}", nama, std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
+    (FolderUji { d: d.clone(), _kunci: None }, d)
+}
+
+#[cfg(test)]
+pub(crate) fn sandbox_uji(nama: &str) -> (FolderUji, PathBuf) {
+    let g = KUNCI_UJI.lock().unwrap_or_else(|e| e.into_inner());
+    let (mut f, d) = folder_uji(nama);
+    f._kunci = Some(g);
     set_root(&d);
-    (g, d)
+    (f, d)
 }
 
 #[cfg(test)]

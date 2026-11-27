@@ -45,6 +45,9 @@ pub struct Settings {
     pub auto_vhost: bool,
     /// Bawaan HIDUP, dan sengaja tidak ikut daftar ekstensi profil.
     pub opcache: bool,
+    /// Bawaan MATI: Apache/Nginx hanya di 127.0.0.1. Menyala = bisa dibuka
+    /// dari perangkat lain di jaringan (dan Windows Firewall bertanya).
+    pub akses_jaringan: bool,
     pub manage_hosts: bool,
     pub php_ini_ke_folder_php: bool,
     pub log_rinci: bool,
@@ -83,6 +86,7 @@ impl Default for Settings {
             minimize_to_tray: true,
             auto_vhost: false,
             opcache: true,
+            akses_jaringan: false,
             manage_hosts: true,
             php_ini_ke_folder_php: false,
             log_rinci: false,
@@ -161,6 +165,7 @@ impl Settings {
         s.minimize_to_tray = ini.get_bool("umum", "minimize_ke_tray", true);
         s.auto_vhost = ini.get_bool("umum", "auto_vhost", false);
         s.opcache = ini.get_bool("umum", "opcache", true);
+        s.akses_jaringan = ini.get_bool("umum", "akses_jaringan", false);
         s.manage_hosts = ini.get_bool("umum", "kelola_hosts", true);
         s.php_ini_ke_folder_php = ini.get_bool("umum", "php_ini_ke_folder_php", false);
         s.log_rinci = ini.get_bool("umum", "log_rinci", false);
@@ -216,6 +221,7 @@ impl Settings {
         ini.set("umum", "minimize_ke_tray", b(self.minimize_to_tray));
         ini.set("umum", "auto_vhost", b(self.auto_vhost));
         ini.set("umum", "opcache", b(self.opcache));
+        ini.set("umum", "akses_jaringan", b(self.akses_jaringan));
         ini.set("umum", "kelola_hosts", b(self.manage_hosts));
         ini.set("umum", "php_ini_ke_folder_php", b(self.php_ini_ke_folder_php));
         ini.set("umum", "log_rinci", b(self.log_rinci));

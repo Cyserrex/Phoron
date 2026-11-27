@@ -70,7 +70,7 @@ namespace Phoron.Core
                                    BinPackage mysql, BinPackage nginx, List<Site> sites,
                                    bool phpIniKeFolderPhp = false, bool logAkses = true,
                                    bool berandaDiAkar = true, bool opcache = true,
-                                   List<Kolam> kolam = null)
+                                   List<Kolam> kolam = null, bool aksesJaringan = false)
         {
             var r = new Result();
             if (php != null) r.PhpIniDir = WritePhpIni(profile, php, r, phpIniKeFolderPhp, opcache);
@@ -93,14 +93,14 @@ namespace Phoron.Core
             }
             else if (profile.WebServer == "nginx")
             {
-                if (nginx != null) r.NginxConf = WriteNginx(profile, nginx, php, sites, r, logAkses, berandaDiAkar);
+                if (nginx != null) r.NginxConf = WriteNginx(profile, nginx, php, sites, r, logAkses, berandaDiAkar, aksesJaringan);
                 else r.Warnings.Add("Versi Nginx yang dicatat profil tidak ada di komputer ini, "
                                     + "dan tidak ada Nginx lain sebagai gantinya.");
             }
             else
             {
                 if (apache != null)
-                    r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses, berandaDiAkar);
+                    r.HttpdConf = WriteApache(profile, apache, php, sites, r, logAkses, berandaDiAkar, aksesJaringan);
                 else r.Warnings.Add("Versi Apache yang dicatat profil tidak ada di komputer ini, "
                                     + "dan tidak ada Apache lain sebagai gantinya.");
             }
@@ -120,7 +120,7 @@ namespace Phoron.Core
 
         static string WriteApache(Profile profile, BinPackage apache, BinPackage php,
                                   List<Site> sites, Result r, bool logAkses,
-                                  bool berandaDiAkar)
+                                  bool berandaDiAkar, bool aksesJaringan)
         {
             var baseConf = PristineConf(apache);
             if (baseConf == null)
@@ -148,7 +148,7 @@ namespace Phoron.Core
                 }
                 if (t.StartsWith("Listen ", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!listenReplaced) { sb.AppendLine("Listen " + profile.HttpPort); listenReplaced = true; }
+                    if (!listenReplaced) { sb.AppendLine("Listen " + Dengar(aksesJaringan, profile.HttpPort)); listenReplaced = true; }
                     continue;
                 }
                 // Include milik pengelola lain (mis. Laragon) dibuang: jalur mutlak
@@ -176,7 +176,7 @@ namespace Phoron.Core
                 }
                 sb.AppendLine(line);
             }
-            if (!listenReplaced) sb.AppendLine("Listen " + profile.HttpPort);
+            if (!listenReplaced) sb.AppendLine("Listen " + Dengar(aksesJaringan, profile.HttpPort));
 
             sb.AppendLine();
             sb.AppendLine("### ================= Phoron =================");
@@ -245,7 +245,7 @@ namespace Phoron.Core
             WriteIfChanged(confPath, sb.ToString());
 
             WriteModPhp(profile, apache, php, r);
-            WriteSslConf(profile, apache, r);
+            WriteSslConf(profile, apache, r, aksesJaringan);
             WriteVhosts(profile, sites, r, berandaDiAkar);
             return confPath;
         }
@@ -482,7 +482,18 @@ namespace Phoron.Core
             WriteIfChanged(path, sb.ToString());
         }
 
-        static void WriteSslConf(Profile profile, BinPackage apache, Result r)
+        /// <summary>
+        /// Alamat Listen/listen untuk sebuah port. Semua antarmuka hanya bila
+        /// "Bisa diakses dari jaringan" menyala; selain itu 127.0.0.1, supaya
+        /// situs tidak terbuka bagi seisi Wi-Fi dan Windows Firewall tidak
+        /// bertanya tiap kali paket Apache atau Nginx baru dijalankan.
+        /// </summary>
+        static string Dengar(bool jaringan, int port)
+        {
+            return jaringan ? port.ToString() : "127.0.0.1:" + port;
+        }
+
+        static void WriteSslConf(Profile profile, BinPackage apache, Result r, bool aksesJaringan)
         {
             var crt = Path.Combine(Paths.EtcSsl, "phoron.crt");
             var key = Path.Combine(Paths.EtcSsl, "phoron.key");
@@ -492,7 +503,7 @@ namespace Phoron.Core
             if (File.Exists(crt) && File.Exists(key))
             {
                 r.SslEnabled = true;
-                sb.AppendLine("    Listen " + profile.HttpsPort);
+                sb.AppendLine("    Listen " + Dengar(aksesJaringan, profile.HttpsPort));
                 sb.AppendLine("    SSLCipherSuite HIGH:MEDIUM:!MD5:!RC4:!3DES");
                 sb.AppendLine("    SSLProtocol all -SSLv3");
                 sb.AppendLine("    SSLSessionCache \"shmcb:" + Paths.Fwd(Path.Combine(Paths.Tmp, "ssl_scache")) + "(512000)\"");
@@ -1057,6 +1068,11 @@ namespace Phoron.Core
             sb.AppendLine();
             sb.AppendLine("[mysqld]");
             sb.AppendLine("port=" + profile.MySqlPort);
+            // Selalu lokal, apa pun "Bisa diakses dari jaringan": untuk mencoba
+            // situs dari HP cukup web server-nya, sedangkan MySQL pengembangan
+            // lazimnya root tanpa sandi - terbuka ke seisi Wi-Fi bukan bawaan
+            // yang pantas.
+            sb.AppendLine("bind-address=127.0.0.1");
             sb.AppendLine("basedir=\"" + Paths.Fwd(mysql.Path) + "\"");
             sb.AppendLine("datadir=\"" + Paths.Fwd(dataDir) + "\"");
             sb.AppendLine("tmpdir=\"" + Paths.Fwd(Paths.Tmp) + "\"");
@@ -1291,7 +1307,7 @@ namespace Phoron.Core
 
         static string WriteNginx(Profile profile, BinPackage nginx, BinPackage php,
                                  List<Site> sites, Result r, bool logAkses = true,
-                                 bool berandaDiAkar = true)
+                                 bool berandaDiAkar = true, bool aksesJaringan = false)
         {
             if (php == null || !File.Exists(Path.Combine(php.Path, "php-cgi.exe")))
                 r.Warnings.Add("Nginx melayani PHP lewat FastCGI; php-cgi.exe tidak ditemukan.");
@@ -1335,13 +1351,14 @@ namespace Phoron.Core
             // Beranda di akar hanya untuk server bawaan, sama seperti Apache yang
             // hanya menaruhnya di vhost _default_: situs .test milik proyek
             // tetap menampilkan index-nya sendiri.
-            sb.Append(NginxServer(profile.HttpPort, "localhost", docRoot, r.FastCgiPort, fcgiParams, berandaDiAkar,
+            var listen = Dengar(aksesJaringan, profile.HttpPort);
+            sb.Append(NginxServer(listen, "localhost", docRoot, r.FastCgiPort, fcgiParams, berandaDiAkar,
                                   LokasiKolamNginx(r, SiteScanner.DocumentRoot(profile), fcgiParams)));
             foreach (var s in sites ?? new List<Site>())
             {
                 // Situs yang memakai versi PHP sendiri diarahkan ke kolamnya.
                 var portSitus = PortKolam(r, s);
-                sb.Append(NginxServer(profile.HttpPort, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path),
+                sb.Append(NginxServer(listen, s.HostName, Paths.Fwd(s.DocRoot ?? s.Path),
                                       portSitus > 0 ? portSitus : r.FastCgiPort, fcgiParams, false));
             }
             sb.AppendLine("}");
@@ -1380,12 +1397,12 @@ namespace Phoron.Core
             return sb.ToString();
         }
 
-        static string NginxServer(int port, string name, string root, int fcgiPort, string fcgiParams,
+        static string NginxServer(string listen, string name, string root, int fcgiPort, string fcgiParams,
                                   bool berandaDiAkar = false, string lokasiTambahan = "")
         {
             var sb = new StringBuilder();
             sb.AppendLine("    server {");
-            sb.AppendLine("        listen       " + port + ";");
+            sb.AppendLine("        listen       " + listen + ";");
             sb.AppendLine("        server_name  " + name + ";");
             sb.AppendLine("        root         \"" + root + "\";");
             sb.AppendLine("        index        index.php index.html index.htm;");

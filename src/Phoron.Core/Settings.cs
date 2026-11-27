@@ -56,6 +56,14 @@ namespace Phoron.Core
         /// sana, dan bukan hiasan.
         /// </summary>
         public bool Opcache = true;
+        /// <summary>
+        /// "Bisa diakses dari jaringan". Bawaannya MATI: Apache dan Nginx
+        /// hanya mendengarkan di 127.0.0.1, jadi situs tidak terbuka bagi
+        /// orang lain di Wi-Fi yang sama dan Windows Firewall tidak bertanya.
+        /// Menyala = semua antarmuka, untuk mencoba situs dari HP. MySQL
+        /// tetap 127.0.0.1 apa pun setelan ini.
+        /// </summary>
+        public bool AksesJaringan = false;
         public bool ManageHosts = true;     // sinkronkan berkas hosts (butuh admin)
         /// <summary>
         /// Tulis php.ini langsung ke folder PHP, bukan ke etc\php\&lt;versi&gt;\.
@@ -183,6 +191,7 @@ namespace Phoron.Core
             // dari sana - yang berubah hanya pemasangan baru.
             s.AutoVhost = ini.GetBool("umum", "auto_vhost", false);
             s.Opcache = ini.GetBool("umum", "opcache", true);
+            s.AksesJaringan = ini.GetBool("umum", "akses_jaringan", false);
             s.ManageHosts = ini.GetBool("umum", "kelola_hosts", true);
             s.PhpIniKeFolderPhp = ini.GetBool("umum", "php_ini_ke_folder_php", false);
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
@@ -298,6 +307,7 @@ namespace Phoron.Core
             ini.Set("umum", "minimize_ke_tray", MinimizeToTray ? "1" : "0");
             ini.Set("umum", "auto_vhost", AutoVhost ? "1" : "0");
             ini.Set("umum", "opcache", Opcache ? "1" : "0");
+            ini.Set("umum", "akses_jaringan", AksesJaringan ? "1" : "0");
             ini.Set("umum", "kelola_hosts", ManageHosts ? "1" : "0");
             ini.Set("umum", "php_ini_ke_folder_php", PhpIniKeFolderPhp ? "1" : "0");
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");

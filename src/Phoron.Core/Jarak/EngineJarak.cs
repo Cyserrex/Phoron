@@ -776,5 +776,93 @@ namespace Phoron.Core
         static readonly TimeSpan BatasJawabUac = TimeSpan.FromMinutes(5);
         /// <summary>Lama menunggu daemon ber-Administrator tersambung sesudah jawaban ok.</summary>
         public TimeSpan BatasSambungAdmin = TimeSpan.FromSeconds(30);
+
+        // ------------------------------------------ hosts dan sertifikat
+
+        /// <summary>
+        /// Hasil aksi hosts/sertifikat. Dalam mode daemon penulisnya DAEMON:
+        /// dialah yang dinaikkan ke Administrator, jadi kalau jendela menulis
+        /// sendiri, tombolnya tetap gagal sesudah "Jalankan sebagai Administrator".
+        /// </summary>
+        public sealed class HasilAksi
+        {
+            /// <summary>Null = berhasil; selain itu pesan untuk orang.</summary>
+            public string Galat;
+            /// <summary>Gagal karena hak akses: halaman menawarkan menaikkan hak.</summary>
+            public bool PerluAdmin;
+            public object Hasil;
+            public bool Ok { get { return Galat == null; } }
+        }
+
+        HasilAksi AksiSistem(string perintah, object data, Action lokal)
+        {
+            if (ModeJarak)
+            {
+                string galat;
+                var j = AksiJarak(perintah, data, BatasSedang, out galat);
+                return new HasilAksi
+                {
+                    Galat = galat,
+                    PerluAdmin = j != null && j.JenisGalat == "perlu_admin",
+                    Hasil = j != null ? j.Hasil : null,
+                };
+            }
+            try { lokal(); return new HasilAksi(); }
+            catch (UnauthorizedAccessException)
+            {
+                return new HasilAksi { Galat = Lang.T("Menyunting berkas hosts butuh hak Administrator."), PerluAdmin = true };
+            }
+            catch (Exception ex) { return new HasilAksi { Galat = ex.Message }; }
+        }
+
+        /// <summary>
+        /// Kembalikan hosts dari cadangan. Ke daemon yang dikirim hanya NAMA
+        /// cadangannya; daemon mencarinya di folder cadangan sendiri.
+        /// </summary>
+        public HasilAksi PulihkanHosts(HostsFile.Cadangan c)
+        {
+            return AksiSistem("pulihkan_hosts", new Dictionary<string, object> { { "nama", c.Nama } },
+                              () => HostsFile.Pulihkan(c.Path));
+        }
+
+        public HasilAksi BersihkanHosts()
+        {
+            return AksiSistem("bersihkan_hosts", null, HostsFile.Clear);
+        }
+
+        /// <summary>Daftarkan nama situs semua profil lewat daemon (hanya mode daemon).</summary>
+        public HasilAksi DaftarkanHostsJarak()
+        {
+            if (!ModeJarak) return new HasilAksi { Galat = Lang.T("Daemon Phoron tidak berjalan.") };
+            return AksiSistem("daftarkan_hosts", null, null);
+        }
+
+        /// <summary>Buat (ulang) sertifikat situs. Config ditulis ulang oleh pemanggil lewat Apply.</summary>
+        public HasilAksi BuatSertifikat()
+        {
+            if (ModeJarak) return AksiSistem("buat_sertifikat", null, null);
+            var apache = Apache;
+            if (apache == null) return new HasilAksi { Galat = Lang.T("Butuh paket Apache (openssl.exe ada di dalamnya).") };
+            var err = SslTool.Generate(apache, Active != null ? Active.SiteSuffix : "test",
+                                       Profiles.Select(x => x.SiteSuffix));
+            if (err != null) return new HasilAksi { Galat = err };
+            Say("Sertifikat SSL dibuat di etc\\ssl.");
+            return new HasilAksi();
+        }
+
+        public HasilAksi PercayaiSertifikat()
+        {
+            HasilAksi h;
+            if (ModeJarak) h = AksiSistem("percayai_sertifikat", null, null);
+            else
+            {
+                var t = SslTool.Trust();
+                h = new HasilAksi { Galat = t, PerluAdmin = t != null && SslTool.Exists && !HostsFile.IsAdmin() };
+            }
+            // Gudang Trusted Root berubah di proses lain: jawaban singgahan
+            // "belum dipercaya" di proses ini sudah basi.
+            SslTool.LupakanKepercayaan();
+            return h;
+        }
     }
 }

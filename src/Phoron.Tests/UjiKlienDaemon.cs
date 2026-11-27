@@ -234,6 +234,10 @@ namespace Phoron.Tests
                 if (isi == null) continue;
                 Ok("Hak Administrator di " + hal + " dari Engine.HakAdmin, bukan proses UI",
                    !isi.Contains("HostsFile.IsAdmin()") && isi.Contains("_e.HakAdmin"));
+                // Daemon yang dinaikkan ke Administrator, jadi daemon pula yang
+                // menulis: jendela yang menulis sendiri tetap gagal sesudahnya.
+                Ok("Hosts dan sertifikat di " + hal + " lewat Engine, bukan ditulis jendela",
+                   !System.Text.RegularExpressions.Regex.IsMatch(isi, @"HostsFile\.(Pulihkan|Clear|Sync)\(|SslTool\.(Trust|Generate)\("));
             }
             var prog = BacaSumber("Phoron.App", "Program.cs");
             if (prog != null)
@@ -255,7 +259,7 @@ namespace Phoron.Tests
             Ok("Belum pernah dicek = null", SetelanJson.Saat(DateTime.MinValue) == null);
             var json = SetelanJson.KeJson(new Settings { Bahasa = "en", AutoVhost = true });
             var kunciRust = new[] { "bin_roots", "situs_terakhir", "active_profile", "auto_start_services",
-                "minimize_to_tray", "auto_vhost", "opcache", "manage_hosts", "php_ini_ke_folder_php", "log_rinci",
+                "minimize_to_tray", "auto_vhost", "opcache", "akses_jaringan", "manage_hosts", "php_ini_ke_folder_php", "log_rinci",
                 "beranda_di_akar", "tema", "jendela_lebar", "jendela_tinggi", "bahasa", "cek_pembaruan",
                 "cek_terakhir", "terminal", "editor", "db_pengguna", "heidi_sql", "db_sandi" };
             Ok("Semua medan Settings Rust dikirim, tidak lebih",
@@ -380,6 +384,7 @@ namespace Phoron.Tests
                 bool perluRestart = true;
                 object peringatanTerakhir = new object[] { new Pesan("Peringatan dari daemon").KeJson() };
                 bool admin = false, batalUac = false, tolakUbah = false, nodeMati = false;
+                string namaCadangan = null;
                 int tundaNyalakan = 0, tundaGanti = 0;
                 object masalahDaemon = new object[0];
                 daemon.Jawab = (perintah, data) =>
@@ -397,6 +402,14 @@ namespace Phoron.Tests
                                 ? DaemonPalsu.Galat(new Dictionary<string, object>
                                   { { "jenis", "gagal" }, { "pesan", new Pesan("Setelan ditolak uji").KeJson() } })
                                 : null;
+                        case "pulihkan_hosts":
+                        case "percayai_sertifikat":
+                            if (perintah == "pulihkan_hosts")
+                                namaCadangan = Protokol.Teks(Protokol.Objek(data), "nama");
+                            return admin
+                                ? null
+                                : DaemonPalsu.Galat(new Dictionary<string, object>
+                                  { { "jenis", "perlu_admin" }, { "pesan", new Pesan("Menyunting berkas hosts butuh hak Administrator.").KeJson() } });
                         case "mulai_ulang_admin":
                             if (batalUac)
                                 return DaemonPalsu.Galat(new Dictionary<string, object>
@@ -699,6 +712,15 @@ namespace Phoron.Tests
 
                 // ---------------------------------------- Hak Administrator
                 Ok("HakAdmin mode jarak = hak daemon", !e.HakAdmin && !e.AdminDaemon);
+                // Hosts dan sertifikat ditulis daemon; jendela tidak menyentuhnya.
+                var cad = new HostsFile.Cadangan { Path = @"C:\di\mana\saja\hosts-20260101-000000.bak" };
+                var hp = e.PulihkanHosts(cad);
+                Ok("Pulihkan hosts lewat daemon: hanya NAMA cadangan yang dikirim",
+                   namaCadangan == "hosts-20260101-000000.bak" && daemon.Hitung("pulihkan_hosts") == 1, namaCadangan ?? "(null)");
+                Ok("Daemon tanpa Administrator: PerluAdmin, bukan galat biasa",
+                   !hp.Ok && hp.PerluAdmin && hp.Galat == "Menyunting berkas hosts butuh hak Administrator.", hp.Galat ?? "(null)");
+                var hs = e.PercayaiSertifikat();
+                Ok("Percayai sertifikat lewat daemon", daemon.Hitung("percayai_sertifikat") == 1 && hs.PerluAdmin);
                 batalUac = true;
                 var hasilBatal = e.MulaiUlangAdminAsync().Result;
                 batalUac = false;
@@ -714,6 +736,8 @@ namespace Phoron.Tests
                    hasilNaik == null && daemon.Hitung("mulai_ulang_admin") == 2 && e.AdminDaemon && e.HakAdmin
                    && daemon.Hitung("halo") > haloSebelum && klien.Aktif, hasilNaik ?? "");
                 Ok("Pamit daemon lama saat mulai ulang admin tidak membuat UI keluar", !ikutKeluar);
+                hp = e.PulihkanHosts(cad);
+                Ok("Sesudah daemon ber-Administrator, pulihkan hosts berhasil", hp.Ok && !hp.PerluAdmin, hp.Galat ?? "");
                 e.Pamit -= saatPamit;
 
                 bool pamit = false;

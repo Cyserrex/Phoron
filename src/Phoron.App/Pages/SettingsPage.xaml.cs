@@ -36,6 +36,7 @@ namespace Phoron.App.Pages
             SwPhpIni.IsChecked = s.PhpIniKeFolderPhp;
             SwLogRinci.IsChecked = s.LogRinci;
             SwBerandaAkar.IsChecked = s.BerandaDiAkar;
+            SwJaringan.IsChecked = s.AksesJaringan;
             foreach (ComboBoxItem it in CmbTema.Items)
                 if ((it.Tag ?? "").ToString() == s.Tema) CmbTema.SelectedItem = it;
             if (CmbTema.SelectedItem == null) CmbTema.SelectedIndex = 0;
@@ -149,6 +150,7 @@ namespace Phoron.App.Pages
             var berandaLama = s.BerandaDiAkar;
             var phpIniLama = s.PhpIniKeFolderPhp;
             var opcacheLama = s.Opcache;
+            var jaringanLama = s.AksesJaringan;
             var rootsLama = string.Join(";", s.BinRoots);
 
             s.AutoStartServices = SwAutoStart.IsChecked == true;
@@ -158,6 +160,7 @@ namespace Phoron.App.Pages
             s.ManageHosts = SwHosts.IsChecked == true;
             s.LogRinci = SwLogRinci.IsChecked == true;
             s.BerandaDiAkar = SwBerandaAkar.IsChecked == true;
+            s.AksesJaringan = SwJaringan.IsChecked == true;
             s.CekPembaruan = SwCekPembaruan.IsChecked == true;
             s.PhpIniKeFolderPhp = SwPhpIni.IsChecked == true;
             var item = CmbTerminal.SelectedItem as ComboBoxItem;
@@ -179,7 +182,8 @@ namespace Phoron.App.Pages
             }
             if (rootsBerubah || s.AutoVhost != vhostLama || s.ManageHosts != hostsLama
                 || s.LogRinci != logLama || s.PhpIniKeFolderPhp != phpIniLama
-                || s.BerandaDiAkar != berandaLama || s.Opcache != opcacheLama)
+                || s.BerandaDiAkar != berandaLama || s.Opcache != opcacheLama
+                || s.AksesJaringan != jaringanLama)
             {
                 // Peringatannya cukup masuk log; kotak pesan modal tiap kali
                 // sakelar disentuh justru mengganggu.
@@ -267,31 +271,20 @@ namespace Phoron.App.Pages
                               + Lang.T("Keadaan sekarang ikut dicadangkan lebih dulu, jadi langkah ini masih bisa dibatalkan. Cadangan lain ada di folder cadangan.")))
                 return;
 
-            try
-            {
-                HostsFile.Pulihkan(pilihan.Path);
-                AppState.Info(Lang.T("Berkas hosts dikembalikan dari {0}.", pilihan.Nama));
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
-            }
-            catch (Exception ex) { AppState.Warn(Lang.T("Gagal memulihkan: {0}", ex.Message)); }
+            // Lewat Engine: dalam mode daemon yang menulis hosts adalah daemon.
+            var h = _e.PulihkanHosts(pilihan);
+            if (h.Ok) AppState.Info(Lang.T("Berkas hosts dikembalikan dari {0}.", pilihan.Nama));
+            else if (h.PerluAdmin) Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
+            else AppState.Warn(Lang.T("Gagal memulihkan: {0}", h.Galat));
         }
 
         void BtnBersihHosts_Click(object sender, RoutedEventArgs e)
         {
             if (!AppState.Ask(Lang.T("Hapus semua baris yang ditambahkan Phoron dari berkas hosts? Baris milik aplikasi lain tidak disentuh."))) return;
-            try
-            {
-                HostsFile.Clear();
-                AppState.Info(Lang.T("Blok Phoron dibuang dari berkas hosts."));
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
-            }
-            catch (Exception ex) { AppState.Warn(Lang.T("Gagal: {0}", ex.Message)); }
+            var h = _e.BersihkanHosts();
+            if (h.Ok) AppState.Info(Lang.T("Blok Phoron dibuang dari berkas hosts."));
+            else if (h.PerluAdmin) Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
+            else AppState.Warn(Lang.T("Gagal: {0}", h.Galat));
         }
     }
 }

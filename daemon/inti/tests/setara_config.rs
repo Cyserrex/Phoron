@@ -228,6 +228,7 @@ fn config_setara_dengan_csharp() {
             log_akses: o[1] == b'1',
             beranda_di_akar: o[2] == b'1',
             opcache: o[3] == b'1',
+            akses_jaringan: o.get(4) == Some(&b'1'),
         };
         let php = cari(&k.nilai["php"]);
         let apache = cari(&k.nilai["apache"]);

@@ -53,6 +53,17 @@ namespace Phoron.App
                 "Phoron", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (jawab != MessageBoxResult.Yes) return;
 
+            // Daemon yang sudah ber-Administrator menulisnya sendiri: tanpa UAC
+            // kedua, dan tanpa proses lain yang ikut menulis hosts.
+            var mesin = AppState.Engine;
+            if (mesin != null && mesin.ModeJarak && mesin.AdminDaemon)
+            {
+                var h = mesin.DaftarkanHostsJarak();
+                if (h.Ok) LaporSelesai(nama.Count);
+                else AppState.Info(h.Galat);
+                return;
+            }
+
             int kode;
             try
             {
@@ -80,19 +91,22 @@ namespace Phoron.App
             }
 
             if (kode == Program.KeluarBerhasil)
-            {
-                var sisa = HostsTool.BelumTerdaftar();
-                if (sisa.Count == 0)
-                    AppState.Info(Lang.T("Selesai. {0} nama situs terdaftar di berkas hosts. Phoron tidak perlu Administrator lagi untuk ini.",
-                                         nama.Count));
-                else
-                    AppState.Info(Lang.T("Berkas hosts ditulis, tapi {0} nama masih belum terbaca: {1}",
-                                         sisa.Count, string.Join(", ", sisa.Take(5).ToArray())));
-            }
+                LaporSelesai(nama.Count);
             else if (kode == Program.KeluarTidakBerhak)
                 AppState.Info(Lang.T("Pembantu jalan tanpa hak Administrator, jadi berkas hosts tidak tersentuh."));
             else
                 AppState.Info(Lang.T("Berkas hosts gagal ditulis. Berkasnya mungkin dikunci antivirus."));
+        }
+
+        static void LaporSelesai(int jumlah)
+        {
+            var sisa = HostsTool.BelumTerdaftar();
+            if (sisa.Count == 0)
+                AppState.Info(Lang.T("Selesai. {0} nama situs terdaftar di berkas hosts. Phoron tidak perlu Administrator lagi untuk ini.",
+                                     jumlah));
+            else
+                AppState.Info(Lang.T("Berkas hosts ditulis, tapi {0} nama masih belum terbaca: {1}",
+                                     sisa.Count, string.Join(", ", sisa.Take(5).ToArray())));
         }
     }
 }

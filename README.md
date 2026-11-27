@@ -389,7 +389,10 @@ sqlite3, zip) filtered to the DLLs the build actually contains.
 - **PHP extensions** — per-profile extensions and common `php.ini` settings.
 - **Logs** — live log viewer.
 - **Settings** — theme, language, bin folders, terminal, autostart, tray,
-  OPcache, logging, updates.
+  OPcache, logging, updates, and **Can be opened from other devices on the
+  network** (off by default: Apache and Nginx listen on 127.0.0.1 only, so your
+  sites are not open to the rest of the Wi-Fi and Windows Firewall never asks;
+  turn it on to try a site from your phone. MySQL always stays on 127.0.0.1).
 
 ---
 

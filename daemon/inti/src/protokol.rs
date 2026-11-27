@@ -115,6 +115,19 @@ pub enum Perintah {
     CatatSitusDibuka { path: String },
     /// Tulis log Aktivitas dari UI (Engine.Say di sisi UI).
     Catat { pesan: Pesan },
+    /// Kembalikan berkas hosts dari cadangan `nama` (nama berkas di folder
+    /// cadangan, bukan jalur: daemon yang ber-Administrator tidak boleh
+    /// menyalin berkas sembarang ke hosts atas permintaan klien).
+    PulihkanHosts { nama: String },
+    /// Buang blok Phoron dari berkas hosts; baris lain tidak disentuh.
+    BersihkanHosts,
+    /// Tulis nama situs SEMUA profil ke hosts. Hasil: daftar nama.
+    DaftarkanHosts,
+    /// Buat (ulang) sertifikat HTTPS untuk akhiran profil aktif di etc\ssl.
+    /// Config tidak ikut ditulis: UI mengirim `Terapkan` sesudahnya.
+    BuatSertifikat,
+    /// Pasang CA Phoron ke Trusted Root Windows.
+    PercayaiSertifikat,
     /// Daemon ikut berhenti: semua layanan dimatikan dengan rapi, lalu Kabar::Pamit.
     Keluar,
 }
@@ -151,6 +164,9 @@ pub enum Galat {
     TidakTerbaca { sebab: String },
     /// Galat biasa dengan pesan untuk orang.
     Gagal { pesan: Pesan },
+    /// Aksi butuh hak Administrator yang tidak dimiliki daemon. UI menawarkan
+    /// `MulaiUlangAdmin`, lalu orang mengulang aksinya.
+    PerluAdmin { pesan: Pesan },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

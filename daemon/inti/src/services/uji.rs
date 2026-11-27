@@ -204,7 +204,7 @@ fn profil_web(d: &Path, web_server: &str, web: &BinPackage, php: &BinPackage) ->
 }
 
 fn opsi_uji() -> Opsi {
-    Opsi { php_ini_ke_folder_php: false, log_akses: false, beranda_di_akar: false, opcache: true }
+    Opsi { php_ini_ke_folder_php: false, log_akses: false, beranda_di_akar: false, opcache: true, akses_jaringan: false }
 }
 
 // ------------------------------------------------------------ uji unit

@@ -65,6 +65,11 @@ kunci `data`.
 | `hentikan_sisa` | - | - (yang gagal di `peringatan`) |
 | `catat_situs_dibuka` | `{path}` | - |
 | `catat` | `{pesan: Pesan}` | - |
+| `pulihkan_hosts` | `{nama}` nama berkas cadangan di `data\hosts-backup` (bukan jalur) | - . Tidak ber-Administrator = `perlu_admin` |
+| `bersihkan_hosts` | - | - (blok Phoron dibuang; baris lain tetap) |
+| `daftarkan_hosts` | - | daftar nama situs semua profil yang ditulis |
+| `buat_sertifikat` | - | - (etc\ssl untuk akhiran profil aktif; config ditulis lewat `terapkan` sesudahnya) |
+| `percayai_sertifikat` | - | - (CA ke Trusted Root; tidak ber-Administrator = `perlu_admin`) |
 | `keluar` | - | - lalu kabar `pamit` |
 
 ## daemon -> UI
@@ -77,7 +82,8 @@ Jawaban (punya `id`):
 ```
 
 `galat.jenis`: `belum_ada {perintah}`, `protokol_beda {daemon, ui}`,
-`tidak_terbaca {sebab}`, `gagal {pesan}`.
+`tidak_terbaca {sebab}`, `gagal {pesan}`, `perlu_admin {pesan}` (aksi hosts/
+sertifikat butuh Administrator; UI menawarkan `mulai_ulang_admin`).
 
 Kabar (tanpa `id`, dikirim ke semua klien):
 

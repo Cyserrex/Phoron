@@ -123,12 +123,18 @@ Semua tahap selesai dan diuji ujung ke ujung:
   http://localhost/.
 - phorond diam di baki: sekitar 11 MB working set, 2 MB private.
 
-## Sisa sebelum rilis
+## Sisa sesudah 1.42.0
 
-1. Pemasang (`installer/setup.iss`) belum diuji dengan Inno Setup sungguhan.
-2. Operasi hosts/sertifikat yang dijalankan dari halaman Pengaturan (Pulihkan /
-   Bersihkan hosts, pasang sertifikat) masih berjalan di proses UI; perlu
-   perintah protokol supaya ikut hak Administrator daemon.
-3. Dipakai harian minimal satu minggu (gerbang rilis butir 4).
-4. Keputusan pengguna: Apache/MySQL tetap mendengar di semua alamat (perilaku
-   C#) atau hanya 127.0.0.1.
+Selesai:
+- Pemasang diuji sungguhan (upgrade 1.42.0 senyap, ber-Administrator, di atas
+  daemon yang hidup). Temuan: daemon tidak dinyalakan lagi karena entri [Run]
+  ber-`skipifsilent`; sekarang ada entri `phorond.exe --baki` sendiri bila
+  Phoron hidup saat pemasangan dimulai.
+- Hosts dan sertifikat (Pulihkan / Bersihkan / Daftarkan hosts, buat dan
+  percayai sertifikat) lewat perintah protokol; galat hak akses = `perlu_admin`.
+- Setelan "Bisa dibuka dari perangkat lain di jaringan" (`akses_jaringan`,
+  bawaan mati): Apache/Nginx di 127.0.0.1 kecuali dinyalakan. MySQL selalu
+  `bind-address=127.0.0.1` - dulu hanya di uji, jadi MySQL terbuka ke jaringan.
+
+Tersisa:
+1. Dipakai harian minimal satu minggu (gerbang rilis butir 4).
