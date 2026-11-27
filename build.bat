@@ -39,9 +39,18 @@ rem Berkas .config (174 byte) menyatakan runtime yang dibutuhkan. Tanpa itu, di
 rem komputer yang hanya punya .NET Framework 4.0-4.7 aplikasinya tetap mulai
 rem lalu gagal di tengah dengan galat yang tidak menjelaskan apa pun.
 copy /y "src\Phoron.App\bin\Release\net48\Phoron.exe.config" "dist\Phoron.exe.config" >nul || goto :err
+rem Daemon Rust: memegang ikon baki dan layanan. Kehadiran phorond.exe di
+rem samping Phoron.exe itulah yang menyalakan mode daemon di UI; tanpa berkas
+rem ini Phoron berjalan dengan Core C# di dalam prosesnya seperti dulu.
+echo == Build phorond (Rust) ==
+pushd daemon
+cargo build --release -p phorond || (popd & goto :err)
+popd
+copy /y "daemon\target\release\phorond.exe" "dist\phorond.exe" >nul || goto :err
 echo.
 echo Selesai: %ROOT%\dist\Phoron.exe
 for %%F in ("dist\Phoron.exe") do echo Ukuran: %%~zF bytes
+for %%F in ("dist\phorond.exe") do echo Ukuran phorond.exe: %%~zF bytes
 goto :done
 
 :debug
