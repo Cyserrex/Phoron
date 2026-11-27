@@ -1,7 +1,6 @@
 //! Padanan `ProfileStore.cs`: baca/tulis profil di folder profiles\.
 //!
-//! `Seed` (profil awal per versi PHP) menyusul di tahap C, karena butuh
-//! `ConfigWriter.EkstensiDisarankan`.
+//! `seed` (profil awal per versi PHP) dipakai `engine` pada jalan pertama.
 
 use crate::ini::Ini;
 use crate::model::{kamus_set, BinPackage, Profile};
@@ -168,6 +167,47 @@ pub fn delete(p: &Profile) -> io::Result<()> {
         std::fs::remove_file(path)?;
     }
     Ok(())
+}
+
+/// Profil awal: satu per versi PHP yang ditemukan, PHP terbaru lebih dulu,
+/// masing-masing dengan Apache yang sepadan dan MySQL tertinggi. Padanan
+/// `ProfileStore.Seed`.
+///
+/// Daftar ekstensi diisi sejak awal (`config::ekstensi_disarankan`), bukan
+/// dibiarkan kosong: profil tanpa ekstensi menghasilkan PHP yang mati di
+/// pemanggilan fungsi pertama (mb_strlen, mysqli_connect), dan galatnya sering
+/// hanya berwujud halaman putih. Nilai paket disimpan lewat `nilai_simpan`
+/// (jalur lengkap bila nama foldernya kembar).
+pub fn seed(packages: &[BinPackage]) -> Vec<Profile> {
+    use crate::model::BinKind;
+    let mut phps: Vec<&BinPackage> = packages.iter().filter(|p| p.kind == BinKind::Php).collect();
+    // Pengurutan stabil: versi seri mempertahankan urutan pindai, seperti
+    // OrderByDescending di C#.
+    phps.sort_by_key(|p| std::cmp::Reverse(p.parsed()));
+    let apaches: Vec<BinPackage> = packages.iter().filter(|p| p.kind == BinKind::Apache).cloned().collect();
+    let mysql = pick_mysql(packages.iter().filter(|p| p.kind == BinKind::MySql));
+    let mut made = Vec::new();
+    for php in phps {
+        let apache = pick_apache(Some(php), &apaches);
+        let mut p = Profile {
+            name: match apache {
+                Some(a) => format!("PHP {} + Apache {}", php.version, a.version),
+                None => format!("PHP {}", php.version),
+            },
+            php_id: php.nilai_simpan().to_string(),
+            apache_id: apache.map(|a| a.nilai_simpan().to_string()).unwrap_or_default(),
+            mysql_id: mysql.map(|m| m.nilai_simpan().to_string()).unwrap_or_default(),
+            web_server: "apache".into(),
+            php_extensions: crate::config::ekstensi_disarankan(Some(php)),
+            ..Profile::default()
+        };
+        p.file_name = unique_file_name(&p.name);
+        // Gagal menyimpan bukan alasan berangkat tanpa profil: profilnya tetap
+        // dipakai sesi ini, dan jalan berikutnya mencoba membuatnya lagi.
+        let _ = save(&mut p);
+        made.push(p);
+    }
+    made
 }
 
 /// Pemisahnya titik koma, sama seperti bin_roots. Jalur Windows tidak pernah
