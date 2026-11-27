@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Phoron.Core;
 
@@ -30,6 +32,9 @@ namespace Phoron.Tests
             {
                 Profil(masuk, keluar);
                 Setelan(masuk, keluar, akar);
+                Paket(akar);
+                Situs(masuk, keluar);
+                ProyekNode(masuk, keluar);
             }
             finally { Paths.Root = dulu; }
             Console.WriteLine("bahan uji setara ditulis ke " + akar);
@@ -133,6 +138,83 @@ namespace Phoron.Tests
             var h = new Ini();
             h.Set("setelan-a", "sandi", "s3kr!t é");
             h.Save(Path.Combine(akar, "harapan.ini"));
+        }
+
+        /// <summary>
+        /// Daftar paket dari folder bin SUNGGUHAN di mesin ini (Laragon, XAMPP,
+        /// bin Phoron) - hasil pemindaiannya, bukan kodenya, yang harus sama.
+        /// </summary>
+        static void Paket(string akar)
+        {
+            var roots = new List<string>();
+            if (Directory.Exists(@"C:\Phoron\bin")) roots.Add(@"C:\Phoron\bin");
+            roots.AddRange(Deteksi.FolderBinTerpasang());
+            File.WriteAllLines(Path.Combine(akar, "akar-bin.txt"), roots);
+            var baris = new List<string>();
+            foreach (var p in BinScanner.ScanAll(roots))
+                baris.Add(string.Join("|", p.Kind, p.Id, p.Path, p.Version, p.Compiler, p.Arch,
+                    p.ThreadSafe ? "TS" : "NTS", p.MainExe, p.ApacheModuleDll ?? "", p.SourceRoot,
+                    p.Kunci, p.Kembar ? "kembar" : ""));
+            File.WriteAllLines(Path.Combine(akar, "paket.txt"), baris, new UTF8Encoding(false));
+        }
+
+        /// <summary>Folder proyek dengan nama bentrok, beraksen, dan berbagai akar web.</summary>
+        static void Situs(string masuk, string keluar)
+        {
+            var proyek = Path.Combine(masuk, "proyek");
+            foreach (var f in new[] { "Kafé", "kafe", "_draf", ".git", "toko_online", "日本",
+                                      @"laravel\public", @"aset\public", @"wp\html", "Blog Lama" })
+                Directory.CreateDirectory(Path.Combine(proyek, f));
+            File.WriteAllText(Path.Combine(proyek, @"laravel\public\index.php"), "");
+            File.WriteAllText(Path.Combine(proyek, @"wp\html\index.html"), "");
+
+            Paths.Root = Path.Combine(masuk, "situs-akar");
+            Directory.CreateDirectory(Paths.SitesEnabled);
+            File.WriteAllText(Path.Combine(Paths.SitesEnabled, "auto.laravel.test.conf"), "");
+            var hosts = Path.Combine(Paths.Root, "hosts");
+            File.WriteAllText(hosts, "127.0.0.1 localhost\r\n# 127.0.0.1 kafe.test\r\n127.0.0.1\tLARAVEL.test blog-lama.test\r\n");
+            var dulu = Paths.HostsFile;
+            Paths.HostsFile = hosts;
+            try
+            {
+                var p = new Profile();
+                p.ProjectRoots.Add(proyek);
+                p.ProjectRoots.Add(@"Z:\tidak-ada-sama-sekali");
+                var peringatan = new List<string>();
+                var baris = SiteScanner.Scan(p, peringatan)
+                    .Select(s => string.Join("|", s.Folder, s.Path, s.Root, s.HostName, s.DocRoot,
+                                             s.InHosts ? "hosts" : "", s.HasVhost ? "vhost" : ""))
+                    .ToList();
+                baris.Add("peringatan=" + peringatan.Count);
+                Directory.CreateDirectory(keluar);
+                File.WriteAllLines(Path.Combine(keluar, "situs.txt"), baris, new UTF8Encoding(false));
+            }
+            finally { Paths.HostsFile = dulu; }
+        }
+
+        static void ProyekNode(string masuk, string keluar)
+        {
+            var dir = Path.Combine(masuk, "node-proyek");
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, "package.json"),
+                "{ \"name\": \"x\", \"scripts\": { \"dev\": \"next dev\", \"build\": \"echo { } && next build\", "
+                + "\"x\\\"y\": \"a:b\", \"dev\": \"lagi\" }, \"dependencies\": { \"astro\": \"5\", \"next\": \"15\" } }");
+            File.WriteAllText(Path.Combine(dir, "yarn.lock"), "");
+
+            Paths.Root = Path.Combine(keluar, "node");
+            Directory.CreateDirectory(Paths.Root);
+            NodeAppStore.SaveAll(new[]
+            {
+                new NodeApp { Path = @"D:\web\toko\", Port = 3001 },
+                new NodeApp { Path = @"D:\web\blog", Name = "Blog ✓", Manager = "pnpm", NodeId = "node-v20", Script = "start" },
+                new NodeApp { Path = "  " },
+            });
+            File.WriteAllLines(Path.Combine(keluar, "node", "package.txt"), new[]
+            {
+                string.Join(",", PackageJson.Scripts(dir)),
+                PackageJson.DetectManager(dir),
+                PackageJson.DetectFramework(dir),
+            }, new UTF8Encoding(false));
         }
 
         /// <summary>Salin masukan ke folder keluaran, lalu muat-dan-simpan dengan Core C#.</summary>

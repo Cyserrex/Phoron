@@ -20,15 +20,25 @@ UI yang crash tidak ikut mematikan Apache/MySQL. Di baki, yang hidup hanya
 
 ## Prinsip
 
-- **Format berkas tidak berubah.** `phoron.ini`, `profiles\*.ini`, `apps.ini`,
-  config yang ditulis ke `etc\` harus identik byte demi byte dengan buatan C#.
-  Orang bisa pindah bolak-balik antara versi C# dan Rust tanpa kehilangan apa pun.
-- **Penjaga bug ikut pindah.** Komentar "kenapa" di C# (berkas terpotong, NUL,
-  karantina, hosts read-only, paket kembar, shutdown MySQL rapi) diterjemahkan
-  bersama kodenya, bukan dibuang.
+- **Per fitur, bukan per baris.** Sejak tahap B, Rust ditulis mengikuti cara
+  kerja dan fitur Phoron, bukan terjemahan baris demi baris kode C#. Kebiasaan
+  .NET yang tidak terasa pengguna tidak ditiru, dan cara yang lebih baik di
+  Rust dipakai (mis. port dan PID dari `GetExtendedTcpTable`, bukan `netstat`).
+- **Yang tetap wajib sama:**
+  1. Format berkas milik pengguna (`phoron.ini`, `profiles\*.ini`, `apps.ini`)
+     identik byte demi byte - orang bisa pindah bolak-balik antara versi C#
+     dan Rust.
+  2. Hasil yang dilihat pengguna: daftar paket hasil pindai, daftar situs dan
+     nama hostnya, config yang membuat Apache/PHP/MySQL jalan. Dibuktikan
+     dengan membandingkan HASIL (uji setara, uji live), bukan kodenya.
+  3. Pelajaran bug lama. Komentar "kenapa" di C# adalah kasus nyata; tiap
+     kasus jadi butir daftar periksa fitur dan punya uji, walau kodenya ditulis
+     ulang dengan cara lain.
 - **Dependensi seminimal mungkin.** `serde`/`serde_json` untuk protokol,
-  `windows-sys` untuk Win32. Tidak ada runtime async.
-- **Satu modul selesai = punya uji Rust + uji setara terhadap keluaran C#.**
+  `windows-sys` untuk Win32, `unicode-normalization` untuk nama host. Tidak ada
+  runtime async.
+- **Satu fitur selesai = daftar periksa terpenuhi + uji Rust + hasil setara
+  dengan Phoron C# pada data nyata.**
 
 ## Tata letak
 
@@ -49,8 +59,8 @@ daemon/
 | A | `Settings`, `Rahasia` (DPAPI), `Deteksi` | setelan global | selesai |
 | A | `Models` (`Profile`, `BinPackage`), `ProfileStore` | profil (tanpa `Seed`) | selesai |
 | A | protokol pipe | tipe pesan JSON (v1) | selesai |
-| B | `BinScanner`, `BinProbe`, `RuntimeVc` | pemindai versi | |
-| B | `SiteScanner`, `NodeApps`, `PortCheck` | situs, proyek Node, port | |
+| B | `BinScanner`, `BinProbe`, `RuntimeVc` | pemindai versi (`bin.rs`) | selesai |
+| B | `SiteScanner`, `NodeApps`, `PortCheck` | situs, proyek Node, port (`situs.rs`, `node_apps.rs`, `port.rs`) | selesai |
 | C | `ConfigWriter` (1.473 baris) | httpd.conf, nginx, php.ini, my.ini, vhost | |
 | C | `HostsFile`, `HostsTool`, `SslTool`, `HstsPeriksa` | hosts, sertifikat | |
 | D | `ProcessJob`, `ServiceManager` (1.114) | start/stop, Job Object | |

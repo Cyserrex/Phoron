@@ -40,6 +40,115 @@ fn beda(nama: &str, rust: &[u8], cs: &[u8]) -> String {
     )
 }
 
+fn baris_csharp(f: &Path) -> Vec<String> {
+    let t = fs::read_to_string(f).unwrap_or_else(|e| panic!("{}: {e}", f.display()));
+    t.lines().map(String::from).collect()
+}
+
+fn bandingkan_baris(nama: &str, rust: &[String], cs: &[String], gagal: &mut Vec<String>) {
+    if rust == cs {
+        return;
+    }
+    // Hanya baris yang berbeda yang ditampilkan: daftar paket bisa panjang.
+    let mut s = format!("{nama}: {} baris Rust vs {} baris C#", rust.len(), cs.len());
+    for i in 0..rust.len().max(cs.len()) {
+        let (a, b) = (rust.get(i), cs.get(i));
+        if a != b {
+            s.push_str(&format!("\n  [{i}] C#:   {}\n  [{i}] Rust: {}", b.map_or("-", |x| x), a.map_or("-", |x| x)));
+        }
+    }
+    gagal.push(s);
+}
+
+/// Hasil fitur tahap B: pindai bin sungguhan, daftar situs, apps.ini, package.json.
+fn fitur(akar: &Path, masuk: &Path, cs: &Path, kerja: &Path, gagal: &mut Vec<String>) {
+    use phoron_inti::{bin, node_apps, situs};
+
+    // Pindai bin: akar yang sama persis dengan yang dipakai C#.
+    let roots: Vec<String> = baris_csharp(&akar.join("akar-bin.txt"));
+    let paket: Vec<String> = bin::scan_all(&roots)
+        .iter()
+        .map(|p| {
+            [
+                format!("{:?}", p.kind),
+                p.id.clone(),
+                p.path.clone(),
+                p.version.clone(),
+                p.compiler.clone(),
+                p.arch.clone(),
+                if p.thread_safe { "TS" } else { "NTS" }.into(),
+                p.main_exe.clone(),
+                p.apache_module_dll.clone(),
+                p.source_root.clone(),
+                p.kunci().into(),
+                if p.kembar { "kembar" } else { "" }.into(),
+            ]
+            .join("|")
+        })
+        .collect();
+    let paket_cs = baris_csharp(&akar.join("paket.txt"));
+    eprintln!("pindai bin: {} paket dari {} akar", paket_cs.len(), roots.len());
+    bandingkan_baris("paket.txt", &paket, &paket_cs, gagal);
+
+    // Situs.
+    paths::set_root(masuk.join("situs-akar"));
+    let hosts = situs::nama_hosts(&fs::read_to_string(paths::root().join("hosts")).unwrap());
+    let p = Profile {
+        project_roots: vec![
+            masuk.join("proyek").to_string_lossy().into_owned(),
+            r"Z:\tidak-ada-sama-sekali".into(),
+        ],
+        ..Profile::default()
+    };
+    let mut peringatan = Vec::new();
+    let mut s: Vec<String> = situs::scan(Some(&p), &hosts, &mut peringatan)
+        .iter()
+        .map(|x| {
+            [
+                x.folder.as_str(),
+                &x.path,
+                &x.root,
+                &x.host_name,
+                &x.doc_root,
+                if x.in_hosts { "hosts" } else { "" },
+                if x.has_vhost { "vhost" } else { "" },
+            ]
+            .join("|")
+        })
+        .collect();
+    s.push(format!("peringatan={}", peringatan.len()));
+    bandingkan_baris("situs.txt", &s, &baris_csharp(&cs.join("situs.txt")), gagal);
+
+    // apps.ini dan package.json.
+    let d = kerja.join("node");
+    fs::create_dir_all(&d).unwrap();
+    paths::set_root(&d);
+    node_apps::save_all(&[
+        node_apps::NodeApp { path: r"D:\web\toko\".into(), port: 3001, ..Default::default() },
+        node_apps::NodeApp {
+            path: r"D:\web\blog".into(),
+            name: "Blog ✓".into(),
+            manager: "pnpm".into(),
+            node_id: "node-v20".into(),
+            script: "start".into(),
+            ..Default::default()
+        },
+        node_apps::NodeApp { path: "  ".into(), ..Default::default() },
+    ])
+    .unwrap();
+    let (br, bc) = (fs::read(d.join("apps.ini")).unwrap(), fs::read(cs.join("node").join("apps.ini")).unwrap());
+    if br != bc {
+        gagal.push(beda("apps.ini", &br, &bc));
+    }
+    let proyek = masuk.join("node-proyek").to_string_lossy().into_owned();
+    let pkg = vec![
+        node_apps::scripts(&proyek).join(","),
+        node_apps::detect_manager(&proyek).to_string(),
+        node_apps::detect_framework(&proyek).to_string(),
+    ];
+    bandingkan_baris("package.txt", &pkg, &baris_csharp(&cs.join("node").join("package.txt")), gagal);
+}
+
 /// Akar Phoron adalah keadaan global proses; dua uji di berkas ini tidak
 /// boleh menggantinya bersamaan.
 static KUNCI: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -140,6 +249,9 @@ fn berkas_identik_dengan_buatan_csharp() {
             gagal.push(beda(&format!("{kasus}\\phoron.ini"), &br, &bc));
         }
     }
+
+    // ---- Tahap B: hasil fitur, bukan berkas.
+    fitur(&akar, &masuk, &cs, &kerja, &mut gagal);
 
     eprintln!("dibandingkan: {} berkas profil {:?}, 3 phoron.ini", c.len(), nama_c);
     assert!(c.len() >= 5, "bahan profil C# kurang dari yang dibangkitkan");
