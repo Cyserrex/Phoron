@@ -16,9 +16,6 @@ namespace Phoron.App.Pages
         readonly Engine _e = AppState.Engine;
         bool _mengisi;
 
-        /// <summary>Keluaran per proyek, disimpan di halaman supaya tetap ada saat berpindah pilihan.</summary>
-        static readonly Dictionary<string, Queue<string>> _log =
-            new Dictionary<string, Queue<string>>(StringComparer.OrdinalIgnoreCase);
 
         public class Baris
         {
@@ -164,10 +161,10 @@ namespace Phoron.App.Pages
                 TextAlignment = TextAlignment.Left,
             };
 
-            Queue<string> q;
-            if (folder != null && _log.TryGetValue(folder, out q))
+            // Riwayatnya disimpan NodeRunner, jadi baris yang datang selagi
+            // halaman ini tertutup tetap ada saat dibuka lagi.
             {
-                foreach (var baris in q)
+                foreach (var baris in _e.Node.Riwayat(folder))
                 {
                     var par = new Paragraph { Margin = new Thickness(0) };
                     var run = new Run(baris);
@@ -221,12 +218,6 @@ namespace Phoron.App.Pages
         {
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                Queue<string> q;
-                if (!_log.TryGetValue(folder, out q)) _log[folder] = q = new Queue<string>();
-                q.Enqueue(baris);
-                // Server pengembangan bisa mencetak ribuan baris; hanya ekor
-                // terakhirnya yang berguna dan hanya itu yang disimpan.
-                while (q.Count > 400) q.Dequeue();
                 var a = Terpilih();
                 if (a != null && string.Equals(a.Path, folder, StringComparison.OrdinalIgnoreCase))
                     MintaGambarUlang(folder);
@@ -258,11 +249,9 @@ namespace Phoron.App.Pages
         {
             // Peristiwa ini datang dari utas pembaca keluaran proyek Node, sama
             // seperti OnOutput - jadi ia juga tidak boleh ditahan.
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                _e.Say(Lang.T("Proyek {0} siap di {1}", Path.GetFileName(folder.TrimEnd('\\')), url));
-                Isi();
-            }));
+            // Barisnya "Proyek X siap di ..." dicatat Engine, bukan di sini -
+            // supaya tetap tercatat walau halaman ini sedang tidak terbuka.
+            Dispatcher.BeginInvoke(new Action(Isi));
         }
 
         void Daftar_Changed(object sender, SelectionChangedEventArgs e)

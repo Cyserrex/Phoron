@@ -131,6 +131,7 @@ namespace Phoron.Tests
                 UjiGagalDiam(sandbox);
                 UjiBlokHosts(sandbox);
                 UjiTerjemahanKode();
+                UjiBatchTiga();
             }
             catch (Exception ex)
             {

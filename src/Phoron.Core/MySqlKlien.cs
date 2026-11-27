@@ -274,6 +274,31 @@ namespace Phoron.Core
             return "`" + (pengenal ?? "").Replace("`", "``") + "`";
         }
 
+        /// <summary>
+        /// Satu argumen baris perintah Windows, dikutip menurut aturan
+        /// CommandLineToArgvW: kutip ganda di dalamnya diloloskan, dan garis
+        /// miring terbalik yang mendahului kutip digandakan.
+        ///
+        /// Dulu nama basis data untuk mysqldump hanya dibuang backtick-nya lalu
+        /// ditempel apa adanya: "my db" terbaca sebagai basis data "my" dengan
+        /// tabel "db", dan ekspornya gagal - atau mencadangkan hal yang salah.
+        /// </summary>
+        public static string KutipArgumen(string arg)
+        {
+            arg = arg ?? "";
+            var sb = new StringBuilder("\"");
+            int miring = 0;
+            foreach (var c in arg)
+            {
+                if (c == '\\') { miring++; continue; }
+                if (c == '"') sb.Append('\\', miring * 2 + 1).Append('"');
+                else sb.Append('\\', miring).Append(c);
+                miring = 0;
+            }
+            sb.Append('\\', miring * 2).Append('"');
+            return sb.ToString();
+        }
+
         /// <summary>Teks sebagai literal SQL, untuk dibandingkan dengan kolom.</summary>
         public static string KutipTeks(string teks)
         {
@@ -303,6 +328,11 @@ namespace Phoron.Core
             if (s == null) return Lang.T("Profil ini tidak memakai basis data.");
             if (string.IsNullOrEmpty(s.Dump))
                 return Lang.T("mysqldump tidak ada di paket MySQL profil ini.");
+            // Dikutip pun, argumen yang diawali "-" tetap dibaca mysqldump
+            // sebagai opsi. Lebih baik menolak dengan jelas daripada mengekspor
+            // sesuatu yang lain.
+            if ((db ?? "").StartsWith("-", StringComparison.Ordinal))
+                return Lang.T("Basis data yang namanya diawali tanda minus tidak bisa diekspor lewat mysqldump.");
 
             string setelan = null, sementara = null;
             try
@@ -319,7 +349,7 @@ namespace Phoron.Core
                 arg.Append("--single-transaction --quick --routines --events ");
                 sementara = berkasTujuan + ".phoron-tmp";
                 arg.Append("--result-file=\"").Append(sementara).Append("\" ");
-                arg.Append(Kutip(db).Replace("`", ""));
+                arg.Append(KutipArgumen(db));
 
                 // Tanpa batas waktu: dump basis data besar memang bisa lama, dan
                 // pengguna bisa membatalkannya sendiri.

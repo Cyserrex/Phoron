@@ -54,6 +54,9 @@ namespace Phoron.Core
             Services.LogRinci = Settings.LogRinci;
             Node = new NodeRunner();
             Node.UrlFound += PeriksaHsts;
+            // Dulu dicatat oleh halaman Node, jadi hilang kalau halamannya tertutup.
+            Node.UrlFound += (folder, url) =>
+                Say(Lang.T("Proyek {0} siap di {1}", Path.GetFileName((folder ?? "").TrimEnd('\\')), url));
             NodeAppsList = new List<NodeApp>();
         }
 
@@ -499,26 +502,47 @@ namespace Phoron.Core
         /// </summary>
         public async Task<List<string>> SwitchAsync(Profile profile, bool restartIfRunning = true)
         {
-            bool webWasRunning = Services.WebState == ServiceState.Jalan;
-            bool dbWasRunning = Services.DbState == ServiceState.Jalan;
-            if (webWasRunning || dbWasRunning)
+            // Satu ganti profil dalam satu waktu. Dua yang berjalan bersamaan
+            // (dobel klik, atau Beranda dan Profil berbarengan) saling membaca
+            // keadaan setengah jadi milik yang lain, dan stop milik yang kedua
+            // membatalkan start milik yang pertama - hasilnya layanan mati.
+            await _gantiProfil.WaitAsync();
+            try
             {
-                Say("Mematikan layanan sebelum ganti profil...");
-                if (dbWasRunning) await Services.StopDbGracefullyAsync(Active ?? profile, MySql);
-                if (webWasRunning) await Services.StopWebAsync();
-            }
+                // "Hidup" termasuk yang MASIH menyala. Dulu hanya Jalan yang
+                // dimatikan: MySQL yang sedang memulihkan InnoDB dibiarkan,
+                // my.ini ditulis ulang untuk profil baru, lalu start lamanya
+                // selesai dan menyala hijau dengan versi dan port profil lama.
+                bool webWasRunning = Hidup(Services.WebState);
+                bool dbWasRunning = Hidup(Services.DbState);
+                if (webWasRunning || dbWasRunning)
+                {
+                    Say("Mematikan layanan sebelum ganti profil...");
+                    if (dbWasRunning) await Services.StopDbGracefullyAsync(Active ?? profile, MySql);
+                    if (webWasRunning) await Services.StopWebAsync();
+                }
 
-            Active = profile;
-            Settings.ActiveProfile = profile != null ? profile.FileName : "";
-            Settings.Save();
-            var warnings = Apply();
+                Active = profile;
+                Settings.ActiveProfile = profile != null ? profile.FileName : "";
+                Settings.Save();
+                var warnings = Apply();
 
-            if (restartIfRunning && (webWasRunning || dbWasRunning))
-            {
-                if (dbWasRunning) await StartDbAsync();
-                if (webWasRunning) await StartWebAsync();
+                if (restartIfRunning && (webWasRunning || dbWasRunning))
+                {
+                    if (dbWasRunning) await StartDbAsync();
+                    if (webWasRunning) await StartWebAsync();
+                }
+                return warnings;
             }
-            return warnings;
+            finally { _gantiProfil.Release(); }
+        }
+
+        readonly System.Threading.SemaphoreSlim _gantiProfil = new System.Threading.SemaphoreSlim(1, 1);
+
+        /// <summary>Layanan yang sedang atau akan menyala - harus dihentikan sebelum ganti profil.</summary>
+        public static bool Hidup(ServiceState s)
+        {
+            return s == ServiceState.Jalan || s == ServiceState.Menyalakan;
         }
 
         /// <summary>Tulis ulang konfigurasi profil aktif tanpa menyentuh layanan.</summary>

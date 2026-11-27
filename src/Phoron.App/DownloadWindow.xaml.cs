@@ -30,7 +30,15 @@ namespace Phoron.App
             TxtJudul.Text = Lang.T("Phoron {0}", hasil.Versi);
             TxtSumber.Text = hasil.UrlInstaller;
             Loaded += async (s, e) => await Jalankan();
+            // Tombol X disembunyikan, tapi Alt+F4 tetap menutup jendela. Dulu
+            // unduhannya jalan terus tanpa jendela, lalu DialogResult dipasang
+            // ke jendela yang sudah tertutup dan muncul kotak "ada yang tidak
+            // beres". Menutup jendela kini sama dengan menekan Batalkan.
+            Closing += (s, e) => { if (!_selesai) _batal.Cancel(); };
+            Closed += (s, e) => _tertutup = true;
         }
+
+        bool _selesai, _tertutup;
 
         async Task Jalankan()
         {
@@ -59,6 +67,8 @@ namespace Phoron.App
             string galat = null;
             Berkas = await Updater.UnduhInstallerAsync(_hasil, kemajuan, _batal.Token, g => galat = g);
             Galat = galat;
+            _selesai = true;
+            if (_tertutup) return;
             DialogResult = Berkas != null;
         }
 

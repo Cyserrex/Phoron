@@ -479,7 +479,13 @@ namespace Phoron.App.Pages
             if (p == null) return;
             var target = _e.Profiles.FirstOrDefault(x => x.FileName == p.FileName);
             if (target == null) return;
-            var warnings = await _e.SwitchAsync(target);
+            // Dinonaktifkan selama berjalan: dobel klik dulu menjalankan dua
+            // ganti profil bersamaan dan dialog "Sekarang memakai" muncul dua kali.
+            var tombol = sender as UIElement;
+            if (tombol != null) tombol.IsEnabled = false;
+            List<string> warnings;
+            try { warnings = await _e.SwitchAsync(target); }
+            finally { if (tombol != null) tombol.IsEnabled = true; }
             AppState.RaiseChanged();
             var main = Window.GetWindow(this) as MainWindow;
             if (main != null) main.RefreshStatus();

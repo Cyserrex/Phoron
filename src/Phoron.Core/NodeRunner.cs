@@ -212,8 +212,41 @@ namespace Phoron.Core
 
         void Lapor(string folder, string baris)
         {
+            // Disimpan DI SINI, bukan di halaman Node. Dulu satu-satunya
+            // penampungnya halaman itu sendiri: jalankan Vite, pindah ke Beranda
+            // atau tutup ke baki, dan setiap baris di antaranya - termasuk galat
+            // saat start - hilang begitu saja.
+            if (folder != null)
+            {
+                lock (_kunci)
+                {
+                    Queue<string> q;
+                    if (!_riwayat.TryGetValue(folder, out q)) _riwayat[folder] = q = new Queue<string>();
+                    q.Enqueue(baris);
+                    // Server pengembangan bisa mencetak ribuan baris; hanya ekor
+                    // terakhirnya yang berguna dan hanya itu yang disimpan.
+                    while (q.Count > BatasRiwayat) q.Dequeue();
+                }
+            }
             var h = Output;
             if (h != null) h(folder, baris);
+        }
+
+        /// <summary>Jumlah baris keluaran terakhir yang disimpan per proyek.</summary>
+        public const int BatasRiwayat = 400;
+
+        readonly Dictionary<string, Queue<string>> _riwayat =
+            new Dictionary<string, Queue<string>>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Salinan keluaran terakhir sebuah proyek, terlama lebih dulu.</summary>
+        public List<string> Riwayat(string folder)
+        {
+            lock (_kunci)
+            {
+                Queue<string> q;
+                return folder != null && _riwayat.TryGetValue(folder, out q)
+                    ? new List<string>(q) : new List<string>();
+            }
         }
 
         void Ubah(string folder, bool jalan)

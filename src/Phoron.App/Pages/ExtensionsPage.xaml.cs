@@ -215,8 +215,16 @@ namespace Phoron.App.Pages
         {
             Simpan();   // rapikan perubahan yang masih tertunda sebelum restart
             var main = Window.GetWindow(this) as MainWindow;
-            await _e.StopWebAsync();
-            await _e.StartWebAsync();
+            // Dinonaktifkan selama berjalan, seperti tombol yang sama di Profil:
+            // klik kedua di tengah jalan membatalkan start milik klik pertama.
+            var tombol = sender as UIElement;
+            if (tombol != null) tombol.IsEnabled = false;
+            try
+            {
+                await _e.StopWebAsync();
+                await _e.StartWebAsync();
+            }
+            finally { if (tombol != null) tombol.IsEnabled = true; }
             if (main != null) main.RefreshStatus();
             _perluRestart = false;
             SegarkanBilah();
