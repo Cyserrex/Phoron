@@ -62,10 +62,19 @@ namespace Phoron.Core
         static readonly TimeSpan BatasSedang = TimeSpan.FromSeconds(90);
 
         /// <summary>Muat berkas sendiri, aksi lewat <paramref name="klien"/>.</summary>
-        public Engine(KlienDaemon klien)
+        public Engine(KlienDaemon klien) : this(klien, null) { }
+
+        /// <param name="penjadwalUi">
+        /// Penjadwal ke utas layar, dipasang SEBELUM langganan kabar. Kabar bisa
+        /// tiba begitu klien terhubung; tanpa penjadwal sejak awal, muat ulang
+        /// dari kabar pertama berjalan di utas pembaca pipe dan menyentuh
+        /// kontrol WPF dari sana - Phoron mati saat dibuka (ShowConflicts).
+        /// </param>
+        public Engine(KlienDaemon klien, Action<Action> penjadwalUi)
         {
             if (klien == null) throw new ArgumentNullException("klien");
             _klien = klien;
+            PenjadwalUi = penjadwalUi;
             var hasil = Core.Settings.Muat();
             Settings = hasil.Setelan;
             foreach (var k in hasil.Keluhan)

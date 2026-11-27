@@ -360,6 +360,11 @@ namespace Phoron.App
         /// <summary>Segarkan teks baki dan, bila ada, panel status jendela.</summary>
         public void SegarkanStatus()
         {
+            // Penjaga utas: dalam mode daemon kabar datang dari utas pembaca
+            // pipe, dan satu jalur saja yang lupa pindah ke utas layar sudah
+            // cukup membuat Phoron mati saat dibuka. Dipindahkan di sini, di
+            // titik masuk, bukan di tiap pemanggil.
+            if (!Application.Current.Dispatcher.CheckAccess()) { Application.Current.Dispatcher.BeginInvoke(new Action(SegarkanStatus)); return; }
             // RefreshStatus jendela lengkap ikut menyegarkan baki.
             if (_jendela != null) _jendela.RefreshStatus();
             else SegarkanBaki();

@@ -98,6 +98,13 @@ namespace Phoron.App
             }
 
             var app = new App();
+            // Konteks sinkronisasi WPF dipasang SEJAK SEKARANG, bukan menunggu
+            // app.Run(). Jendela dan Beranda sudah dibuat sebelum loop pesan
+            // berjalan, dan "await" yang dimulai di sana (ShowConflicts) tanpa
+            // konteks ini melanjutkan di thread pool lalu menyentuh kontrol WPF -
+            // dalam mode daemon, Phoron mati tiga detik sesudah dibuka.
+            System.Threading.SynchronizationContext.SetSynchronizationContext(
+                new System.Windows.Threading.DispatcherSynchronizationContext(app.Dispatcher));
             app.InitializeComponent();
             // Tanpa ini, mulai dalam keadaan tersembunyi berarti tidak ada jendela
             // terbuka sama sekali, dan WPF akan menutup aplikasinya seketika.
@@ -112,7 +119,11 @@ namespace Phoron.App
             Phoron.Core.Engine engine;
             if (klien != null)
             {
-                try { engine = new Phoron.Core.Engine(klien); }
+                try
+                {
+                    var d = app.Dispatcher;
+                    engine = new Phoron.Core.Engine(klien, kerja => d.BeginInvoke(kerja));
+                }
                 catch (Exception ex) { klien.Dispose(); return GagalMembuatEngine(ex); }
             }
             else

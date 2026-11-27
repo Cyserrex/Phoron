@@ -176,6 +176,11 @@ namespace Phoron.App.Pages
 
         public void RefreshState()
         {
+            // Penjaga utas: dalam mode daemon kabar datang dari utas pembaca
+            // pipe, dan satu jalur saja yang lupa pindah ke utas layar sudah
+            // cukup membuat Phoron mati saat dibuka. Dipindahkan di sini, di
+            // titik masuk, bukan di tiap pemanggil.
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshState)); return; }
             var php = _e.Php;
             var web = _e.WebPackage;
             var db = _e.MySql;

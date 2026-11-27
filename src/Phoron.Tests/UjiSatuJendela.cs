@@ -45,6 +45,15 @@ namespace Phoron.Tests
                    xaml.Contains("<ColumnDefinition Width=\"164\"/>")
                    && Regex.Matches(xaml, @"<ListBoxItem Tag=""[a-z]+"">\s*<StackPanel Orientation=""Horizontal"">").Count == 10);
 
+            // Mode daemon: kabar bisa tiba saat Engine baru dibuat. Penjadwal ke
+            // utas layar harus ikut diberikan saat itu juga; dulu dipasang
+            // belakangan oleh Pengendali, dan kabar pertama membuat Beranda
+            // disegarkan dari utas pipe - Phoron mati saat dibuka.
+            var program = BacaSumber("Phoron.App", "Program.cs");
+            if (program != null)
+                Ok("Engine mode daemon menerima penjadwal UI sejak dibuat",
+                   Regex.IsMatch(program, @"new Phoron\.Core\.Engine\(klien, kerja => d\.BeginInvoke\(kerja\)\)"));
+
             var dash = BacaSumber("Phoron.App", Path.Combine("Pages", "DashboardPage.xaml"));
             if (dash != null)
                 Ok("Rincian layanan selalu terlihat, bukan dilipat",
