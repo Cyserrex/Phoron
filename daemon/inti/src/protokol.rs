@@ -72,8 +72,20 @@ pub enum Perintah {
     /// Baca ulang phoron.ini, profil, apps.ini, dan pindai ulang bin/situs
     /// (Engine.Reload). Dikirim UI sesudah menulis profil/apps.ini.
     MuatUlang,
-    /// Simpan setelan global; daemon menulis phoron.ini lalu memuat ulang.
+    /// Simpan setelan global seutuhnya; daemon menulis phoron.ini lalu memuat
+    /// ulang. UI sebaiknya memakai `UbahSetelan`: salinan utuh yang basi akan
+    /// menimpa perubahan dari menu baki atau klien lain (lost update).
     SimpanSetelan { setelan: Settings },
+    /// Ubah HANYA medan setelan yang disebut (nama kunci = nama medan Settings
+    /// Rust, nilai JSON sesuai tipenya). Daemon menerapkannya ke setelan
+    /// terkininya, menulis phoron.ini, lalu menyiarkan `PerluMuatUlang`. Medan
+    /// yang tidak dikenal ditolak dengan Galat::Gagal (bukan diabaikan diam-diam).
+    UbahSetelan { perubahan: serde_json::Map<String, serde_json::Value> },
+    /// Jalankan ulang daemon dengan hak Administrator (dialog UAC di desktop
+    /// pengguna). Layanan yang sedang hidup dinyalakan lagi oleh daemon baru.
+    /// Jawaban ok dikirim sebelum daemon lama keluar; UI menyambung ulang
+    /// sendiri. Dibatalkan di UAC = Galat::Gagal.
+    MulaiUlangAdmin,
     /// Tulis ulang semua config profil aktif (Engine.Apply). Peringatan ikut
     /// di `peringatan` jawaban.
     Terapkan,

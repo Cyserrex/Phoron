@@ -38,6 +38,8 @@ kunci `data`.
 | `keadaan` | - | `Keadaan` |
 | `muat_ulang` | - | - |
 | `simpan_setelan` | `{setelan: Settings}` | - |
+| `ubah_setelan` | `{perubahan: {medan: nilai, ...}}` hanya medan yang diubah | - (dipakai UI; mencegah menimpa perubahan dari menu baki) |
+| `mulai_ulang_admin` | - | - (daemon baru ber-Administrator; layanan hidup dinyalakan lagi) |
 | `terapkan` | - | - (peringatan di `peringatan`) |
 | `ganti_profil` | `{file_name, restart}` | - |
 | `nyalakan_semua` / `matikan_semua` | - | - |
