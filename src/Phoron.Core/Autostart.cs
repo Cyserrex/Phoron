@@ -109,13 +109,13 @@ namespace Phoron.Core
             {
                 using (var key = Registry.CurrentUser.CreateSubKey(KunciRun))
                 {
-                    if (key == null) return "Kunci registri Run tidak bisa dibuka.";
+                    if (key == null) return Lang.T("Kunci registri Run tidak bisa dibuka.");
                     if (aktif) key.SetValue(NamaNilai, NilaiSeharusnya(), RegistryValueKind.String);
                     else key.DeleteValue(NamaNilai, false);
                 }
                 return null;
             }
-            catch (Exception ex) { return "Gagal menulis registri: " + ex.Message; }
+            catch (Exception ex) { return Lang.T("Gagal menulis registri: {0}", ex.Message); }
         }
     }
 }

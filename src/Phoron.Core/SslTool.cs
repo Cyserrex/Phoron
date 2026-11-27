@@ -57,7 +57,7 @@ namespace Phoron.Core
                                       IEnumerable<string> akhiranLain = null)
         {
             var openssl = FindOpenSsl(apache);
-            if (openssl == null) return "openssl.exe tidak ditemukan di paket Apache yang dipilih.";
+            if (openssl == null) return Lang.T("openssl.exe tidak ditemukan di paket Apache yang dipilih.");
 
             var suffix = Akhiran(siteSuffix);
             Directory.CreateDirectory(Paths.EtcSsl);
@@ -117,7 +117,7 @@ namespace Phoron.Core
                 // menjawab pertanyaan tentang CA yang sudah tidak ada lagi.
                 LupakanKepercayaan();
                 if (!File.Exists(CaCrtPath) || !File.Exists(CaKeyPath))
-                    return "openssl gagal membuat CA: " + resCa.All;
+                    return Lang.T("openssl gagal membuat CA: {0}", resCa.All);
             }
 
             var cnf = Path.Combine(Paths.Tmp, "phoron-ssl.cnf");
@@ -161,7 +161,7 @@ namespace Phoron.Core
                 "req -new -nodes -newkey rsa:2048"
                 + " -keyout \"" + keyBaru + "\" -out \"" + csr + "\""
                 + " -config \"" + cnf + "\"");
-            if (!File.Exists(keyBaru) || !File.Exists(csr)) return "openssl gagal: " + res.All;
+            if (!File.Exists(keyBaru) || !File.Exists(csr)) return Lang.T("openssl gagal: {0}", res.All);
 
             // Nomor seri acak, bukan -CAcreateserial yang mulai dari angka kecil
             // di berkas .srl: kalau CA dibuat ulang dengan nama yang sama, seri
@@ -176,14 +176,14 @@ namespace Phoron.Core
                 + " -extfile \"" + cnf + "\" -extensions leaf"
                 + " -out \"" + crtBaru + "\"");
             try { File.Delete(csr); } catch { }
-            if (!File.Exists(crtBaru)) return "openssl gagal: " + res.All;
+            if (!File.Exists(crtBaru)) return Lang.T("openssl gagal: {0}", res.All);
 
             try
             {
                 GantiBerkas(keyBaru, KeyPath);
                 GantiBerkas(crtBaru, CrtPath);
             }
-            catch (Exception ex) { return "Sertifikat tidak bisa disimpan: " + ex.Message; }
+            catch (Exception ex) { return Lang.T("Sertifikat tidak bisa disimpan: {0}", ex.Message); }
             ConfigWriter.TandaiWebBerubah();
             return null;
         }
@@ -351,12 +351,12 @@ namespace Phoron.Core
         /// <summary>Pasang CA ke Trusted Root Windows. Butuh hak admin.</summary>
         public static string Trust()
         {
-            if (!Exists) return "Sertifikat belum dibuat.";
-            if (!HostsFile.IsAdmin()) return "Perlu menjalankan Phoron sebagai Administrator.";
+            if (!Exists) return Lang.T("Sertifikat belum dibuat.");
+            if (!HostsFile.IsAdmin()) return Lang.T("Perlu menjalankan Phoron sebagai Administrator.");
             var res = Shell.Run("certutil.exe", "-addstore -f Root \"" + CaCrtPath + "\"", Paths.Root, 60000);
             // Jawaban lama tidak berlaku lagi - gudangnya baru saja berubah.
             LupakanKepercayaan();
-            if (!res.Ok) return "certutil gagal: " + res.All;
+            if (!res.Ok) return Lang.T("certutil gagal: {0}", res.All);
             BuangAkarLama();
             return null;
         }

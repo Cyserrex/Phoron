@@ -1,0 +1,158 @@
+namespace Phoron.Core
+{
+    public static partial class Lang
+    {
+        /// <summary>
+        /// Pesan galat dan status yang disusun di Phoron.Core lalu ditampilkan
+        /// layar: pembaruan, unduhan paket, port, autostart, SSL, runtime VC++,
+        /// dan Oracle Instant Client.
+        /// Baris: { Indonesia, Inggris, Jawa, Banjar }.
+        /// </summary>
+        static string[][] BarisCore()
+        {
+            return new[]
+            {
+                // Pemeriksa pembaruan (Updater)
+                new[] { "Jawaban kosong dari GitHub.",
+                        "GitHub sent an empty response.",
+                        "Wangsulan saka GitHub kosong.",
+                        "Jawaban matan GitHub kosong." },
+                new[] { "Nomor versi tidak ditemukan di jawaban GitHub.",
+                        "No version number was found in GitHub's response.",
+                        "Nomer versi ora ketemu ing wangsulan GitHub.",
+                        "Nomor versi kada tatamu di jawaban GitHub." },
+                new[] { "Nomor versi tidak ditemukan di umpan rilis.",
+                        "No version number was found in the release feed.",
+                        "Nomer versi ora ketemu ing umpan rilis.",
+                        "Nomor versi kada tatamu di umpan rilis." },
+                new[] { "Belum ada rilis di GitHub.",
+                        "There are no releases on GitHub yet.",
+                        "Durung ana rilis ing GitHub.",
+                        "Balum ada rilis di GitHub." },
+                new[] { "Jatah permintaan API GitHub habis. Ini hanya terjadi kalau umpan rilis tidak bisa dihubungi sehingga Phoron jatuh ke API. Coba lagi beberapa saat lagi, atau periksa apakah jaringan memblokir github.com.",
+                        "The GitHub API request quota has run out. This only happens when the release feed cannot be reached and Phoron falls back to the API. Try again in a little while, or check whether your network blocks github.com.",
+                        "Jatah panjaluk API GitHub entek. Iki mung kedadeyan yen umpan rilis ora bisa dihubungi saengga Phoron tiba menyang API. Jajal maneh sedhela engkas, utawa priksa apa jaringane mblokir github.com.",
+                        "Jatah parmintaan API GitHub habis. Ini cuma tajadi amun umpan rilis kada kawa dihubungi sampai Phoron tagugur ka API. Cuba pulang sabantar lagi, atawa pariksa apakah jaringan mamblokir github.com." },
+                new[] { "Tidak bisa menghubungi GitHub: {0}",
+                        "Could not reach GitHub: {0}",
+                        "Ora bisa nyambung menyang GitHub: {0}",
+                        "Kada kawa manghubungi GitHub: {0}" },
+                new[] { "Gagal mengecek pembaruan: {0}",
+                        "Could not check for updates: {0}",
+                        "Gagal mriksa nganyari: {0}",
+                        "Gagal mancek pahanyaran: {0}" },
+                new[] { "Rilis itu tidak menyertakan berkas installer.",
+                        "That release does not include an installer file.",
+                        "Rilis kuwi ora nggawa berkas installer.",
+                        "Rilis itu kada mambawa barakas installer." },
+                new[] { "Unduhan dibatalkan.",
+                        "The download was cancelled.",
+                        "Undhuhan dibatalake.",
+                        "Hunduhan dibatalakan." },
+                new[] { "Gagal mengunduh: {0}",
+                        "Download failed: {0}",
+                        "Gagal ngundhuh: {0}",
+                        "Gagal mahunduh: {0}" },
+                new[] { "Berkas unduhan tidak bisa dibaca: {0}",
+                        "The downloaded file could not be read: {0}",
+                        "Berkas undhuhan ora bisa diwaca: {0}",
+                        "Barakas hunduhan kada kawa dibaca: {0}" },
+                new[] { "Unduhan terputus: {0} dari {1}. Coba unduh lagi.",
+                        "The download was cut off: {0} of {1}. Try downloading again.",
+                        "Undhuhan pedhot: {0} saka {1}. Jajal undhuh maneh.",
+                        "Hunduhan tapagat: {0} matan {1}. Cuba hunduh pulang." },
+                new[] { "Keaslian installer tidak bisa dipastikan: {0} tidak tercantum di SHA256SUMS.txt rilisnya.",
+                        "The installer's authenticity could not be verified: {0} is not listed in the release's SHA256SUMS.txt.",
+                        "Keasliane installer ora bisa dipesthekake: {0} ora kacathet ing SHA256SUMS.txt rilise.",
+                        "Kaaslian installer kada kawa dipastiakan: {0} kada tacantum di SHA256SUMS.txt rilisnya." },
+                new[] { "Installer yang diunduh tidak sama dengan yang diterbitkan (SHA256 tidak cocok). Coba unduh lagi.",
+                        "The downloaded installer does not match the published one (SHA256 mismatch). Try downloading again.",
+                        "Installer sing diundhuh ora padha karo sing diterbitake (SHA256 ora cocog). Jajal undhuh maneh.",
+                        "Installer nang dihunduh kada sama lawan nang diterbitakan (SHA256 kada cocok). Cuba hunduh pulang." },
+
+                // Unduhan paket (Downloader)
+                new[] { "Tidak bisa membaca daftar PHP: {0}",
+                        "Could not read the PHP list: {0}",
+                        "Ora bisa maca daftar PHP: {0}",
+                        "Kada kawa mambaca daptar PHP: {0}" },
+                new[] { "Thread Safe", "Thread Safe", "Thread Safe", "Thread Safe" },
+                new[] { "Non Thread Safe", "Non Thread Safe", "Non Thread Safe", "Non Thread Safe" },
+                new[] { "Folder {0} sudah ada.",
+                        "Folder {0} already exists.",
+                        "Folder {0} wis ana.",
+                        "Folder {0} sudah ada." },
+                new[] { "Dibatalkan.", "Cancelled.", "Dibatalake.", "Dibatalakan." },
+
+                // Pemeriksa port (PortCheck)
+                new[] { "Port {0} bebas.", "Port {0} is free.", "Port {0} kosong.", "Port {0} kosong." },
+                new[] { "proses tak dikenal", "an unknown process", "proses sing ora dikenal", "proses nang kada dikenal" },
+                new[] { "Port {0} sedang dipakai {1} (PID {2}).",
+                        "Port {0} is in use by {1} (PID {2}).",
+                        "Port {0} lagi dienggo {1} (PID {2}).",
+                        "Port {0} lagi dipakai {1} (PID {2})." },
+                new[] { "Port {0} sedang dipakai {1}.",
+                        "Port {0} is in use by {1}.",
+                        "Port {0} lagi dienggo {1}.",
+                        "Port {0} lagi dipakai {1}." },
+
+                // Autostart
+                new[] { "Kunci registri Run tidak bisa dibuka.",
+                        "The Run registry key could not be opened.",
+                        "Kunci registri Run ora bisa dibukak.",
+                        "Kunci registri Run kada kawa dibuka." },
+                new[] { "Gagal menulis registri: {0}",
+                        "Could not write to the registry: {0}",
+                        "Gagal nulis registri: {0}",
+                        "Gagal manulis registri: {0}" },
+
+                // Sertifikat SSL (SslTool)
+                new[] { "openssl.exe tidak ditemukan di paket Apache yang dipilih.",
+                        "openssl.exe was not found in the selected Apache package.",
+                        "openssl.exe ora ketemu ing paket Apache sing dipilih.",
+                        "openssl.exe kada tatamu di pakat Apache nang dipilih." },
+                new[] { "openssl gagal membuat CA: {0}",
+                        "openssl failed to create the CA: {0}",
+                        "openssl gagal nggawe CA: {0}",
+                        "openssl gagal maulah CA: {0}" },
+                new[] { "openssl gagal: {0}", "openssl failed: {0}", "openssl gagal: {0}", "openssl gagal: {0}" },
+                new[] { "Sertifikat tidak bisa disimpan: {0}",
+                        "The certificate could not be saved: {0}",
+                        "Sertifikat ora bisa disimpen: {0}",
+                        "Sertifikat kada kawa disimpan: {0}" },
+                new[] { "Sertifikat belum dibuat.",
+                        "The certificate has not been created yet.",
+                        "Sertifikat durung digawe.",
+                        "Sertifikat balum diulah." },
+                new[] { "Perlu menjalankan Phoron sebagai Administrator.",
+                        "Phoron needs to be run as Administrator.",
+                        "Phoron kudu dilakokake minangka Administrator.",
+                        "Phoron parlu dijalanakan sabagai Administrator." },
+                new[] { "certutil gagal: {0}", "certutil failed: {0}", "certutil gagal: {0}", "certutil gagal: {0}" },
+
+                // Runtime Visual C++ (RuntimeVc)
+                new[] { "{0} {1} dibangun dengan {2}, jadi butuh {3} Redistributable {4}. Di komputer ini {5} tidak ada, dan tanpa itu modul PHP tidak bisa dimuat - Apache akan gagal start dengan pesan yang justru menunjuk berkas PHP. Pasang {3} Redistributable dari situs Microsoft.",
+                        "{0} {1} was built with {2}, so it needs the {3} Redistributable {4}. {5} is missing on this computer, and without it the PHP module cannot be loaded - Apache will fail to start with a message that points at the PHP file instead. Install the {3} Redistributable from the Microsoft website.",
+                        "{0} {1} dibangun nganggo {2}, dadi butuh {3} Redistributable {4}. Ing komputer iki {5} ora ana, lan tanpa kuwi modul PHP ora bisa dimuat - Apache bakal gagal start kanthi pesen sing malah nuduhake berkas PHP. Pasang {3} Redistributable saka situs Microsoft.",
+                        "{0} {1} dibangun lawan {2}, jadi parlu {3} Redistributable {4}. Di komputer ini {5} kadada, wan tanpa itu modul PHP kada kawa dimuat - Apache bakal gagal start lawan pasan nang malah manunjuk barakas PHP. Pasang {3} Redistributable matan situs Microsoft." },
+                new[] { "{0} {1} dibangun dengan {2}, jadi butuh {3} Redistributable yang sesuai. Di komputer ini {4} tidak ada, dan tanpa itu modul PHP tidak bisa dimuat - Apache akan gagal start dengan pesan yang justru menunjuk berkas PHP. Pasang {3} Redistributable dari situs Microsoft.",
+                        "{0} {1} was built with {2}, so it needs the matching {3} Redistributable. {4} is missing on this computer, and without it the PHP module cannot be loaded - Apache will fail to start with a message that points at the PHP file instead. Install the {3} Redistributable from the Microsoft website.",
+                        "{0} {1} dibangun nganggo {2}, dadi butuh {3} Redistributable sing cocog. Ing komputer iki {4} ora ana, lan tanpa kuwi modul PHP ora bisa dimuat - Apache bakal gagal start kanthi pesen sing malah nuduhake berkas PHP. Pasang {3} Redistributable saka situs Microsoft.",
+                        "{0} {1} dibangun lawan {2}, jadi parlu {3} Redistributable nang cocok. Di komputer ini {4} kadada, wan tanpa itu modul PHP kada kawa dimuat - Apache bakal gagal start lawan pasan nang malah manunjuk barakas PHP. Pasang {3} Redistributable matan situs Microsoft." },
+
+                // Oracle Instant Client
+                new[] { "Oracle Instant Client yang ada di komputer ini ({0}) berarsitektur {1}, sedangkan PHP {2} berarsitektur {3}. Keduanya HARUS sama, dan tidak ada client {3} lain di PATH. Pasang Instant Client {3} lalu tambahkan foldernya ke PATH Windows, atau pakai PHP {1}.",
+                        "The Oracle Instant Client on this computer ({0}) is {1}, while PHP {2} is {3}. The two MUST match, and there is no other {3} client on the PATH. Install Instant Client {3} and add its folder to the Windows PATH, or use a {1} PHP.",
+                        "Oracle Instant Client sing ana ing komputer iki ({0}) arsitekture {1}, dene PHP {2} arsitekture {3}. Loro-lorone KUDU padha, lan ora ana client {3} liyane ing PATH. Pasang Instant Client {3} banjur tambahna foldere menyang PATH Windows, utawa nganggo PHP {1}.",
+                        "Oracle Instant Client nang ada di komputer ini ({0}) arsitekturnya {1}, sadangkan PHP {2} arsitekturnya {3}. Duanya MUSTI sama, wan kadada client {3} lain di PATH. Pasang Instant Client {3} imbah itu tambahakan foldernya ka PATH Windows, atawa pakai PHP {1}." },
+                new[] { "Oracle Instant Client tidak ditemukan di PATH, jadi oci8 dan pdo_oci tidak akan bisa dimuat. Pasang Instant Client {0}, lalu tambahkan foldernya ke PATH Windows.",
+                        "Oracle Instant Client was not found on the PATH, so oci8 and pdo_oci cannot be loaded. Install Instant Client {0}, then add its folder to the Windows PATH.",
+                        "Oracle Instant Client ora ketemu ing PATH, dadi oci8 lan pdo_oci ora bakal bisa dimuat. Pasang Instant Client {0}, banjur tambahna foldere menyang PATH Windows.",
+                        "Oracle Instant Client kada tatamu di PATH, jadi oci8 wan pdo_oci kada bakal kawa dimuat. Pasang Instant Client {0}, imbah itu tambahakan foldernya ka PATH Windows." },
+                new[] { "Oracle Instant Client tidak ditemukan di PATH, jadi oci8 dan pdo_oci tidak akan bisa dimuat. Pasang Instant Client yang sesuai arsitektur PHP, lalu tambahkan foldernya ke PATH Windows.",
+                        "Oracle Instant Client was not found on the PATH, so oci8 and pdo_oci cannot be loaded. Install the Instant Client that matches PHP's architecture, then add its folder to the Windows PATH.",
+                        "Oracle Instant Client ora ketemu ing PATH, dadi oci8 lan pdo_oci ora bakal bisa dimuat. Pasang Instant Client sing cocog karo arsitektur PHP, banjur tambahna foldere menyang PATH Windows.",
+                        "Oracle Instant Client kada tatamu di PATH, jadi oci8 wan pdo_oci kada bakal kawa dimuat. Pasang Instant Client nang cocok lawan arsitektur PHP, imbah itu tambahakan foldernya ka PATH Windows." },
+            };
+        }
+    }
+}

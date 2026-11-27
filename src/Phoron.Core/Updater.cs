@@ -30,8 +30,8 @@ namespace Phoron.Core
         public override string ToString()
         {
             return Total > 0
-                ? Ukuran(Sudah) + " dari " + Ukuran(Total)
-                : Ukuran(Sudah) + " terunduh";
+                ? Lang.T("{0} dari {1}", Ukuran(Sudah), Ukuran(Total))
+                : Lang.T("{0} terunduh", Ukuran(Sudah));
         }
     }
 
@@ -113,10 +113,10 @@ namespace Phoron.Core
         public static HasilCek Urai(string json)
         {
             var h = new HasilCek();
-            if (string.IsNullOrWhiteSpace(json)) { h.Galat = "Jawaban kosong dari GitHub."; return h; }
+            if (string.IsNullOrWhiteSpace(json)) { h.Galat = Lang.T("Jawaban kosong dari GitHub."); return h; }
 
             var tag = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
-            if (!tag.Success) { h.Galat = "Nomor versi tidak ditemukan di jawaban GitHub."; return h; }
+            if (!tag.Success) { h.Galat = Lang.T("Nomor versi tidak ditemukan di jawaban GitHub."); return h; }
             h.Versi = Bersihkan(tag.Groups[1].Value);
 
             var halaman = Regex.Match(json, "\"html_url\"\\s*:\\s*\"([^\"]+/releases/tag/[^\"]+)\"");
@@ -183,11 +183,11 @@ namespace Phoron.Core
         public static HasilCek UraiAtom(string xml)
         {
             var h = new HasilCek();
-            if (string.IsNullOrWhiteSpace(xml)) { h.Galat = "Jawaban kosong dari GitHub."; return h; }
+            if (string.IsNullOrWhiteSpace(xml)) { h.Galat = Lang.T("Jawaban kosong dari GitHub."); return h; }
 
             // Entri PERTAMA adalah rilis terbaru; GitHub mengurutkannya begitu.
             var tag = Regex.Match(xml, "/releases/tag/([^\"<]+)");
-            if (!tag.Success) { h.Galat = "Nomor versi tidak ditemukan di umpan rilis."; return h; }
+            if (!tag.Success) { h.Galat = Lang.T("Nomor versi tidak ditemukan di umpan rilis."); return h; }
 
             var namaTag = tag.Groups[1].Value.Trim();
             h.Versi = Bersihkan(namaTag);
@@ -252,17 +252,17 @@ namespace Phoron.Core
                 var h = new HasilCek();
                 var resp = ex.Response as HttpWebResponse;
                 h.Galat = resp != null && (int)resp.StatusCode == 404
-                    ? "Belum ada rilis di GitHub."
+                    ? Lang.T("Belum ada rilis di GitHub.")
                     : JatahHabis(resp)
-                        ? "Jatah permintaan API GitHub habis. Ini hanya terjadi kalau umpan "
+                        ? Lang.T("Jatah permintaan API GitHub habis. Ini hanya terjadi kalau umpan "
                           + "rilis tidak bisa dihubungi sehingga Phoron jatuh ke API. Coba lagi "
-                          + "beberapa saat lagi, atau periksa apakah jaringan memblokir github.com."
-                        : "Tidak bisa menghubungi GitHub: " + ex.Message;
+                          + "beberapa saat lagi, atau periksa apakah jaringan memblokir github.com.")
+                        : Lang.T("Tidak bisa menghubungi GitHub: {0}", ex.Message);
                 return h;
             }
             catch (Exception ex)
             {
-                return new HasilCek { Galat = "Gagal mengecek pembaruan: " + ex.Message };
+                return new HasilCek { Galat = Lang.T("Gagal mengecek pembaruan: {0}", ex.Message) };
             }
         }
 
@@ -277,7 +277,7 @@ namespace Phoron.Core
         {
             if (hasil == null || string.IsNullOrEmpty(hasil.UrlInstaller))
             {
-                if (galat != null) galat("Rilis itu tidak menyertakan berkas installer.");
+                if (galat != null) galat(Lang.T("Rilis itu tidak menyertakan berkas installer."));
                 return null;
             }
             var tujuan = Path.Combine(Paths.Tmp, "Phoron-" + hasil.Versi + "-Setup.exe");
@@ -323,13 +323,13 @@ namespace Phoron.Core
                 // Berkas separuh jadi dibuang: kalau ditinggal, unduhan berikutnya
                 // menemukan berkas bernama sama dan menganggapnya sudah lengkap.
                 try { if (File.Exists(tujuan)) File.Delete(tujuan); } catch { }
-                if (galat != null) galat("Unduhan dibatalkan.");
+                if (galat != null) galat(Lang.T("Unduhan dibatalkan."));
                 return null;
             }
             catch (Exception ex)
             {
                 try { if (File.Exists(tujuan)) File.Delete(tujuan); } catch { }
-                if (galat != null) galat("Gagal mengunduh: " + ex.Message);
+                if (galat != null) galat(Lang.T("Gagal mengunduh: {0}", ex.Message));
                 return null;
             }
         }
@@ -380,10 +380,10 @@ namespace Phoron.Core
         {
             long ukuran;
             try { ukuran = new FileInfo(berkas).Length; }
-            catch (Exception ex) { return "Berkas unduhan tidak bisa dibaca: " + ex.Message; }
+            catch (Exception ex) { return Lang.T("Berkas unduhan tidak bisa dibaca: {0}", ex.Message); }
             if (total > 0 && ukuran != total)
-                return "Unduhan terputus: " + KemajuanUnduh.Ukuran(ukuran) + " dari " + KemajuanUnduh.Ukuran(total)
-                       + ". Coba unduh lagi.";
+                return Lang.T("Unduhan terputus: {0} dari {1}. Coba unduh lagi.",
+                              KemajuanUnduh.Ukuran(ukuran), KemajuanUnduh.Ukuran(total));
             if (daftarHash == null) return null;
 
             string harap = null;
@@ -396,14 +396,14 @@ namespace Phoron.Core
                 if (string.Equals(nama, namaBerkas, StringComparison.OrdinalIgnoreCase)) { harap = b.Substring(0, sp).ToLowerInvariant(); break; }
             }
             if (harap == null)
-                return "Keaslian installer tidak bisa dipastikan: " + namaBerkas + " tidak tercantum di SHA256SUMS.txt rilisnya.";
+                return Lang.T("Keaslian installer tidak bisa dipastikan: {0} tidak tercantum di SHA256SUMS.txt rilisnya.", namaBerkas);
 
             string nyata;
             using (var sha = SHA256.Create())
             using (var f = File.OpenRead(berkas))
                 nyata = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant();
             return nyata == harap ? null
-                : "Installer yang diunduh tidak sama dengan yang diterbitkan (SHA256 tidak cocok). Coba unduh lagi.";
+                : Lang.T("Installer yang diunduh tidak sama dengan yang diterbitkan (SHA256 tidak cocok). Coba unduh lagi.");
         }
     }
 }

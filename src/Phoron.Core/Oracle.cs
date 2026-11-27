@@ -140,15 +140,18 @@ namespace Phoron.Core
             h.Arsitektur = pertamaArch;
             h.Layak = false;
             h.Pesan = h.Ada
-                ? "Oracle Instant Client yang ada di komputer ini (" + h.JalurDll + ") berarsitektur "
-                  + h.Arsitektur + ", sedangkan PHP " + php.Version + " berarsitektur "
-                  + h.ArsitekturPhp + ". Keduanya HARUS sama, dan tidak ada client "
-                  + h.ArsitekturPhp + " lain di PATH. Pasang Instant Client " + h.ArsitekturPhp
-                  + " lalu tambahkan foldernya ke PATH Windows, atau pakai PHP " + h.Arsitektur + "."
-                : "Oracle Instant Client tidak ditemukan di PATH, jadi oci8 dan pdo_oci tidak akan "
-                  + "bisa dimuat. Pasang Instant Client "
-                  + (h.ArsitekturPhp.Length > 0 ? h.ArsitekturPhp : "yang sesuai arsitektur PHP")
-                  + ", lalu tambahkan foldernya ke PATH Windows.";
+                ? Lang.T("Oracle Instant Client yang ada di komputer ini ({0}) berarsitektur {1}, "
+                         + "sedangkan PHP {2} berarsitektur {3}. Keduanya HARUS sama, dan tidak ada client "
+                         + "{3} lain di PATH. Pasang Instant Client {3} lalu tambahkan foldernya ke PATH "
+                         + "Windows, atau pakai PHP {1}.",
+                         h.JalurDll, h.Arsitektur, php.Version, h.ArsitekturPhp)
+                : h.ArsitekturPhp.Length > 0
+                    ? Lang.T("Oracle Instant Client tidak ditemukan di PATH, jadi oci8 dan pdo_oci tidak akan "
+                             + "bisa dimuat. Pasang Instant Client {0}, lalu tambahkan foldernya ke PATH Windows.",
+                             h.ArsitekturPhp)
+                    : Lang.T("Oracle Instant Client tidak ditemukan di PATH, jadi oci8 dan pdo_oci tidak akan "
+                             + "bisa dimuat. Pasang Instant Client yang sesuai arsitektur PHP, lalu tambahkan "
+                             + "foldernya ke PATH Windows.");
             return h;
         }
     }

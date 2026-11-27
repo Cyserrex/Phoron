@@ -17,6 +17,7 @@ namespace Phoron.Core
             yield return BarisSetelan();
             yield return BarisVersi();
             yield return BarisBerandaD();
+            yield return BarisCore();
         }
 
         static string[][] BarisUmum()

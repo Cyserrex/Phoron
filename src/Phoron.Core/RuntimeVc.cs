@@ -74,12 +74,17 @@ namespace Phoron.Core
 
             h.Ada = File.Exists(jalur) || File.Exists(lokal) || File.Exists(lokalBin);
             if (!h.Ada)
-                h.Pesan = pkg.Kind + " " + pkg.Version + " dibangun dengan " + pkg.Compiler
-                    + ", jadi butuh " + paket + " Redistributable "
-                    + (arch.Length > 0 ? arch : "yang sesuai")
-                    + ". Di komputer ini " + dll + " tidak ada, dan tanpa itu modul PHP "
-                    + "tidak bisa dimuat - Apache akan gagal start dengan pesan yang justru "
-                    + "menunjuk berkas PHP. Pasang " + paket + " Redistributable dari situs Microsoft.";
+                h.Pesan = arch.Length > 0
+                    ? Lang.T("{0} {1} dibangun dengan {2}, jadi butuh {3} Redistributable {4}. "
+                             + "Di komputer ini {5} tidak ada, dan tanpa itu modul PHP tidak bisa dimuat - "
+                             + "Apache akan gagal start dengan pesan yang justru menunjuk berkas PHP. "
+                             + "Pasang {3} Redistributable dari situs Microsoft.",
+                             pkg.Kind, pkg.Version, pkg.Compiler, paket, arch, dll)
+                    : Lang.T("{0} {1} dibangun dengan {2}, jadi butuh {3} Redistributable yang sesuai. "
+                             + "Di komputer ini {4} tidak ada, dan tanpa itu modul PHP tidak bisa dimuat - "
+                             + "Apache akan gagal start dengan pesan yang justru menunjuk berkas PHP. "
+                             + "Pasang {3} Redistributable dari situs Microsoft.",
+                             pkg.Kind, pkg.Version, pkg.Compiler, paket, dll);
             return h;
         }
 

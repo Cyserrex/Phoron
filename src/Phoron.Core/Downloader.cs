@@ -52,7 +52,7 @@ namespace Phoron.Core
             var list = new List<RemotePackage>();
             string html;
             try { html = await GetStringAsync(PhpBase); }
-            catch (Exception ex) { throw new Exception("Tidak bisa membaca daftar PHP: " + ex.Message); }
+            catch (Exception ex) { throw new Exception(Lang.T("Tidak bisa membaca daftar PHP: {0}", ex.Message)); }
 
             // Indeks berkasnya HTML biasa; nama arsip yang menarik selalu berbentuk
             // php-<versi>-Win32-<toolset>-x64.zip. Paket debug dan devel dilewati.
@@ -69,7 +69,7 @@ namespace Phoron.Core
                     Name = Path.GetFileNameWithoutExtension(name),
                     Url = PhpBase + name,
                     Version = m.Groups[1].Value,
-                    Note = string.IsNullOrEmpty(m.Groups[2].Value) ? "Thread Safe" : "Non Thread Safe",
+                    Note = string.IsNullOrEmpty(m.Groups[2].Value) ? Lang.T("Thread Safe") : Lang.T("Non Thread Safe"),
                 });
             }
             return list.OrderByDescending(p => new BinPackage { Version = p.Version }.Parsed)
@@ -124,7 +124,7 @@ namespace Phoron.Core
             var kindDir = Path.Combine(Paths.Bin, KindFolder(pkg.Kind));
             Directory.CreateDirectory(kindDir);
             var target = Path.Combine(kindDir, pkg.Name);
-            if (Directory.Exists(target)) return "Folder " + pkg.Name + " sudah ada.";
+            if (Directory.Exists(target)) return Lang.T("Folder {0} sudah ada.", pkg.Name);
 
             var zip = Path.Combine(Paths.Tmp, pkg.Name + ".zip");
             try
@@ -138,12 +138,12 @@ namespace Phoron.Core
             {
                 SafeDelete(zip);
                 SafeDeleteDir(target);
-                return "Dibatalkan.";
+                return Lang.T("Dibatalkan.");
             }
             catch (Exception ex)
             {
                 SafeDeleteDir(target);
-                return "Gagal: " + ex.Message;
+                return Lang.T("Gagal: {0}", ex.Message);
             }
             finally { SafeDelete(zip); }
         }

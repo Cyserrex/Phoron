@@ -32,9 +32,11 @@ namespace Phoron.Core
             public string Jalur = "";
             public string Describe()
             {
-                if (!InUse) return "Port " + Port + " bebas.";
-                var who = string.IsNullOrEmpty(ProcessName) ? "proses tak dikenal" : ProcessName;
-                return "Port " + Port + " sedang dipakai " + who + (Pid > 0 ? " (PID " + Pid + ")" : "") + ".";
+                if (!InUse) return Lang.T("Port {0} bebas.", Port);
+                var who = string.IsNullOrEmpty(ProcessName) ? Lang.T("proses tak dikenal") : ProcessName;
+                return Pid > 0
+                    ? Lang.T("Port {0} sedang dipakai {1} (PID {2}).", Port, who, Pid)
+                    : Lang.T("Port {0} sedang dipakai {1}.", Port, who);
             }
         }
 
