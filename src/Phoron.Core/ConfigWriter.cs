@@ -165,6 +165,15 @@ namespace Phoron.Core
                     sb.AppendLine("# " + line + "   # dinonaktifkan Phoron - lihat blok di bawah");
                     continue;
                 }
+                // Log bawaan vendor ("logs/access.log", relatif ke ServerRoot)
+                // menulis ke folder paket di bin - apa pun setelan log rinci.
+                // Log Phoron ditulis di blok penutup, ke folder logs Phoron.
+                // ErrorLogFormat bukan direktif log dan tidak ikut.
+                if (Regex.IsMatch(t, "^(CustomLog|TransferLog|ErrorLog)\\s", RegexOptions.IgnoreCase))
+                {
+                    sb.AppendLine("# " + line + "   # dinonaktifkan Phoron - log ditulis ke folder logs Phoron");
+                    continue;
+                }
                 sb.AppendLine(line);
             }
             if (!listenReplaced) sb.AppendLine("Listen " + profile.HttpPort);

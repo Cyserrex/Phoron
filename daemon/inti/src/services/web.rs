@@ -5,10 +5,9 @@ use super::{port16, sambung, Lanjut, Layanan, Proses, Resep};
 use crate::config::{self, Hasil};
 use crate::model::{BinPackage, Profile, ServiceKind, ServiceState};
 use crate::protokol::Pesan;
-use crate::{bin, oracle, paths, port, shell};
+use crate::{bin, oracle, paths, port};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -48,6 +47,19 @@ fn petunjuk_gagal(apache: &BinPackage, php: Option<&BinPackage>) -> String {
     }
     let teks: Vec<String> = kurang.iter().map(config::teks).collect();
     format!("\r\n\r\nKemungkinan sebabnya: {}", teks.join("\r\n"))
+}
+
+/// Folder awalan (`-p`) Nginx: milik Phoron, bukan folder paket. Nginx
+/// membuka `logs\error.log` di awalannya sebelum membaca config, dan membuat
+/// `temp\*_temp` di sana untuk jalur sementara yang tidak disetel config
+/// (uwsgi, scgi). Dengan awalan folder paket, keduanya menulisi bin - yang
+/// tidak pernah boleh disunting Phoron. Config memakai jalur mutlak, jadi
+/// awalannya tidak menentukan apa pun yang lain.
+pub(super) fn awalan_nginx() -> std::io::Result<std::path::PathBuf> {
+    let a = paths::tmp().join("nginx");
+    std::fs::create_dir_all(a.join("logs"))?;
+    std::fs::create_dir_all(a.join("temp"))?;
+    Ok(a)
 }
 
 /// Nama kolam untuk pesan: "PHP 8.3.12 (api-bacameter, bbs)".
@@ -186,7 +198,8 @@ impl Layanan {
             self.buang_web_yatim(p);
             return Some(false);
         }
-        p.dalam_start.store(false, Ordering::SeqCst);
+        // dalam_start tetap menyala sampai `selesaikan`: proses yang mati di
+        // sisa start tetap dilaporkan start, sekali.
         if mati || p.keluar() {
             if !self.lepas_web_jika(p) {
                 // Pengawas sudah melapor.
@@ -213,7 +226,9 @@ impl Layanan {
 
         // Uji config dulu: httpd yang salah config mencetak sebabnya lalu
         // keluar seketika; tanpa uji ini orang cuma melihat "Gagal".
-        let uji = shell::run(&httpd, &format!("{args} -t"), Some(Path::new(&apache.path)), 30_000, Some(&env), None)
+        // Bisa dipotong stop: start sesudah stop tidak perlu menunggu uji ini.
+        let uji = self
+            .jalankan(&httpd, &format!("{args} -t"), Path::new(&apache.path), 30_000, Some(&env), ServiceKind::Web, g)
             .map_err(|e| e.to_string())?;
         if self.batal(ServiceKind::Web, g) {
             return Ok(false);
@@ -254,10 +269,12 @@ impl Layanan {
     fn start_nginx(&self, nginx: &BinPackage, php: Option<&BinPackage>, cfg: &Hasil, g: u64) -> Lanjut<bool> {
         let exe = jalur(&Path::new(&nginx.path).join("nginx.exe"));
         let conf = cfg.nginx_conf.clone().unwrap_or_else(|| paths::etc_nginx().join("nginx.conf"));
-        let args = format!("-p \"{}\" -c \"{}\"", nginx.path, jalur(&conf));
+        let awalan = awalan_nginx().map_err(|e| e.to_string())?;
+        let args = format!("-p \"{}\" -c \"{}\"", jalur(&awalan), jalur(&conf));
         let env = super::env_for(php, cfg.php_ini_dir.as_deref());
 
-        let uji = shell::run(&exe, &format!("{args} -t"), Some(Path::new(&nginx.path)), 30_000, Some(&env), None)
+        let uji = self
+            .jalankan(&exe, &format!("{args} -t"), Path::new(&nginx.path), 30_000, Some(&env), ServiceKind::Web, g)
             .map_err(|e| e.to_string())?;
         if self.batal(ServiceKind::Web, g) {
             return Ok(false);

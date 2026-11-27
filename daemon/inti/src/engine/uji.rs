@@ -375,10 +375,14 @@ fn simpan_setelan_ditulis_lalu_dimuat_ulang() {
     let (_g, d) = sandbox("eng-simpan");
     setelan(&d, "");
     let (e, r) = rekam();
+    e.catat_situs_dibuka(r"D:\www\dari-baki");
     let mut s = e.settings();
     s.tema = "gelap".into();
     s.db_sandi = "rahasia-uji".into();
+    s.log_rinci = true;
+    // Salinan UI: situs terakhir dan profil aktif di dalamnya diabaikan.
     s.situs_terakhir = (0..9).map(|i| format!(r"D:\www\s{i}")).collect();
+    s.active_profile = "dari-ui".into();
     kunci(&r).clear();
     e.simpan_setelan(s).unwrap();
     let isi = fs::read_to_string(d.join("phoron.ini")).unwrap();
@@ -386,8 +390,10 @@ fn simpan_setelan_ditulis_lalu_dimuat_ulang() {
     assert!(!isi.contains("rahasia-uji"), "sandi tersimpan terbuka");
     let baru = Settings::load();
     assert_eq!(baru.db_sandi, "rahasia-uji");
-    assert_eq!(baru.situs_terakhir.len(), settings::BATAS_SITUS_TERAKHIR);
+    assert_eq!(baru.situs_terakhir, [r"D:\www\dari-baki"], "situs terakhir milik catat_situs_dibuka");
+    assert_eq!(baru.active_profile, "", "profil aktif milik ganti_profil");
     assert_eq!(e.settings().tema, "gelap");
+    assert!(e.layanan().log_rinci(), "log rinci tidak sampai ke layanan");
     assert!(kunci(&r).iter().any(|k| matches!(k, Kabar::PerluMuatUlang)));
     let _ = fs::remove_dir_all(&d);
 }
@@ -543,6 +549,136 @@ fn ganti_profil_tanpa_layanan() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// phoron.ini dibaca hanya saat Engine dibuat: muat ulang tidak menimpa
+/// setelan di memori dengan isi cakram (berkas cacat, suntingan luar), dan
+/// perubahan ganti profil serta situs terakhir bertahan.
+#[test]
+fn muat_ulang_tidak_membaca_phoron_ini() {
+    let (_g, d) = sandbox("eng-muatini");
+    setelan(&d, "kelola_hosts=0\r\ntema=terang\r\n");
+    let a = simpan_profil(Profile { name: "A".into(), ..Profile::default() });
+    let b = simpan_profil(Profile { name: "B".into(), ..Profile::default() });
+    let (e, _) = rekam();
+    e.ganti_profil(&b.file_name, false).unwrap();
+    e.catat_situs_dibuka(r"D:\www\toko");
+    // Berkas di cakram diubah dari luar, lalu dirusak.
+    fs::write(d.join("phoron.ini"), format!("[umum]\r\nprofil_aktif={}\r\ntema=gelap\r\n", a.file_name)).unwrap();
+    e.muat_ulang();
+    assert_eq!(e.settings().tema, "terang", "muat ulang membaca phoron.ini");
+    assert_eq!(e.active().unwrap().file_name, b.file_name);
+    fs::write(d.join("phoron.ini"), [0xff_u8, 0xfe, 0x00, 0x5b]).unwrap();
+    e.muat_ulang();
+    let s = e.settings();
+    assert_eq!((s.active_profile.as_str(), s.situs_terakhir.len()), (b.file_name.as_str(), 1));
+    assert_eq!(e.active().unwrap().file_name, b.file_name);
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Simpan/ubah setelan tidak mengganti profil aktif; ubah_setelan yang
+/// menyebutnya ditolak. cek_terakhir tetap boleh; log rinci sampai ke layanan.
+#[test]
+fn setelan_tidak_mengganti_profil_aktif() {
+    let (_g, d) = sandbox("eng-setelanaktif");
+    setelan(&d, "kelola_hosts=0\r\n");
+    let a = simpan_profil(Profile { name: "A".into(), ..Profile::default() });
+    let b = simpan_profil(Profile { name: "B".into(), ..Profile::default() });
+    let (e, _) = rekam();
+    assert_eq!(e.active().unwrap().file_name, a.file_name);
+    let mut s = e.settings();
+    s.active_profile = b.file_name.clone();
+    e.simpan_setelan(s).unwrap();
+    assert_eq!(e.active().unwrap().file_name, a.file_name, "simpan_setelan memindah profil aktif");
+    assert_eq!(Settings::load().active_profile, "");
+
+    let ubah = |j: serde_json::Value| e.ubah_setelan(j.as_object().unwrap().clone());
+    assert_eq!(
+        ubah(serde_json::json!({ "active_profile": b.file_name })),
+        Err(Pesan::baru("Profil aktif diganti lewat Ganti profil, bukan lewat setelan."))
+    );
+    assert!(ubah(serde_json::json!({ "situs_terakhir": ["x"] })).is_err());
+    assert_eq!(e.active().unwrap().file_name, a.file_name);
+    assert!(!e.layanan().log_rinci());
+    let saat = e.settings().cek_terakhir;
+    ubah(serde_json::json!({ "log_rinci": true, "cek_terakhir": { "detik": 1_800_000_000_i64, "tick": 0 } })).unwrap();
+    assert!(e.layanan().log_rinci(), "log rinci tidak diteruskan ke layanan");
+    assert_ne!(e.settings().cek_terakhir, saat, "cek_terakhir boleh diubah UI");
+    assert!(ubah(serde_json::json!({ "nama_ngawur": 1 })).is_err());
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Dua ganti profil berpapasan (dobel klik, Beranda dan Profil bersamaan):
+/// hasilnya satu profil yang utuh - memori, phoron.ini, dan Keadaan sepakat.
+#[test]
+fn ganti_profil_berpapasan() {
+    let (_g, d) = sandbox("eng-papasan");
+    setelan(&d, "kelola_hosts=0\r\n");
+    let a = simpan_profil(Profile { name: "A".into(), ..Profile::default() });
+    let b = simpan_profil(Profile { name: "B".into(), ..Profile::default() });
+    let (e, _) = rekam();
+    let mut utas = Vec::new();
+    for i in 0..6 {
+        let (e2, f) = (e.clone(), if i % 2 == 0 { a.file_name.clone() } else { b.file_name.clone() });
+        utas.push(std::thread::spawn(move || {
+            e2.ganti_profil(&f, true).unwrap();
+            e2.muat_ulang();
+            e2.catat_situs_dibuka(&format!(r"D:\www\s{i}"));
+        }));
+    }
+    for t in utas {
+        t.join().unwrap();
+    }
+    let aktif = e.active().unwrap().file_name;
+    assert_eq!(e.settings().active_profile, aktif);
+    assert_eq!(Settings::load().active_profile, aktif);
+    assert_eq!(e.keadaan().profil_aktif, aktif);
+    assert_eq!(Settings::load().situs_terakhir.len(), settings::BATAS_SITUS_TERAKHIR, "situs terakhir hilang");
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Profil aktif tidak berganti di tengah start: ganti profil menunggu start
+/// (pemegang kunci profil) selesai.
+#[test]
+fn ganti_profil_menunggu_start() {
+    let (_g, d) = sandbox("eng-tunggustart");
+    setelan(&d, "kelola_hosts=0\r\n");
+    let a = simpan_profil(Profile { name: "A".into(), ..Profile::default() });
+    let b = simpan_profil(Profile { name: "B".into(), ..Profile::default() });
+    let (e, _) = rekam();
+    let start = e.profil_baca(); // seolah nyalakan_web sedang berjalan
+    let e2 = e.clone();
+    let f = b.file_name.clone();
+    let t = std::thread::spawn(move || e2.ganti_profil(&f, false));
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(e.active().unwrap().file_name, a.file_name, "profil aktif berganti di tengah start");
+    assert!(!t.is_finished());
+    drop(start);
+    t.join().unwrap().unwrap();
+    assert_eq!(e.active().unwrap().file_name, b.file_name);
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Sesudah tutup: start dan ganti profil baru ditolak dengan pesan.
+#[test]
+fn tutup_menolak_start_baru() {
+    let (_g, d) = sandbox("eng-tutup");
+    setelan(&d, "kelola_hosts=0\r\n");
+    let a = simpan_profil(Profile { name: "A".into(), ..Profile::default() });
+    let (e, _) = rekam();
+    let mulai = Instant::now();
+    e.tutup();
+    assert!(mulai.elapsed() < Duration::from_secs(10), "tutup menunggu padahal tidak ada yang berjalan");
+    let ditutup = Err(Pesan::baru("Phoron sedang ditutup."));
+    assert_eq!(e.nyalakan_web(), ditutup);
+    assert_eq!(e.nyalakan_db(), ditutup);
+    assert_eq!(e.nyalakan_semua(), Err(Pesan::baru("Phoron sedang ditutup.")));
+    assert_eq!(e.ganti_profil(&a.file_name, true), Err(Pesan::baru("Phoron sedang ditutup.")));
+    assert_eq!(
+        tangani(&e, Perintah::NyalakanWeb),
+        IsiJawaban::Galat { galat: Galat::Gagal { pesan: Pesan::baru("Phoron sedang ditutup.") } }
+    );
+    let _ = fs::remove_dir_all(&d);
+}
+
 // ------------------------------------------------------------ protokol
 
 #[test]
@@ -686,24 +822,126 @@ fn nyata_jalan_pertama_membuat_profil() {
     let _ = fs::remove_dir_all(&d);
 }
 
-/// CustomLog bawaan vendor ("logs/access.log", relatif ke ServerRoot) ikut
-/// tersalin ke httpd.conf dan akan menulis ke folder paket Laragon. Uji tidak
-/// boleh menulis ke sana, jadi dimatikan di sini (lihat temuan tahap D).
-fn tanpa_log_vendor(cfg: &Hasil) {
-    let Some(conf) = &cfg.httpd_conf else { return };
-    let isi = fs::read_to_string(conf).unwrap();
-    let baru: Vec<String> = isi
-        .split('\n')
-        .map(|b| {
-            let t = b.trim_start();
-            if t.starts_with("CustomLog \"logs/") || t.starts_with("TransferLog \"logs/") {
-                format!("# {b}")
-            } else {
-                b.to_string()
-            }
-        })
-        .collect();
-    fs::write(conf, baru.join("\n")).unwrap();
+/// Folder paket Laragon yang dipakai uji nyata - hanya boleh dibaca.
+const FOLDER_PAKET: &[&str] =
+    &[r"C:\laragon\bin\apache", r"C:\laragon\bin\php", r"C:\laragon\bin\mysql", r"C:\laragon\bin\nginx"];
+
+/// Siapkan uji nyata: config utas ini mendengarkan hanya di 127.0.0.1 (tanpa
+/// dialog Windows Firewall) dan folder paket dipotret untuk diperiksa.
+fn mulai_nyata() -> crate::uji_paket::JagaPaket {
+    config::uji_dengar_lokal(true);
+    crate::uji_paket::JagaPaket::baru(&crate::uji_paket::yang_ada(FOLDER_PAKET))
+}
+
+/// Engine dari Laragon dengan port acak dan folder proyek di sandbox untuk
+/// semua profil hasil seed. Hasil: Engine, rekaman kabar, profil PHP 8.1 dan 7.4.
+fn engine_laragon(d: &Path) -> (Engine, Arc<Mutex<Vec<Kabar>>>, Profile, Profile) {
+    fs::write(d.join("phoron.ini"), format!("[umum]\r\nbin_roots={LARAGON_BIN}\r\nkelola_hosts=0\r\n")).unwrap();
+    let www = d.join("www");
+    fs::create_dir_all(&www).unwrap();
+    fs::write(www.join("uji.php"), "<?php echo 'phoron-engine ' . PHP_VERSION . ' ' . php_sapi_name();").unwrap();
+    let (e, r) = rekam();
+    for mut p in e.profiles() {
+        p.http_port = port_bebas() as i32;
+        p.https_port = port_bebas() as i32;
+        p.mysql_port = port_bebas() as i32;
+        p.project_roots = vec![www.to_string_lossy().into_owned()];
+        profile_store::save(&mut p).unwrap();
+    }
+    e.muat_ulang();
+    let p81 = e.active().unwrap();
+    let p74 = e.profiles().into_iter().find(|p| p.php_id.starts_with("php-7.4.22")).unwrap();
+    (e, r, p81, p74)
+}
+
+/// Tunggu sampai init MySQL (folder data kosong) benar-benar berjalan.
+fn tunggu_init(e: &Engine) {
+    assert!(
+        tunggu(|| hitung_log(e, "belum ada - menyiapkan basis data awal") > 0, 30_000),
+        "init MySQL tidak pernah mulai: {:#?}",
+        log(e)
+    );
+    std::thread::sleep(Duration::from_millis(1500));
+}
+
+/// Ganti profil selagi MySQL MASIH menyala (init folder data kosong): init
+/// profil lama dibatalkan, dan MySQL akhirnya Jalan dengan profil baru. Dulu
+/// stop tidak bisa memotong init dan nyalakan profil baru menerima `false`
+/// milik start yang dibatalkan - ganti profil Ok, MySQL mati.
+#[test]
+fn nyata_ganti_profil_saat_mysql_init() {
+    if !laragon_ada() || !Path::new(r"C:\laragon\bin\mysql\mysql-8.0.30-winx64").is_dir() {
+        return;
+    }
+    let (_g, d) = sandbox("eng-gantiinit");
+    let jaga = mulai_nyata();
+    let awal: Vec<u32> = proses_di(LARAGON_BIN).into_iter().map(|p| p.0).collect();
+    let (e, _r, _p81, p74) = engine_laragon(&d);
+    let e2 = e.clone();
+    let t = std::thread::spawn(move || e2.nyalakan_db());
+    tunggu_init(&e);
+    assert_eq!(e.layanan().db_state(), ServiceState::Menyalakan);
+    e.ganti_profil(&p74.file_name, true).unwrap();
+    assert_eq!(t.join().unwrap(), Ok(false), "start profil lama tidak dibatalkan");
+    assert_eq!(e.active().unwrap().file_name, p74.file_name);
+    assert_eq!(e.layanan().db_state(), ServiceState::Jalan, "{}", log(&e).join("\n"));
+    assert!(!port::is_free(p74.mysql_port as u16));
+    assert_eq!(hitung_log(&e, "Penyiapan folder data dibatalkan."), 1, "{}", log(&e).join("\n"));
+    e.tutup();
+    assert!(tunggu(|| port::is_free(p74.mysql_port as u16), 10_000));
+    assert!(hitung_log(&e, "MySQL dimatikan dengan rapi.") >= 1, "{}", log(&e).join("\n"));
+    pastikan_tanpa_yatim(&awal);
+    config::uji_dengar_lokal(false);
+    jaga.pastikan_utuh();
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Daemon keluar di tengah init MySQL: tutup membatalkan init (proses init
+/// ikut mati, tidak yatim), menunggu start itu berbenah, dan folder setengah
+/// jadinya tidak dianggap siap pada start berikutnya.
+#[test]
+fn nyata_tutup_di_tengah_init() {
+    if !laragon_ada() || !Path::new(r"C:\laragon\bin\mysql\mysql-8.0.30-winx64").is_dir() {
+        return;
+    }
+    let (_g, d) = sandbox("eng-tutupinit");
+    let jaga = mulai_nyata();
+    let awal: Vec<u32> = proses_di(LARAGON_BIN).into_iter().map(|p| p.0).collect();
+    let (e, _r, p81, _p74) = engine_laragon(&d);
+    let mysql = e.mysql().unwrap();
+    let data_dir = config::mysql_data_dir(&mysql);
+    let e2 = e.clone();
+    let t = std::thread::spawn(move || e2.nyalakan_db());
+    tunggu_init(&e);
+    let mulai = Instant::now();
+    e.tutup();
+    assert!(mulai.elapsed() < BATAS_TUTUP, "tutup menunggu sampai batas");
+    // Start sudah selesai berbenah saat tutup kembali.
+    assert!(tunggu(|| t.is_finished(), 2000), "tutup kembali sebelum start selesai berbenah");
+    assert_eq!(t.join().unwrap(), Ok(false));
+    assert_eq!(e.layanan().db_state(), ServiceState::Berhenti);
+    assert!(port::is_free(p81.mysql_port as u16));
+    assert!(proses_di(&mysql.path).is_empty(), "init MySQL tertinggal sesudah tutup");
+    assert!(
+        !Path::new(&data_dir).join("mysql").is_dir() || services::penanda_init(&data_dir).exists(),
+        "folder data setengah jadi akan dianggap siap"
+    );
+    pastikan_tanpa_yatim(&awal);
+    config::uji_dengar_lokal(false);
+    jaga.pastikan_utuh();
+    let _ = fs::remove_dir_all(&d);
+}
+
+fn pastikan_tanpa_yatim(awal: &[u32]) {
+    let yatim = || -> Vec<(u32, String)> {
+        proses_di(LARAGON_BIN).into_iter().filter(|p| !awal.contains(&p.0)).collect()
+    };
+    let bersih = tunggu(|| yatim().is_empty(), 10_000);
+    let sisa = yatim();
+    for p in &sisa {
+        crate::shell::kill_tree(p.0);
+    }
+    assert!(bersih, "proses yatim tertinggal: {sisa:?}");
 }
 
 fn ambil(port: u16, jalan: &str) -> String {
@@ -770,8 +1008,8 @@ fn nyata_ujung_ke_ujung() {
     fs::create_dir_all(&www).unwrap();
     fs::write(www.join("uji.php"), "<?php echo 'phoron-engine ' . PHP_VERSION . ' ' . php_sapi_name();").unwrap();
 
+    let jaga = mulai_nyata();
     let (e, r) = rekam();
-    e.pasang_kait_web(Some(tanpa_log_vendor));
     // Port acak untuk semua profil hasil seed; folder proyek di sandbox.
     for mut p in e.profiles() {
         p.http_port = port_bebas() as i32;
@@ -826,15 +1064,9 @@ fn nyata_ujung_ke_ujung() {
         if s.web == ServiceState::Berhenti && s.db == ServiceState::Berhenti));
     drop(k);
 
-    // Tidak ada proses yatim dari folder paket.
-    let yatim = || -> Vec<(u32, String)> {
-        proses_di(LARAGON_BIN).into_iter().filter(|p| !awal.contains(&p.0)).collect()
-    };
-    let bersih = tunggu(|| yatim().is_empty(), 10_000);
-    let sisa = yatim();
-    for p in &sisa {
-        crate::shell::kill_tree(p.0);
-    }
-    assert!(bersih, "proses yatim tertinggal: {sisa:?}");
+    // Tidak ada proses yatim dari folder paket, dan tidak ada yang ditulisi.
+    pastikan_tanpa_yatim(&awal);
+    config::uji_dengar_lokal(false);
+    jaga.pastikan_utuh();
     let _ = fs::remove_dir_all(&d);
 }

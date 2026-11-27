@@ -28,6 +28,10 @@
 //! - Listen hanya sekali, dengan port profil.
 //! - LoadModule hanya untuk .so yang ada: modul hilang = Apache gagal start total.
 //! - Log galat selalu menyala; log akses hanya bila "Catat log rinci" menyala.
+//! - CustomLog/TransferLog/ErrorLog bawaan vendor dikomentari: relatif ke
+//!   ServerRoot, jadi Apache menulis ke folder paket di bin apa pun setelan
+//!   log rinci. Log hanya ditulis ke folder logs Phoron. Uji:
+//!   `log_vendor_tidak_tersalin`.
 //! - Beranda lewat Alias /phoron, bukan berkas di folder proyek.
 //! - Pengalihan akar ke beranda ditaruh DI DALAM VirtualHost bawaan: RewriteRule
 //!   di konteks server tidak diwarisi VirtualHost dan gagal senyap.
@@ -345,6 +349,43 @@ fn include_mutlak(t: &str) -> bool {
     matches!((c.next(), c.next()), (Some(h), Some(':')) if h.is_ascii_alphabetic())
 }
 
+/// `^(CustomLog|TransferLog|ErrorLog)\s` tanpa peka besar-kecil: direktif log
+/// bawaan vendor. `ErrorLogFormat` bukan direktif log dan tidak ikut.
+fn log_vendor(t: &str) -> bool {
+    ["CustomLog", "TransferLog", "ErrorLog"].iter().any(|d| {
+        awal(t, d) && t[d.len()..].starts_with(|c: char| c.is_whitespace())
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Uji yang benar-benar menyalakan server: dengarkan hanya di 127.0.0.1
+    /// supaya Windows Firewall tidak memunculkan dialog. Per utas karena uji
+    /// berjalan paralel dan uji config lain memeriksa bentuk aslinya.
+    static DENGAR_LOKAL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Uji: config yang ditulis utas ini mendengarkan hanya di 127.0.0.1.
+#[cfg(test)]
+pub(crate) fn uji_dengar_lokal(nyala: bool) {
+    DENGAR_LOKAL.with(|d| d.set(nyala));
+}
+
+#[cfg(test)]
+fn dengar_lokal() -> bool {
+    DENGAR_LOKAL.with(|d| d.get())
+}
+
+#[cfg(not(test))]
+fn dengar_lokal() -> bool {
+    false
+}
+
+/// Alamat Listen/listen untuk sebuah port.
+fn dengar(port: i32) -> String {
+    if dengar_lokal() { format!("127.0.0.1:{port}") } else { port.to_string() }
+}
+
 /// `^;?\s*(zend_)?extension\s*=` tanpa peka besar-kecil.
 fn baris_ekstensi(t: &str) -> bool {
     let r = lewati_spasi(t.strip_prefix(';').unwrap_or(t));
@@ -469,7 +510,7 @@ fn write_apache(
         }
         if awal(t, "Listen ") {
             if !listen {
-                sb.baris(&format!("Listen {}", profile.http_port));
+                sb.baris(&format!("Listen {}", dengar(profile.http_port)));
                 listen = true;
             }
             continue;
@@ -481,10 +522,17 @@ fn write_apache(
             sb.baris(&format!("# {line}   # dinonaktifkan Phoron - lihat blok di bawah"));
             continue;
         }
+        // Log bawaan vendor ("logs/access.log", relatif ke ServerRoot) menulis
+        // ke folder paket di bin - apa pun setelan log rinci. Log Phoron
+        // ditulis di blok penutup, ke folder logs Phoron.
+        if log_vendor(t) {
+            sb.baris(&format!("# {line}   # dinonaktifkan Phoron - log ditulis ke folder logs Phoron"));
+            continue;
+        }
         sb.baris(line);
     }
     if !listen {
-        sb.baris(&format!("Listen {}", profile.http_port));
+        sb.baris(&format!("Listen {}", dengar(profile.http_port)));
     }
 
     sb.kosong();
@@ -748,7 +796,7 @@ fn write_ssl_conf(profile: &Profile, r: &mut Hasil) -> io::Result<()> {
     sb.baris("<IfModule ssl_module>");
     if crt.is_file() && key.is_file() {
         r.ssl_enabled = true;
-        sb.baris(&format!("    Listen {}", profile.https_port));
+        sb.baris(&format!("    Listen {}", dengar(profile.https_port)));
         sb.baris("    SSLCipherSuite HIGH:MEDIUM:!MD5:!RC4:!3DES");
         sb.baris("    SSLProtocol all -SSLv3");
         sb.baris(&format!("    SSLSessionCache \"shmcb:{}(512000)\"", fwd_p(&paths::tmp().join("ssl_scache"))));
@@ -1213,6 +1261,9 @@ pub fn write_my_ini(profile: &Profile, mysql: &BinPackage) -> io::Result<PathBuf
     sb.kosong();
     sb.baris("[mysqld]");
     sb.baris(&format!("port={}", profile.mysql_port));
+    if dengar_lokal() {
+        sb.baris("bind-address=127.0.0.1");
+    }
     sb.baris(&format!("basedir=\"{}\"", fwd(&mysql.path)));
     sb.baris(&format!("datadir=\"{}\"", fwd(&data_dir)));
     sb.baris(&format!("tmpdir=\"{}\"", fwd_p(&paths::tmp())));
@@ -1484,7 +1535,7 @@ fn nginx_server(
 ) -> String {
     let mut sb = Teks::default();
     sb.baris("    server {");
-    sb.baris(&format!("        listen       {port};"));
+    sb.baris(&format!("        listen       {};", dengar(port)));
     sb.baris(&format!("        server_name  {name};"));
     sb.baris(&format!("        root         \"{root}\";"));
     sb.baris("        index        index.php index.html index.htm;");

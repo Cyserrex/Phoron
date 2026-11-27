@@ -86,6 +86,7 @@ namespace Phoron.Tests
                 UjiBeranda();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
+                UjiLogVendor();
                 UjiHosts();
                 UjiHostsAman();
                 UjiPortCheck();

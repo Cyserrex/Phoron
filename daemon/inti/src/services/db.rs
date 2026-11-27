@@ -31,8 +31,20 @@ fn jalur(p: &Path) -> String {
     p.to_string_lossy().into_owned()
 }
 
+/// Penanda "init sedang berjalan" di samping folder data (BUKAN di dalamnya:
+/// mysqld --initialize menolak folder yang sudah berisi). Ditulis sebelum
+/// init, dihapus sesudah init tuntas atau sisanya dibereskan. Masih ada =
+/// init terputus (dibatalkan, atau daemon mati di tengahnya) dan folder itu
+/// setengah jadi. Isinya "1" bila folder data kosong sebelum init.
+pub fn penanda_init(data_dir: &str) -> PathBuf {
+    PathBuf::from(format!("{}.phoron-init", data_dir.trim_end_matches('\\')))
+}
+
+/// Folder data siap dipakai: tabel sistem sudah dibuat dan tidak ada init
+/// yang terputus di atasnya. Folder mysql\ saja dari init yang terputus
+/// dulu dikira siap, lalu mysqld jalan di folder setengah jadi.
 fn sudah_init(data_dir: &str) -> bool {
-    Path::new(data_dir).join("mysql").is_dir()
+    Path::new(data_dir).join("mysql").is_dir() && !penanda_init(data_dir).exists()
 }
 
 /// Tabel sistem yang hanya ada setelah inisialisasi berjalan cukup jauh:
@@ -50,7 +62,7 @@ pub fn tabel_sistem_ada(data_dir: &str) -> bool {
 /// bukan 0 hanya dimaafkan bila tabel sistemnya benar-benar ada
 /// (mysql_install_db MariaDB kadang keluar bukan 0 sesudah selesai).
 pub fn init_berhasil(res: &RunResult, data_dir: &str) -> bool {
-    if res.timed_out {
+    if res.timed_out || res.dibatalkan {
         return false;
     }
     res.exit_code == 0 || tabel_sistem_ada(data_dir)
@@ -114,7 +126,7 @@ impl Layanan {
                     &[&lama, &pemilik, &data_dir],
                 ));
             }
-            let galat = self.siapkan_data(mysql, &my_ini, &data_dir)?;
+            let galat = self.siapkan_data(mysql, &my_ini, &data_dir, g)?;
             if self.batal(ServiceKind::Db, g) {
                 return Ok(false);
             }
@@ -130,7 +142,9 @@ impl Layanan {
         // --console: galatnya sampai ke Aktivitas seketika; salinan lengkapnya
         // ditulis Phoron sendiri ke mysql-error.log.
         let args = format!("--defaults-file=\"{my_ini}\" --console");
-        let p = match self.spawn(&mysqld, &args, &mysql.path, None, "mysql", Some(mysql_error_log()), None, false) {
+        // dalam_start: selama start masih menunggu port, start sendiri yang
+        // melaporkan kematiannya (sekali), bukan pengawas.
+        let p = match self.spawn(&mysqld, &args, &mysql.path, None, "mysql", Some(mysql_error_log()), None, true) {
             Ok(p) => p,
             Err(pesan) => return Ok(self.gagal(ServiceKind::Db, pesan)),
         };
@@ -207,8 +221,10 @@ impl Layanan {
 
     /// Matikan MySQL dengan rapi - InnoDB tidak suka dibunuh, dan tabel MyISAM
     /// bisa rusak karenanya. Rujukannya dilepas LEBIH DULU, sebelum mysqld
-    /// diminta berhenti. `profile`/`mysql` boleh kosong: dipakai yang tercatat
-    /// saat mysqld dinyalakan.
+    /// diminta berhenti. Port dan paket yang tercatat saat mysqld DINYALAKAN
+    /// didahulukan: profil bisa sudah disunting (port lain) selagi mysqld
+    /// jalan, dan mysqladmin yang dikirim ke port itu bisa mematikan MySQL
+    /// lain. `profile`/`mysql` hanya cadangan.
     pub fn stop_db(&self, profile: Option<&Profile>, mysql: Option<&BinPackage>) {
         self.naikkan_giliran(ServiceKind::Db);
         let Some(p) = self.ambil_lepas_db() else {
@@ -219,8 +235,8 @@ impl Layanan {
         self.say(Pesan::baru("Meminta MySQL berhenti dengan rapi..."));
         let (paket, port) = {
             let d = self.data();
-            let port = profile.map(|x| port16(x.mysql_port)).unwrap_or(d.db_port);
-            (mysql.cloned().or_else(|| d.db_paket.clone()), port)
+            let port = if d.db_port > 0 { d.db_port } else { profile.map(|x| port16(x.mysql_port)).unwrap_or(0) };
+            (d.db_paket.clone().or_else(|| mysql.cloned()), port)
         };
         if !self.matikan_mysql_rapi(&p, paket.as_ref(), port) {
             self.say(Pesan::baru("MySQL tidak mau berhenti dengan rapi - dimatikan paksa."));
@@ -260,7 +276,30 @@ impl Layanan {
     }
 
     /// Siapkan folder data kosong. `Some(pesan)` = gagal (sudah dicatat).
-    fn siapkan_data(&self, mysql: &BinPackage, my_ini: &str, data_dir: &str) -> Lanjut<Option<Pesan>> {
+    /// `None` juga untuk init yang dibatalkan stop (pemanggil memeriksa
+    /// giliran sesudahnya); sisanya sudah dibereskan.
+    fn siapkan_data(&self, mysql: &BinPackage, my_ini: &str, data_dir: &str, g: u64) -> Lanjut<Option<Pesan>> {
+        let penanda = penanda_init(data_dir);
+        if penanda.exists() {
+            // Init sebelumnya terputus - daemon mati, atau dibatalkan tapi
+            // sisanya tidak sempat dipindah. Folder itu setengah jadi: tidak
+            // boleh dipakai mysqld, dan init baru menolaknya ("data directory
+            // is not empty").
+            let kosong_dulu = std::fs::read_to_string(&penanda).is_ok_and(|s| s.trim() == "1");
+            if kosong_dulu && Path::new(data_dir).is_dir() {
+                self.say(Pesan::baru("Penyiapan folder data sebelumnya terputus sebelum selesai."));
+                if !self.sisihkan(data_dir) {
+                    // Penanda dibiarkan: folder itu tetap tidak dianggap siap.
+                    let p = Pesan::dengan(
+                        "Folder data {0} setengah jadi dan tidak bisa dipindah. Kosongkan folder itu, lalu coba lagi.",
+                        &[data_dir],
+                    );
+                    self.say(p.clone());
+                    return Ok(Some(p));
+                }
+            }
+            let _ = std::fs::remove_file(&penanda);
+        }
         // Hanya folder yang KOSONG sebelum init yang boleh disingkirkan bila
         // init gagal. Folder yang sudah berisi apa pun bukan buatan kita.
         // Folder yang tidak bisa dibaca dianggap berisi: lebih baik tidak
@@ -268,28 +307,19 @@ impl Layanan {
         let kosong_sebelumnya = !Path::new(data_dir).exists()
             || std::fs::read_dir(data_dir).map(|mut r| r.next().is_none()).unwrap_or(false);
         std::fs::create_dir_all(data_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&penanda, if kosong_sebelumnya { "1" } else { "0" }).map_err(|e| e.to_string())?;
         let bin = Path::new(&mysql.path).join("bin");
         let install = bin.join("mysql_install_db.exe");
-        let hasil = if install.is_file() {
+        // Terikat ke Job daemon dan dibatalkan oleh stop: dulu init lewat
+        // shell biasa tidak bisa dihentikan sampai lima menit dan tetap hidup
+        // sebagai proses yatim sesudah daemon keluar.
+        let (exe, args) = if install.is_file() {
             // MariaDB: mysqld --initialize tidak ada di sana.
-            shell::run(
-                &jalur(&install),
-                &format!("--datadir=\"{data_dir}\" --service= --password="),
-                Some(&bin),
-                300_000,
-                None,
-                None,
-            )
+            (jalur(&install), format!("--datadir=\"{data_dir}\" --service= --password="))
         } else {
-            shell::run(
-                &jalur(&bin.join("mysqld.exe")),
-                &format!("--defaults-file=\"{my_ini}\" --initialize-insecure --console"),
-                Some(&bin),
-                300_000,
-                None,
-                None,
-            )
+            (jalur(&bin.join("mysqld.exe")), format!("--defaults-file=\"{my_ini}\" --initialize-insecure --console"))
         };
+        let hasil = self.jalankan(&exe, &args, &bin, 300_000, None, ServiceKind::Db, g);
         // Exe yang tidak bisa dijalankan dianggap init gagal (dengan sebabnya),
         // supaya sisanya tetap dibereskan.
         let res = hasil.unwrap_or_else(|e| RunResult { exit_code: -1, stderr: e.to_string(), ..RunResult::default() });
@@ -299,29 +329,65 @@ impl Layanan {
             log_file::tambah(&mysql_error_log(), &semua);
         }
         if init_berhasil(&res, data_dir) {
+            let _ = std::fs::remove_file(&penanda);
             return Ok(None);
         }
-        let galat = Pesan::dengan(
-            "Gagal menyiapkan folder data{0}:\n{1}",
-            &[if res.timed_out { " (melewati batas waktu)" } else { "" }, &semua],
-        );
-        self.say(galat.clone());
-        // Sisa init yang gagal membuat percobaan berikutnya tertolak ("data
-        // directory is not empty") atau dikira sudah siap. Dipindah, tidak
-        // dihapus - siapa tahu ada yang ingin melihatnya.
-        if kosong_sebelumnya && Path::new(data_dir).is_dir() {
-            let sisih = format!("{}.gagal-{}", data_dir.trim_end_matches('\\'), waktu::cap_lokal_berkas());
-            match std::fs::rename(data_dir, &sisih) {
-                Ok(()) => self.say(Pesan::dengan(
+        let galat = if res.dibatalkan {
+            self.say(Pesan::baru("Penyiapan folder data dibatalkan."));
+            None
+        } else {
+            let galat = Pesan::dengan(
+                "Gagal menyiapkan folder data{0}:\n{1}",
+                &[if res.timed_out { " (melewati batas waktu)" } else { "" }, &semua],
+            );
+            self.say(galat.clone());
+            Some(galat)
+        };
+        // Sisa init yang gagal atau dibatalkan membuat percobaan berikutnya
+        // tertolak ("data directory is not empty") atau dikira sudah siap.
+        // Folder yang gagal dipindah tetap berpenanda: start berikutnya tidak
+        // menganggapnya siap dan mencoba memindahnya lagi.
+        if !kosong_sebelumnya || !Path::new(data_dir).is_dir() || self.sisihkan(data_dir) {
+            let _ = std::fs::remove_file(&penanda);
+        }
+        Ok(galat)
+    }
+
+    /// Pindahkan sisa init ke `<folder>.gagal-<waktu>`. Dipindah, tidak
+    /// dihapus - siapa tahu ada yang ingin melihatnya. Benar bila berhasil.
+    /// Dicoba beberapa kali: proses init yang baru dibunuh bisa masih
+    /// memegang berkasnya sesaat.
+    fn sisihkan(&self, data_dir: &str) -> bool {
+        // Dua sisa dalam detik yang sama (init terputus lalu init baru yang
+        // gagal) tidak boleh berebut nama.
+        let dasar = format!("{}.gagal-{}", data_dir.trim_end_matches('\\'), waktu::cap_lokal_berkas());
+        let sisih = (1..100)
+            .map(|i| if i == 1 { dasar.clone() } else { format!("{dasar}-{i}") })
+            .find(|s| !Path::new(s).exists())
+            .unwrap_or(dasar);
+        let mut hasil = std::fs::rename(data_dir, &sisih);
+        for _ in 0..15 {
+            if hasil.is_ok() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+            hasil = std::fs::rename(data_dir, &sisih);
+        }
+        match hasil {
+            Ok(()) => {
+                self.say(Pesan::dengan(
                     "Sisa percobaan yang gagal dipindah ke {0} - start berikutnya akan menyiapkan folder data dari awal.",
                     &[&sisih],
-                )),
-                Err(e) => self.say(Pesan::dengan(
+                ));
+                true
+            }
+            Err(e) => {
+                self.say(Pesan::dengan(
                     "Sisa percobaan yang gagal tidak bisa dipindah ({0}). Kosongkan {1} sebelum mencoba lagi.",
                     &[&e.to_string(), data_dir],
-                )),
+                ));
+                false
             }
         }
-        Ok(Some(galat))
     }
 }
