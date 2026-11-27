@@ -683,6 +683,20 @@ namespace Phoron.Tests
                teks.IndexOf('\t') < 0,
                "TAB pertama di indeks " + teks.IndexOf('\t'));
 
+            // MsgBox biasa tidak ikut ditekan /SUPPRESSMSGBOXES: upgrade senyap
+            // ke 1.42.1 tertahan sepuluh menit di "Close Phoron now?". Di sisi
+            // pemasangan hanya SuppressibleMsgBox yang boleh; satu-satunya MsgBox
+            // ada di pencopotan, yang dijaga "if UninstallSilent then Exit".
+            var kodePascal = teks.Substring(Math.Max(0, teks.IndexOf("[Code]", StringComparison.Ordinal)));
+            int pencopotan = kodePascal.IndexOf("procedure CurUninstallStepChanged", StringComparison.Ordinal);
+            var sisiPasang = pencopotan > 0 ? kodePascal.Substring(0, pencopotan) : kodePascal;
+            int polos = Regex.Matches(sisiPasang, @"(?<!Suppressible)MsgBox\(").Count;
+            Ok("Dialog pemasangan bisa ditekan /SUPPRESSMSGBOXES (SuppressibleMsgBox)",
+               polos == 0 && Regex.Matches(sisiPasang, @"SuppressibleMsgBox\(").Count == 3,
+               polos + " MsgBox biasa");
+            Ok("Dialog hapus data saat pencopotan tetap dijaga UninstallSilent",
+               pencopotan > 0 && kodePascal.Substring(pencopotan).Contains("if UninstallSilent then Exit;"));
+
             var blokBahasa = Blok(teks, "[Languages]");
             var kode = new List<string>();
             foreach (Match m in Regex.Matches(blokBahasa, "Name:\\s*\"([^\"]+)\""))

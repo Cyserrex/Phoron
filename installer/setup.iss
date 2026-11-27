@@ -699,8 +699,9 @@ begin
     aplikasinya gagal dibuka tanpa penjelasan apa pun. }
   if not DotNet48Installed() then
   begin
-    if MsgBox(ExpandConstant('{cm:NeedDotNet}'), mbConfirmation,
-              MB_YESNO) = IDYES then
+    { Senyap: jangan membuka browser di pemasangan otomatis. }
+    if SuppressibleMsgBox(ExpandConstant('{cm:NeedDotNet}'), mbConfirmation,
+              MB_YESNO, IDNO) = IDYES then
       ShellExec('open',
                 'https://dotnet.microsoft.com/download/dotnet-framework/net48',
                 '', '', SW_SHOW, ewNoWait, dummy);
@@ -726,8 +727,12 @@ begin
     else
       port := CustomMessage('LayananPegangPort') + #13#10 + #13#10 + port;
 
-    if MsgBox(FmtMessage(CustomMessage('TawarTutup'), [port]), mbConfirmation,
-              MB_YESNO) = IDNO then
+    { SuppressibleMsgBox, bukan MsgBox: MsgBox biasa TIDAK ikut ditekan
+      /SUPPRESSMSGBOXES, sehingga upgrade /SILENT tertahan di dialog yang bisa
+      saja tertutup jendela lain (terjadi pada upgrade ke 1.42.1). Senyap =
+      Ya: menutup Phoron memang maksud upgrade, dan caranya rapi. }
+    if SuppressibleMsgBox(FmtMessage(CustomMessage('TawarTutup'), [port]), mbConfirmation,
+              MB_YESNO, IDYES) = IDNO then
     begin
       Result := CustomMessage('BatalTutup');
       Exit;
@@ -745,8 +750,8 @@ begin
     penghalang pemasangan, jadi cukup diberitahukan. }
   port := PortPhoronTerpakai();
   if port <> '' then
-    if MsgBox(FmtMessage(CustomMessage('PortSisa'), [port]), mbConfirmation,
-              MB_YESNO) = IDNO then
+    if SuppressibleMsgBox(FmtMessage(CustomMessage('PortSisa'), [port]), mbConfirmation,
+              MB_YESNO, IDYES) = IDNO then
       Result := CustomMessage('DibatalkanAnda');
 end;
 
