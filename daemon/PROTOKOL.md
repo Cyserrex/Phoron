@@ -68,6 +68,10 @@ Kabar (tanpa `id`, dikirim ke semua klien):
 
 Bedakan jawaban dan kabar dari ada tidaknya kunci `id`.
 
+`node_keluaran` punya `pesan` opsional untuk baris buatan Phoron sendiri
+("-- dihentikan --", galat keluar, peringatan HSTS). Bila ada, tampilkan
+`Lang.T(pesan.kunci, pesan.args)`; bila tidak, `baris` apa adanya.
+
 ## Bentuk data
 
 - `Pesan`: `{kunci, args?}`. `kunci` = teks templat Indonesia persis seperti
