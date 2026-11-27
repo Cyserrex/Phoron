@@ -106,10 +106,10 @@ namespace Phoron.App
                 // jauh lebih berguna daripada "ada yang tidak beres".
                 var jalur = Crash.Tulis(ex, "saat memulai Phoron", _engine.Riwayat());
                 _engine.Say("Gagal memulai: " + ex.Message);
-                AppState.Warn("Phoron gagal menyiapkan konfigurasinya." + Environment.NewLine
+                AppState.Warn(Lang.T("Phoron gagal menyiapkan konfigurasinya.") + Environment.NewLine
                               + Environment.NewLine + ex.Message
                               + (jalur != null ? Environment.NewLine + Environment.NewLine
-                                                 + "Rincian: " + jalur : ""));
+                                                 + Lang.T("Rincian: {0}", jalur) : ""));
             }
             finally
             {
@@ -282,7 +282,7 @@ namespace Phoron.App
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
             bool busy = web == ServiceState.Menyalakan || web == ServiceState.Mematikan
                      || db == ServiceState.Menyalakan || db == ServiceState.Mematikan;
-            _tray.Text = "Phoron - " + (anyRunning ? "berjalan" : "berhenti");
+            _tray.Text = Lang.T(anyRunning ? "Phoron - berjalan" : "Phoron - berhenti");
             if (_tray.ContextMenuStrip != null && _tray.ContextMenuStrip.Items.Count > 0)
             {
                 _tray.ContextMenuStrip.Items[0].Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
@@ -329,12 +329,12 @@ namespace Phoron.App
         void SetupTray()
         {
             var menu = new Forms.ContextMenuStrip();
-            menu.Items.Add("Nyalakan semua", null, async (s, e) => await TogglePower());
-            menu.Items.Add("Buka folder www", null, (s, e) => Shell.Open(Paths.Www));
-            menu.Items.Add("Buka localhost", null, (s, e) => Shell.Open(_engine.RootUrl()));
+            menu.Items.Add(Lang.T("Nyalakan semua"), null, async (s, e) => await TogglePower());
+            menu.Items.Add(Lang.T("Buka folder www"), null, (s, e) => Shell.Open(Paths.Www));
+            menu.Items.Add(Lang.T("Buka localhost"), null, (s, e) => Shell.Open(_engine.RootUrl()));
             menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add("Tampilkan Phoron", null, (s, e) => Tampilkan());
-            menu.Items.Add("Keluar", null, (s, e) => Keluar());
+            menu.Items.Add(Lang.T("Tampilkan Phoron"), null, (s, e) => Tampilkan());
+            menu.Items.Add(Lang.T("Keluar"), null, (s, e) => Keluar());
 
             _tray = new Forms.NotifyIcon
             {

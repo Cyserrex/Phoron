@@ -135,7 +135,7 @@
                              orang mencari ikon tersembunyi lalu klik kanan. -->
                         <ui:Button x:Name="BtnKeluar" Content="{loc:T 'Keluar'}" Margin="0,6,0,0"
                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                   ToolTip="Tutup Phoron sepenuhnya dan matikan semua layanan"
+                                   ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
                                    Click="BtnKeluar_Click"/>
                     </StackPanel>
                 </Grid>

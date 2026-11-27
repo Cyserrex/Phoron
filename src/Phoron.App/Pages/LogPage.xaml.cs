@@ -31,7 +31,7 @@ namespace Phoron.App.Pages
                 : new System.Collections.Generic.List<string>();
             CmbBerkas.ItemsSource = berkas.Select(Path.GetFileName).ToList();
             if (CmbBerkas.Items.Count > 0) CmbBerkas.SelectedIndex = 0;
-            else Isi.Text = "Belum ada berkas log. Nyalakan layanan dulu.";
+            else Isi.Text = Lang.T("Belum ada berkas log. Nyalakan layanan dulu.");
         }
 
         string BerkasTerpilih()
@@ -59,7 +59,7 @@ namespace Phoron.App.Pages
                     using (var r = new StreamReader(fs)) teks = r.ReadToEnd();
                 }
             }
-            catch (Exception ex) { teks = "Tidak bisa membaca berkas: " + ex.Message; }
+            catch (Exception ex) { teks = Lang.T("Tidak bisa membaca berkas: {0}", ex.Message); }
 
             if (Isi.Text == teks) return;
             Isi.Text = teks;
@@ -74,14 +74,14 @@ namespace Phoron.App.Pages
         {
             var path = BerkasTerpilih();
             if (path == null) return;
-            if (!AppState.Ask("Kosongkan " + Path.GetFileName(path) + "?")) return;
+            if (!AppState.Ask(Lang.T("Kosongkan {0}?", Path.GetFileName(path)))) return;
             try
             {
                 using (var fs = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
                     fs.SetLength(0);
                 Muat(true);
             }
-            catch (Exception ex) { AppState.Warn("Gagal mengosongkan: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal mengosongkan: {0}", ex.Message)); }
         }
     }
 }

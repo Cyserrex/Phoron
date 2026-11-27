@@ -26,9 +26,8 @@ namespace Phoron.App.Pages
             SwWindows.IsChecked = Autostart.Aktif;
             var asing = Autostart.EntriAsing();
             TxtWindows.Text = asing == null
-                ? "Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela."
-                : "Ada entri autostart milik salinan Phoron lain: " + asing
-                  + ". Menyalakan sakelar ini akan menggantinya dengan yang ini.";
+                ? Lang.T("Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela.")
+                : Lang.T("Ada entri autostart milik salinan Phoron lain: {0}. Menyalakan sakelar ini akan menggantinya dengan yang ini.", asing);
             SwAutoStart.IsChecked = s.AutoStartServices;
             SwTray.IsChecked = s.MinimizeToTray;
             SwVhost.IsChecked = s.AutoVhost;
@@ -55,12 +54,11 @@ namespace Phoron.App.Pages
 
             bool admin = HostsFile.IsAdmin();
             TxtAdmin.Text = admin
-                ? "Phoron berjalan sebagai Administrator. Berkas hosts dan pemasangan sertifikat bisa dilakukan."
-                : "Phoron berjalan tanpa hak Administrator. Menyunting berkas hosts dan memasang sertifikat "
-                  + "ke Trusted Root tidak akan berhasil.";
+                ? Lang.T("Phoron berjalan sebagai Administrator. Berkas hosts dan pemasangan sertifikat bisa dilakukan.")
+                : Lang.T("Phoron berjalan tanpa hak Administrator. Menyunting berkas hosts dan memasang sertifikat ke Trusted Root tidak akan berhasil.");
             BtnAdmin.IsEnabled = !admin;
             TxtRoot.Text = Paths.Root;
-            TxtVersi.Text = "Phoron " + AppInfo.Version;
+            TxtVersi.Text = Lang.T("Phoron {0}", AppInfo.Version);
             SegarkanKeteranganPembaruan();
             _mengisi = false;
         }
@@ -77,7 +75,7 @@ namespace Phoron.App.Pages
             var err = Autostart.Set(mau);
             if (err != null)
             {
-                AppState.Warn(err);
+                AppState.Warn(Lang.T(err));
                 _mengisi = true;
                 SwWindows.IsChecked = Autostart.Aktif;
                 _mengisi = false;
@@ -97,9 +95,8 @@ namespace Phoron.App.Pages
         {
             var asing = Autostart.EntriAsing();
             TxtWindows.Text = asing == null
-                ? "Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela."
-                : "Ada entri autostart milik salinan Phoron lain: " + asing
-                  + ". Menyalakan sakelar ini akan menggantinya dengan yang ini.";
+                ? Lang.T("Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela.")
+                : Lang.T("Ada entri autostart milik salinan Phoron lain: {0}. Menyalakan sakelar ini akan menggantinya dengan yang ini.", asing);
         }
 
         /// <summary>
@@ -194,20 +191,19 @@ namespace Phoron.App.Pages
         {
             var h = _e.Pembaruan;
             if (h == null)
-                TxtPembaruan.Text = "Versi terpasang " + AppInfo.Version + ". Belum dicek.";
+                TxtPembaruan.Text = Lang.T("Versi terpasang {0}. Belum dicek.", AppInfo.Version);
             else if (h.Galat != null)
-                TxtPembaruan.Text = "Versi terpasang " + AppInfo.Version + ". " + h.Galat;
+                TxtPembaruan.Text = Lang.T("Versi terpasang {0}. {1}", AppInfo.Version, Lang.T(h.Galat));
             else if (h.LebihBaru)
-                TxtPembaruan.Text = "Phoron " + h.Versi + " sudah rilis; yang terpasang "
-                                    + AppInfo.Version + ".";
+                TxtPembaruan.Text = Lang.T("Phoron {0} sudah rilis; yang terpasang {1}.", h.Versi, AppInfo.Version);
             else
-                TxtPembaruan.Text = "Phoron " + AppInfo.Version + " sudah versi terbaru.";
+                TxtPembaruan.Text = Lang.T("Phoron {0} sudah versi terbaru.", AppInfo.Version);
         }
 
         async void BtnCek_Click(object sender, RoutedEventArgs e)
         {
             BtnCek.IsEnabled = false;
-            TxtPembaruan.Text = "Menghubungi GitHub...";
+            TxtPembaruan.Text = Lang.T("Menghubungi GitHub...");
             try
             {
                 // Dipaksa: tombol ini ditekan justru ketika orang ingin tahu
@@ -216,8 +212,8 @@ namespace Phoron.App.Pages
                 SegarkanKeteranganPembaruan();
                 if (hasil != null && hasil.Galat == null && hasil.LebihBaru)
                     UpdateDialog.Tawarkan(_e, hasil);
-                else if (hasil != null && hasil.Galat != null) AppState.Warn(hasil.Galat);
-                else AppState.Info("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+                else if (hasil != null && hasil.Galat != null) AppState.Warn(Lang.T(hasil.Galat));
+                else AppState.Info(Lang.T("Phoron {0} sudah versi terbaru.", AppInfo.Version));
             }
             finally { BtnCek.IsEnabled = true; }
         }
@@ -226,7 +222,7 @@ namespace Phoron.App.Pages
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)
         {
-            Program.RestartAsAdmin("Beberapa fungsi Phoron perlu hak Administrator.");
+            Program.RestartAsAdmin(Lang.T("Beberapa fungsi Phoron perlu hak Administrator."));
         }
 
         void BtnRoot_Click(object sender, RoutedEventArgs e) { Shell.Open(Paths.Root); }
@@ -254,50 +250,48 @@ namespace Phoron.App.Pages
             var daftar = HostsFile.DaftarCadangan();
             if (daftar.Count == 0)
             {
-                AppState.Info("Belum ada cadangan berkas hosts. Cadangan pertama dibuat "
-                              + "sendiri saat Phoron menulis berkas hosts untuk pertama kalinya.");
+                AppState.Info(Lang.T("Belum ada cadangan berkas hosts. Cadangan pertama dibuat sendiri saat Phoron menulis berkas hosts untuk pertama kalinya."));
                 return;
             }
 
             var asli = daftar.FirstOrDefault(c => c.Asli);
             var pilihan = asli ?? daftar[0];
             var keterangan = asli != null
-                ? "cadangan asli, yaitu keadaan sebelum Phoron dipasang"
-                : "cadangan terbaru, " + pilihan.Waktu.ToString("d MMMM yyyy HH:mm");
+                ? Lang.T("cadangan asli, yaitu keadaan sebelum Phoron dipasang")
+                : Lang.T("cadangan terbaru, {0}", pilihan.Waktu.ToString("d MMMM yyyy HH:mm"));
 
-            if (!AppState.Ask("Kembalikan berkas hosts ke " + keterangan + "?" + Environment.NewLine
-                              + Environment.NewLine + pilihan.Nama + " (" + pilihan.Ukuran + " byte)"
+            if (!AppState.Ask(Lang.T("Kembalikan berkas hosts ke {0}?", keterangan)
                               + Environment.NewLine + Environment.NewLine
-                              + "Keadaan sekarang ikut dicadangkan lebih dulu, jadi langkah ini "
-                              + "masih bisa dibatalkan. Cadangan lain ada di folder cadangan."))
+                              + pilihan.Nama + " (" + pilihan.Ukuran + " byte)"
+                              + Environment.NewLine + Environment.NewLine
+                              + Lang.T("Keadaan sekarang ikut dicadangkan lebih dulu, jadi langkah ini masih bisa dibatalkan. Cadangan lain ada di folder cadangan.")))
                 return;
 
             try
             {
                 HostsFile.Pulihkan(pilihan.Path);
-                AppState.Info("Berkas hosts dikembalikan dari " + pilihan.Nama + ".");
+                AppState.Info(Lang.T("Berkas hosts dikembalikan dari {0}.", pilihan.Nama));
             }
             catch (UnauthorizedAccessException)
             {
-                Program.RestartAsAdmin("Menyunting berkas hosts butuh hak Administrator.");
+                Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
             }
-            catch (Exception ex) { AppState.Warn("Gagal memulihkan: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal memulihkan: {0}", ex.Message)); }
         }
 
         void BtnBersihHosts_Click(object sender, RoutedEventArgs e)
         {
-            if (!AppState.Ask("Hapus semua baris yang ditambahkan Phoron dari berkas hosts? "
-                              + "Baris milik aplikasi lain tidak disentuh.")) return;
+            if (!AppState.Ask(Lang.T("Hapus semua baris yang ditambahkan Phoron dari berkas hosts? Baris milik aplikasi lain tidak disentuh."))) return;
             try
             {
                 HostsFile.Clear();
-                AppState.Info("Blok Phoron dibuang dari berkas hosts.");
+                AppState.Info(Lang.T("Blok Phoron dibuang dari berkas hosts."));
             }
             catch (UnauthorizedAccessException)
             {
-                Program.RestartAsAdmin("Menyunting berkas hosts butuh hak Administrator.");
+                Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts butuh hak Administrator."));
             }
-            catch (Exception ex) { AppState.Warn("Gagal: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal: {0}", ex.Message)); }
         }
     }
 }

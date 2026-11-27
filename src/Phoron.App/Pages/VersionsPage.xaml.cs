@@ -68,7 +68,7 @@ namespace Phoron.App.Pages
         {
             Daftar.ItemsSource = _e.Packages.Select(p => new Baris
             {
-                Jenis = p.Kind.ToString(),
+                Jenis = NamaJenis(p.Kind),
                 Versi = p.Version,
                 Toolset = p.Compiler + (p.Kind == BinKind.Php ? (p.ThreadSafe ? " TS" : " NTS") : ""),
                 Arsitektur = p.Arch,
@@ -76,6 +76,23 @@ namespace Phoron.App.Pages
                 Sumber = p.SourceRoot,
                 Pkg = p,
             }).ToList();
+        }
+
+        /// <summary>
+        /// Nama jenis seperti yang ditulis orang, bukan nama anggota enum:
+        /// "MySql" dan "Php" adalah ejaan kode, di layar harus "MySQL" dan "PHP".
+        /// </summary>
+        static string NamaJenis(BinKind jenis)
+        {
+            switch (jenis)
+            {
+                case BinKind.Php: return "PHP";
+                case BinKind.MySql: return "MySQL";
+                case BinKind.Apache: return "Apache";
+                case BinKind.Nginx: return "Nginx";
+                case BinKind.Node: return "Node.js";
+                default: return jenis.ToString();
+            }
         }
 
         void BtnPindai_Click(object sender, RoutedEventArgs e)
@@ -90,10 +107,10 @@ namespace Phoron.App.Pages
         {
             using (var dlg = new Forms.FolderBrowserDialog())
             {
-                dlg.Description = "Pilih folder bin tambahan (mis. C:\\xampp atau bin milik Laragon)";
+                dlg.Description = Lang.T("Pilih folder bin tambahan (mis. C:\\xampp atau bin milik Laragon)");
                 if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
                 if (_e.Settings.BinRoots.Any(r => string.Equals(r, dlg.SelectedPath, StringComparison.OrdinalIgnoreCase)))
-                { AppState.Info("Folder itu sudah terdaftar."); return; }
+                { AppState.Info(Lang.T("Folder itu sudah terdaftar.")); return; }
                 _e.Settings.BinRoots.Add(dlg.SelectedPath);
                 _e.Settings.Save();
                 _e.Reload();
@@ -116,16 +133,15 @@ namespace Phoron.App.Pages
             {
                 var ada = Deteksi.FolderBinTerpasang();
                 AppState.Info(ada.Count == 0
-                    ? "Tidak ada Laragon, XAMPP, atau WAMP yang terpasang di tempat bakunya. "
-                      + "Kalau punya, tambahkan foldernya sendiri lewat \"Tambah folder bin\"."
-                    : "Semua yang terdeteksi sudah terdaftar: " + string.Join(", ", ada));
+                    ? Lang.T("Tidak ada Laragon, XAMPP, atau WAMP yang terpasang di tempat bakunya. "
+                             + "Kalau punya, tambahkan foldernya sendiri lewat \"Tambah folder bin\".")
+                    : Lang.T("Semua yang terdeteksi sudah terdaftar: {0}", string.Join(", ", ada)));
                 return;
             }
-            if (!AppState.Ask("Ditemukan folder bin ini di komputer Anda:" + Environment.NewLine
-                              + Environment.NewLine + string.Join(Environment.NewLine, baru)
-                              + Environment.NewLine + Environment.NewLine
-                              + "Tambahkan ke daftar yang dipindai? Phoron tidak pernah menulis "
-                              + "ke dalam folder itu.")) return;
+            if (!AppState.Ask(Lang.T("Ditemukan folder bin ini di komputer Anda:\n\n{0}\n\n"
+                                     + "Tambahkan ke daftar yang dipindai? Phoron tidak pernah menulis "
+                                     + "ke dalam folder itu.",
+                                     string.Join(Environment.NewLine, baru)))) return;
 
             _e.Settings.BinRoots.AddRange(baru);
             _e.Settings.Save();
@@ -133,8 +149,8 @@ namespace Phoron.App.Pages
             AppState.RaiseChanged();
             IsiRoots();
             IsiDaftar();
-            AppState.Info(baru.Count + " folder ditambahkan. Sekarang ada "
-                          + _e.Packages.Count + " paket terdeteksi.");
+            AppState.Info(Lang.T("{0} folder ditambahkan. Sekarang ada {1} paket terdeteksi.",
+                                 baru.Count, _e.Packages.Count));
         }
 
         void BtnBuka_Click(object sender, RoutedEventArgs e)
@@ -164,18 +180,18 @@ namespace Phoron.App.Pages
                 return;
             }
 
-            TxtStatus.Text = "Mengambil daftar versi PHP...";
+            TxtStatus.Text = Lang.T("Mengambil daftar versi PHP...");
             try
             {
                 var list = await Downloader.ListPhpAsync();
                 CmbPaket.ItemsSource = list;
                 CmbPaket.DisplayMemberPath = "Name";
                 CmbPaket.SelectedIndex = 0;
-                TxtStatus.Text = list.Count + " arsip PHP tersedia di windows.php.net.";
+                TxtStatus.Text = Lang.T("{0} arsip PHP tersedia di windows.php.net.", list.Count);
             }
             catch (Exception ex)
             {
-                TxtStatus.Text = ex.Message + " (perlu koneksi internet)";
+                TxtStatus.Text = Lang.T("{0} (perlu koneksi internet)", ex.Message);
             }
         }
 
@@ -188,18 +204,18 @@ namespace Phoron.App.Pages
         async void BtnPasang_Click(object sender, RoutedEventArgs e)
         {
             var pkg = CmbPaket.SelectedItem as RemotePackage;
-            if (pkg == null) { AppState.Warn("Pilih dulu paket yang mau dipasang."); return; }
+            if (pkg == null) { AppState.Warn(Lang.T("Pilih dulu paket yang mau dipasang.")); return; }
 
             BtnPasang.IsEnabled = false;
             Bar.Visibility = Visibility.Visible;
             Bar.Value = 0;
-            TxtStatus.Text = "Mengunduh " + pkg.Name + "...";
+            TxtStatus.Text = Lang.T("Mengunduh {0}...", pkg.Name);
             var progress = new Progress<int>(v => Bar.Value = v);
             try
             {
                 var err = await Downloader.InstallAsync(pkg, progress, CancellationToken.None);
                 if (err != null) { TxtStatus.Text = err; AppState.Warn(err); return; }
-                TxtStatus.Text = pkg.Name + " terpasang.";
+                TxtStatus.Text = Lang.T("{0} terpasang.", pkg.Name);
                 _e.Say("Paket " + pkg.Name + " dipasang ke folder bin Phoron.");
                 _e.Reload();
                 AppState.RaiseChanged();

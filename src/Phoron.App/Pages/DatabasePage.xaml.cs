@@ -244,8 +244,9 @@ namespace Phoron.App.Pages
                 : Lang.T("kosong");
             TxtSandi.Opacity = adaSandi ? 0.8 : 0.6;
 
-            TxtPerintah.Text = "mysql -u " + pengguna
-                + (_e.Active != null && _e.Active.MySqlPort != 3306
+            // Baris perintah, bukan kalimat - tidak diterjemahkan.
+            TxtPerintah.Text = string.Concat("mysql -u ", pengguna,
+                _e.Active != null && _e.Active.MySqlPort != 3306
                    ? " -P " + _e.Active.MySqlPort : "");
         }
 

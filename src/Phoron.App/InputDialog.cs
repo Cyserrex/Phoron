@@ -78,7 +78,9 @@ namespace Phoron.App
             };
             var ok = new Wpf.Ui.Controls.Button
             {
-                Content = Phoron.Core.Lang.T("Buat situs"),
+                // Tombolnya menyebut aksinya: judul dialog ("Buat situs",
+                // "Hapus basis data") sudah diterjemahkan pemanggilnya.
+                Content = judul,
                 Appearance = Wpf.Ui.Controls.ControlAppearance.Primary,
                 Margin = new Thickness(0, 0, 8, 0),
                 IsDefault = true,

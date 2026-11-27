@@ -457,7 +457,9 @@ namespace Phoron.Tests
         {
             Bagian("Kamus Banjar");
 
-            var padanan = PadananBanjar();
+            // Dibaca dari kamus yang sudah dibangun, bukan dari teks Lang.cs:
+            // kamus tambahan per layar (LangLayar*.cs) ikut diperiksa.
+            var padanan = Lang.Padanan(Lang.Banjar).ToList();
             Ok("Kamus Banjar terbaca dari sumbernya", padanan.Count > 100,
                padanan.Count + " pasangan");
 

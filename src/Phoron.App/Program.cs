@@ -66,12 +66,14 @@ namespace Phoron.App
                 // Yang dimaksud pengguna jelas: "tampilkan Phoron". Salinan
                 // kedua membangunkan yang pertama lalu keluar tanpa sepatah kata.
                 if (BangunkanYangSudahJalan()) return 0;
+                // Catatan: bahasa belum diterapkan di titik ini (Engine dan
+                // setelannya belum dimuat), jadi Lang.T masih jatuh ke teks
+                // sumber berbahasa Indonesia.
                 MessageBox.Show(
-                    "Phoron sudah berjalan. Lihat ikonnya di baki sistem (system tray)."
+                    Phoron.Core.Lang.T("Phoron sudah berjalan. Lihat ikonnya di baki sistem (system tray).")
                     + (tertutup
                         ? Environment.NewLine + Environment.NewLine
-                          + "Phoron yang berjalan tampaknya dijalankan sebagai Administrator, "
-                          + "jadi jendelanya hanya bisa dimunculkan lewat ikon itu."
+                          + Phoron.Core.Lang.T("Phoron yang berjalan tampaknya dijalankan sebagai Administrator, jadi jendelanya hanya bisa dimunculkan lewat ikon itu.")
                         : ""),
                     "Phoron", MessageBoxButton.OK, MessageBoxImage.Information);
                 return 0;
@@ -99,10 +101,12 @@ namespace Phoron.App
             catch (Exception ex)
             {
                 var jalur = Phoron.Core.Crash.Tulis(ex, "membuat Engine saat start");
+                // Setelan (termasuk bahasanya) justru gagal dibaca di sini, jadi
+                // pesan ini selalu tampil dalam bahasa sumber.
                 MessageBox.Show(
-                    "Phoron tidak bisa membaca setelannya, jadi tidak bisa dijalankan."
+                    Phoron.Core.Lang.T("Phoron tidak bisa membaca setelannya, jadi tidak bisa dijalankan.")
                     + "\n\n" + ex.Message
-                    + (jalur != null ? "\n\nRincian tersimpan di:\n" + jalur : ""),
+                    + (jalur != null ? "\n\n" + Phoron.Core.Lang.T("Rincian tersimpan di:") + "\n" + jalur : ""),
                     "Phoron", MessageBoxButton.OK, MessageBoxImage.Error);
                 return KeluarGalat;
             }
@@ -193,8 +197,8 @@ namespace Phoron.App
         public static bool RestartAsAdmin(string reason)
         {
             var jawab = MessageBox.Show(
-                reason + "\n\nJalankan ulang Phoron sebagai Administrator sekarang?",
-                "Perlu hak Administrator", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                reason + "\n\n" + Phoron.Core.Lang.T("Jalankan ulang Phoron sebagai Administrator sekarang?"),
+                Phoron.Core.Lang.T("Perlu hak Administrator"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (jawab != MessageBoxResult.Yes) return false;
             try
             {
@@ -225,7 +229,7 @@ namespace Phoron.App
                 bool dibatalkan = ex is System.ComponentModel.Win32Exception
                                   && ((System.ComponentModel.Win32Exception)ex).NativeErrorCode == 1223;
                 if (!dibatalkan)
-                    MessageBox.Show("Gagal menaikkan hak akses: " + ex.Message, "Phoron",
+                    MessageBox.Show(Phoron.Core.Lang.T("Gagal menaikkan hak akses: {0}", ex.Message), "Phoron",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }

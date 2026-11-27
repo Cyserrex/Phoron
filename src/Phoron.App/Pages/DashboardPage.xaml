@@ -34,11 +34,11 @@
                     </StackPanel>
                     <ui:Button Grid.Column="1" x:Name="BtnSwitchRun" Content="{loc:T 'Switch &amp; Jalankan'}"
                                Appearance="Primary" VerticalAlignment="Bottom" Margin="0,0,8,0"
-                               ToolTip="Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL"
+                               ToolTip="{loc:T 'Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL'}"
                                Click="BtnSwitchRun_Click"/>
                     <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="{loc:T 'Switch'}"
                                VerticalAlignment="Bottom"
-                               ToolTip="Pindah ke profil ini tanpa mengubah keadaan layanan"
+                               ToolTip="{loc:T 'Pindah ke profil ini tanpa mengubah keadaan layanan'}"
                                Click="BtnSwitch_Click"/>
                 </Grid>
             </Border>

@@ -29,6 +29,7 @@ namespace Phoron.App
             InitializeComponent();
 
             PasangIkon();
+            BtnKeluar.ToolTip = Lang.T("Tutup Phoron sepenuhnya dan matikan semua layanan");
             // Diterapkan lagi tiap kali jendela dibuat: setelan "sistem" hanya
             // membaca tema Windows saat dipanggil, dan temanya bisa saja sudah
             // berganti selama Phoron hanya ada di baki.
@@ -90,6 +91,7 @@ namespace Phoron.App
                     case "profil": teks.Text = Lang.T("Profil"); break;
                     case "versi": teks.Text = Lang.T("Versi"); break;
                     case "situs": teks.Text = Lang.T("Situs"); break;
+                    case "basisdata": teks.Text = Lang.T("Basis data"); break;
                     case "node": teks.Text = Lang.T("Node / TS"); break;
                     case "ekstensi": teks.Text = Lang.T("Ekstensi PHP"); break;
                     case "log": teks.Text = Lang.T("Log"); break;
@@ -98,6 +100,7 @@ namespace Phoron.App
                 }
             }
             BtnKeluar.Content = Lang.T("Keluar");
+            BtnKeluar.ToolTip = Lang.T("Tutup Phoron sepenuhnya dan matikan semua layanan");
             RefreshStatus();
 
             // Halaman yang sedang terbuka dibuat ulang supaya teksnya ikut
@@ -219,7 +222,7 @@ namespace Phoron.App
             DotDb.Fill = pakaiDb ? Dot(db) : Dot(ServiceState.Berhenti);
             TxtWeb.Text = webName + " " + Lang.T(pakaiWeb
                 ? web.ToString().ToLowerInvariant() : "tidak dipakai");
-            TxtDb.Text = "MySQL " + Lang.T(pakaiDb
+            TxtDb.Text = Lang.T("MySQL") + " " + Lang.T(pakaiDb
                 ? db.ToString().ToLowerInvariant() : "tidak dipakai");
             TxtProfil.Text = _engine.Active != null ? _engine.Active.Name : Lang.T("(belum ada profil)");
 
@@ -259,8 +262,7 @@ namespace Phoron.App
         void BtnKeluar_Click(object sender, RoutedEventArgs e)
         {
             if (Pengendali.Ini.AdaYangJalan()
-                && !AppState.Ask("Masih ada layanan yang berjalan. Semuanya akan dimatikan.\n\n"
-                                 + "Keluar dari Phoron sekarang?")) return;
+                && !AppState.Ask(Lang.T("Masih ada layanan yang berjalan. Semuanya akan dimatikan.\n\nKeluar dari Phoron sekarang?"))) return;
             Pengendali.Ini.Keluar();
         }
 

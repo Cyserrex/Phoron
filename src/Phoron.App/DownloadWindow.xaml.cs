@@ -26,7 +26,8 @@ namespace Phoron.App
         {
             InitializeComponent();
             _hasil = hasil;
-            TxtJudul.Text = "Phoron " + hasil.Versi;
+            Title = Lang.T("Mengunduh pembaruan");
+            TxtJudul.Text = Lang.T("Phoron {0}", hasil.Versi);
             TxtSumber.Text = hasil.UrlInstaller;
             Loaded += async (s, e) => await Jalankan();
         }
@@ -48,7 +49,11 @@ namespace Phoron.App
                     Bar.IsIndeterminate = true;
                     TxtPersen.Text = "";
                 }
-                TxtUkuran.Text = k.ToString();
+                // Bukan k.ToString(): kalimat itu dirakit di Core dalam bahasa
+                // Indonesia. Di sini angkanya saja yang dipinjam.
+                TxtUkuran.Text = k.Total > 0
+                    ? Lang.T("{0} dari {1}", KemajuanUnduh.Ukuran(k.Sudah), KemajuanUnduh.Ukuran(k.Total))
+                    : Lang.T("{0} terunduh", KemajuanUnduh.Ukuran(k.Sudah));
             });
 
             string galat = null;
@@ -60,7 +65,7 @@ namespace Phoron.App
         void BtnBatal_Click(object sender, RoutedEventArgs e)
         {
             BtnBatal.IsEnabled = false;
-            TxtUkuran.Text = "Membatalkan...";
+            TxtUkuran.Text = Lang.T("Membatalkan...");
             _batal.Cancel();
         }
     }

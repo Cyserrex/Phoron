@@ -170,7 +170,7 @@ namespace Phoron.App.Pages
             var p = _e.Active;
 
             TxtPhp.Text = php != null ? php.Version : "-";
-            TxtPhpSub.Text = php != null ? php.Label : "belum dipilih di profil";
+            TxtPhpSub.Text = php != null ? php.Label : Lang.T("belum dipilih di profil");
             TxtWebKind.Text = p != null && p.WebServer == "nginx" ? "Nginx" : "Apache";
             TxtWeb.Text = web != null ? web.Version : "-";
             // Status HTTPS ikut ditulis: tanpa sertifikat, port 443 tidak dibuka
@@ -178,20 +178,20 @@ namespace Phoron.App.Pages
             // tanpa menyebutkan sebabnya di mana pun.
             var https = SslTool.Exists
                 ? " · https " + (p != null ? p.HttpsPort.ToString() : "?")
-                : " · https mati";
+                : " · " + Lang.T("https mati");
             TxtWebSub.Text = web != null
                 ? web.Label + " · port " + (p != null ? p.HttpPort.ToString() : "?") + https
-                : "belum dipilih di profil";
+                : Lang.T("belum dipilih di profil");
             TxtDb.Text = db != null ? db.Version : "-";
             TxtDbSub.Text = db != null
                 ? db.Label + " · port " + (p != null ? p.MySqlPort.ToString() : "?")
-                : "belum dipilih di profil";
+                : Lang.T("belum dipilih di profil");
 
             TitikKartu();
 
-            BtnSsl.Content = !SslTool.Exists ? "Buat sertifikat SSL"
+            BtnSsl.Content = Lang.T(!SslTool.Exists ? "Buat sertifikat SSL"
                            : !SslTool.IsTrusted ? "Percayai sertifikat SSL"
-                           : "Buat ulang sertifikat SSL";
+                           : "Buat ulang sertifikat SSL");
             ShowConflicts();
         }
 
@@ -233,7 +233,7 @@ namespace Phoron.App.Pages
             // Keterangan saat disentuh, supaya artinya tidak hanya dibawa warna.
             DotKartuWeb.ToolTip = namaWeb + " " + Lang.T(pakaiWeb
                 ? web.ToString().ToLowerInvariant() : "tidak dipakai");
-            DotKartuDb.ToolTip = "MySQL " + Lang.T(pakaiDb
+            DotKartuDb.ToolTip = Lang.T("MySQL") + " " + Lang.T(pakaiDb
                 ? db.ToString().ToLowerInvariant() : "tidak dipakai");
             DotKartuPhp.ToolTip = !adaPhp
                 ? "PHP " + Lang.T("tidak dipakai")
@@ -282,7 +282,7 @@ namespace Phoron.App.Pages
             if (nomor != _nomorPeringatan) return;   // sudah ada permintaan yang lebih baru
 
             var pesan = new List<string>();
-            if (aktif == null) pesan.Add("Belum ada profil. Buat satu di halaman Profil.");
+            if (aktif == null) pesan.Add(Lang.T("Belum ada profil. Buat satu di halaman Profil."));
             else pesan.AddRange(bentrok);
 
             // Konfigurasi sudah berubah di cakram, tapi server yang sedang jalan
@@ -294,29 +294,25 @@ namespace Phoron.App.Pages
             string barisRestart = null, barisHosts = null, barisPembaruan = null, barisSisa = null;
             var barisAdmin = new List<string>();
             if (restartWeb || restartDb)
-                pesan.Add(barisRestart = restartWeb && restartDb
+                pesan.Add(barisRestart = Lang.T(restartWeb && restartDb
                     ? "Konfigurasi web server dan MySQL sudah berubah, tapi keduanya masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
                     : restartWeb
                         ? "Konfigurasi web server sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."
-                        : "Konfigurasi MySQL sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku.");
+                        : "Konfigurasi MySQL sudah berubah, tapi yang sedang jalan masih memakai yang lama. Nyalakan ulang supaya perubahannya berlaku."));
             // Sebagian pesan di panel ini bisa ditindak tanpa hak apa pun, sebagian
             // lagi memang mentok tanpa Administrator. Hanya yang kedua yang boleh
             // memunculkan tombol naik hak akses.
             bool perluAdmin = false;
             if (!SslTool.Exists)
-                pesan.Add("HTTPS belum aktif: sertifikat belum ada, jadi port "
-                          + (_e.Active != null ? _e.Active.HttpsPort.ToString() : "443")
-                          + " tidak dibuka. Pakai http:// (bukan https://), atau tekan "
-                          + "\"Buat sertifikat SSL\" di bawah.");
+                pesan.Add(Lang.T("HTTPS belum aktif: sertifikat belum ada, jadi port {0} tidak dibuka. Pakai http:// (bukan https://), atau tekan \"Buat sertifikat SSL\" di bawah.",
+                          _e.Active != null ? _e.Active.HttpsPort.ToString() : "443"));
             else if (!SslTool.IsTrusted)
             {
                 // Sertifikat yang ada tapi belum tepercaya adalah keadaan paling
                 // menjebak: https menjawab, lalu browser menuduh situsnya palsu.
                 // Pada host ber-HSTS (mis. localhost yang pernah dipasangi header
                 // itu), tombol "tambah pengecualian" pun tidak ditawarkan.
-                pesan.Add("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser "
-                          + "akan memperingatkan - dan pada host ber-HSTS tidak ada tombol "
-                          + "pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah.");
+                pesan.Add(Lang.T("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser akan memperingatkan - dan pada host ber-HSTS tidak ada tombol pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah."));
                 barisAdmin.Add(pesan[pesan.Count - 1]);
                 perluAdmin = true;   // memasang ke Trusted Root butuh Administrator
             }
@@ -328,8 +324,8 @@ namespace Phoron.App.Pages
 
             var baru = _e.Pembaruan;
             if (baru != null && baru.Galat == null && baru.LebihBaru)
-                pesan.Add(barisPembaruan = "Phoron " + baru.Versi + " sudah rilis; yang terpasang "
-                          + AppInfo.Version + ".");
+                pesan.Add(barisPembaruan = Lang.T("Phoron {0} sudah rilis; yang terpasang {1}.",
+                          baru.Versi, AppInfo.Version));
             // Autostart Windows memakai kunci Run, dan Windows SELALU menjalankan
             // entri Run tanpa hak admin. Jadi keadaan ini normal, bukan kerusakan,
             // dan kalimatnya harus mengatakan begitu - lalu menunjukkan bahwa
@@ -337,11 +333,8 @@ namespace Phoron.App.Pages
             var belumDaftar = BelumDaftar();
             if (_e.Settings.ManageHosts && !HostsFile.IsAdmin() && belumDaftar.Count > 0)
             {
-                pesan.Add(barisHosts = "Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu "
-                          + "untuk aplikasi yang menyala sendiri saat boot. Akibatnya "
-                          + belumDaftar.Count + " nama situs .test belum terdaftar di berkas hosts. "
-                          + "Alamat http://localhost/proyek/ tetap jalan normal. "
-                          + "Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.");
+                pesan.Add(barisHosts = Lang.T("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu untuk aplikasi yang menyala sendiri saat boot. Akibatnya {0} nama situs .test belum terdaftar di berkas hosts. Alamat http://localhost/proyek/ tetap jalan normal. Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.",
+                          belumDaftar.Count));
                 barisAdmin.Add(barisHosts);
                 perluAdmin = true;
             }
@@ -356,9 +349,7 @@ namespace Phoron.App.Pages
             // Menyebutkannya tanpa menyediakan tombolnya hanya memaksa orang
             // membuka Task Manager dan menebak PID mana yang boleh dimatikan.
             if (sisa.Count > 0)
-                pesan.Add(barisSisa = "Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat "
-                    + "membersihkan diri - tapi bisa juga milik Laragon atau XAMPP yang memang "
-                    + "sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan.");
+                pesan.Add(barisSisa = Lang.T("Proses itu BISA JADI sisa Phoron yang sebelumnya berakhir tanpa sempat membersihkan diri - tapi bisa juga milik Laragon atau XAMPP yang memang sedang Anda pakai. Jalur berkasnya ditampilkan sebelum dihentikan."));
 
             // Catatan yang sudah ditutup (X) tidak ditampilkan lagi selama masih
             // sama; tombol aksinya ikut tersembunyi bersama catatannya.
@@ -415,16 +406,15 @@ namespace Phoron.App.Pages
             // Laragon dan XAMPP juga, jadi httpd yang sama persis bisa saja
             // dijalankan Laragon sendiri. Yang bisa diperbuat adalah menyodorkan
             // keterangan secukupnya supaya orang memutuskan, bukan mengaku-aku.
-            if (!AppState.Ask("Hentikan proses berikut?" + Environment.NewLine + Environment.NewLine
+            if (!AppState.Ask(Lang.T("Hentikan proses berikut?") + Environment.NewLine + Environment.NewLine
                               + string.Join(Environment.NewLine, sisa.Select(u =>
-                                    "  " + u.ProcessName + " (PID " + u.Pid + ") di port " + u.Port
+                                    "  " + Lang.T("{0} (PID {1}) di port {2}", u.ProcessName, u.Pid, u.Port)
                                     + (string.IsNullOrEmpty(u.Jalur)
                                        ? "" : Environment.NewLine + "      " + u.Jalur)))
                               + Environment.NewLine + Environment.NewLine
-                              + "Periksa jalurnya dulu: kalau ia berada di folder Laragon atau "
-                              + "XAMPP, kemungkinan besar itu milik aplikasi lain yang sedang "
-                              + "berjalan." + Environment.NewLine + Environment.NewLine
-                              + "MySQL diminta berhenti dengan rapi lebih dulu.")) return;
+                              + Lang.T("Periksa jalurnya dulu: kalau ia berada di folder Laragon atau XAMPP, kemungkinan besar itu milik aplikasi lain yang sedang berjalan.")
+                              + Environment.NewLine + Environment.NewLine
+                              + Lang.T("MySQL diminta berhenti dengan rapi lebih dulu."))) return;
 
             BtnBebaskan.IsEnabled = false;
             try
@@ -434,7 +424,7 @@ namespace Phoron.App.Pages
                 var main = Window.GetWindow(this) as MainWindow;
                 if (main != null) main.RefreshStatus();
                 if (gagal.Count > 0) AppState.Warn(string.Join(Environment.NewLine + Environment.NewLine, gagal));
-                else AppState.Info("Proses yang tertinggal sudah dihentikan; portnya bebas.");
+                else AppState.Info(Lang.T("Proses yang tertinggal sudah dihentikan; portnya bebas."));
             }
             finally { BtnBebaskan.IsEnabled = true; }
         }
@@ -464,8 +454,7 @@ namespace Phoron.App.Pages
 
         void BtnAdmin_Click(object sender, RoutedEventArgs e)
         {
-            Program.RestartAsAdmin("Menyunting berkas hosts dan memasang sertifikat ke Trusted Root "
-                                   + "hanya bisa dilakukan dengan hak Administrator.");
+            Program.RestartAsAdmin(Lang.T("Menyunting berkas hosts dan memasang sertifikat ke Trusted Root hanya bisa dilakukan dengan hak Administrator."));
         }
 
         // ------------------------------------------------------------------ Aksi
@@ -550,20 +539,20 @@ namespace Phoron.App.Pages
                 File.WriteAllText(file, "<?php phpinfo();", new UTF8Encoding(false));
                 Shell.Open(_e.RootUrl() + "phoron-phpinfo.php");
             }
-            catch (Exception ex) { AppState.Warn("Gagal membuat phpinfo: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal membuat phpinfo: {0}", ex.Message)); }
         }
 
         void BtnTest_Click(object sender, RoutedEventArgs e)
         {
             var apache = _e.Apache;
-            if (apache == null) { AppState.Warn("Profil ini belum menunjuk Apache."); return; }
+            if (apache == null) { AppState.Warn(Lang.T("Profil ini belum menunjuk Apache.")); return; }
             _e.Apply();
             var httpd = Path.Combine(apache.Path, "bin", "httpd.exe");
             var conf = Path.Combine(Paths.EtcApache, "httpd.conf");
             var res = Shell.Run(httpd, "-f \"" + conf + "\" -d \"" + apache.Path + "\" -t",
                                 apache.Path, 30000, ServiceManager.EnvFor(_e.Php, ConfigWriter.FolderPhpIni(_e.Php, _e.Settings.PhpIniKeFolderPhp)));
-            AppState.Info(string.IsNullOrWhiteSpace(res.All) ? "Konfigurasi OK." : res.All,
-                          res.Ok ? "Konfigurasi OK" : "Konfigurasi bermasalah");
+            AppState.Info(string.IsNullOrWhiteSpace(res.All) ? Lang.T("Konfigurasi OK.") : res.All,
+                          Lang.T(res.Ok ? "Konfigurasi OK" : "Konfigurasi bermasalah"));
         }
 
         void BtnSsl_Click(object sender, RoutedEventArgs e)
@@ -572,13 +561,11 @@ namespace Phoron.App.Pages
             // tidak membatalkan kepercayaan itu - CA yang sama dipakai lagi.
             if (SslTool.Exists && !SslTool.IsTrusted) { PercayaiSertifikat(); return; }
             if (SslTool.Exists
-                && !AppState.Ask("Sertifikat sudah ada dan CA-nya sudah tepercaya. Buat ulang "
-                                 + "sertifikat situs? CA yang sama dipakai lagi, jadi tidak perlu "
-                                 + "dipercayai ulang."))
+                && !AppState.Ask(Lang.T("Sertifikat sudah ada dan CA-nya sudah tepercaya. Buat ulang sertifikat situs? CA yang sama dipakai lagi, jadi tidak perlu dipercayai ulang.")))
                 return;
 
             var apache = _e.Apache;
-            if (apache == null) { AppState.Warn("Butuh paket Apache (openssl.exe ada di dalamnya)."); return; }
+            if (apache == null) { AppState.Warn(Lang.T("Butuh paket Apache (openssl.exe ada di dalamnya).")); return; }
             var err = SslTool.Generate(apache, _e.Active != null ? _e.Active.SiteSuffix : "test",
                                       _e.Profiles.Select(x => x.SiteSuffix));
             if (err != null) { AppState.Warn(err); return; }
@@ -590,13 +577,12 @@ namespace Phoron.App.Pages
 
         void PercayaiSertifikat()
         {
-            if (!AppState.Ask("Pasang CA Phoron ke Trusted Root Windows supaya browser tidak "
-                              + "memberi peringatan?")) return;
+            if (!AppState.Ask(Lang.T("Pasang CA Phoron ke Trusted Root Windows supaya browser tidak memberi peringatan?"))) return;
 
             var t = SslTool.Trust();
             if (t != null && t.Contains("Administrator"))
             {
-                Program.RestartAsAdmin("Memasang sertifikat ke Trusted Root butuh hak Administrator.");
+                Program.RestartAsAdmin(Lang.T("Memasang sertifikat ke Trusted Root butuh hak Administrator."));
                 return;
             }
             if (t != null) { AppState.Warn(t); return; }
@@ -606,14 +592,7 @@ namespace Phoron.App.Pages
             // Windows, jadi "sudah terpasang" saja bukan jawaban lengkap bagi
             // pengguna Firefox - dan diam soal ini membuat orang mengira
             // pemasangannya gagal.
-            AppState.Info("CA Phoron terpasang di Trusted Root Windows. Tutup dan buka ulang browser.\n\n"
-                          + "Chrome dan Edge langsung ikut. Firefox memakai daftar sertifikatnya "
-                          + "sendiri: buka about:config, setel security.enterprise_roots.enabled "
-                          + "jadi true, lalu jalankan ulang Firefox.\n\n"
-                          + "Kalau sebuah nama (mis. localhost) pernah dipasangi HSTS, Firefox "
-                          + "menolak menampilkan tombol pengecualian sampai sertifikatnya benar-benar "
-                          + "tepercaya - atau entri HSTS-nya dibuang lewat Riwayat > klik kanan situs "
-                          + "> Lupakan Situs Ini.");
+            AppState.Info(Lang.T("CA Phoron terpasang di Trusted Root Windows. Tutup dan buka ulang browser.\n\nChrome dan Edge langsung ikut. Firefox memakai daftar sertifikatnya sendiri: buka about:config, setel security.enterprise_roots.enabled jadi true, lalu jalankan ulang Firefox.\n\nKalau sebuah nama (mis. localhost) pernah dipasangi HSTS, Firefox menolak menampilkan tombol pengecualian sampai sertifikatnya benar-benar tepercaya - atau entri HSTS-nya dibuang lewat Riwayat > klik kanan situs > Lupakan Situs Ini."));
         }
     }
 }

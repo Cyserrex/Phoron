@@ -76,18 +76,18 @@ namespace Phoron.App
 
                 if (TerlaluSering())
                 {
-                    Tampilkan("Phoron berkali-kali menemui galat dan akan ditutup supaya tidak "
-                              + "menimbulkan kerusakan lain." + Dua() + Pesan(ex)
-                              + (jalur != null ? Dua() + "Rincian: " + jalur : ""),
+                    Tampilkan(Lang.T("Phoron berkali-kali menemui galat dan akan ditutup supaya tidak menimbulkan kerusakan lain.")
+                              + Dua() + PesanLayar(ex)
+                              + (jalur != null ? Dua() + Lang.T("Rincian: {0}", jalur) : ""),
                               MessageBoxButton.OK);
                     TutupDenganRapi();
                     return true;
                 }
 
                 var jawab = Tampilkan(
-                    "Ada yang tidak beres di dalam Phoron." + Dua() + Pesan(ex) + Dua()
-                    + (jalur != null ? "Rincian tersimpan di:" + Environment.NewLine + jalur + Dua() : "")
-                    + "Layanan yang sedang berjalan tidak terganggu. Lanjutkan memakai Phoron?",
+                    Lang.T("Ada yang tidak beres di dalam Phoron.") + Dua() + PesanLayar(ex) + Dua()
+                    + (jalur != null ? Lang.T("Rincian tersimpan di:") + Environment.NewLine + jalur + Dua() : "")
+                    + Lang.T("Layanan yang sedang berjalan tidak terganggu. Lanjutkan memakai Phoron?"),
                     MessageBoxButton.YesNo);
 
                 if (jawab == MessageBoxResult.No) TutupDenganRapi();
@@ -108,9 +108,9 @@ namespace Phoron.App
             try
             {
                 var jalur = TulisAman(ex, "galat fatal di luar utas layar");
-                Tampilkan("Phoron harus ditutup karena galat yang tidak bisa dipulihkan."
-                          + Dua() + Pesan(ex)
-                          + (jalur != null ? Dua() + "Rincian: " + jalur : ""),
+                Tampilkan(Lang.T("Phoron harus ditutup karena galat yang tidak bisa dipulihkan.")
+                          + Dua() + PesanLayar(ex)
+                          + (jalur != null ? Dua() + Lang.T("Rincian: {0}", jalur) : ""),
                           MessageBoxButton.OK);
                 HentikanLayanan();
             }
@@ -201,6 +201,15 @@ namespace Phoron.App
             var dalam = ex;
             while (dalam.InnerException != null) dalam = dalam.InnerException;
             return dalam.Message;
+        }
+
+        /// <summary>
+        /// Sama dengan <see cref="Pesan"/>, tapi untuk kotak pesan: keterangan
+        /// pengganti diterjemahkan. Yang ke log tetap memakai Pesan apa adanya.
+        /// </summary>
+        static string PesanLayar(Exception ex)
+        {
+            return ex == null ? Lang.T("(galat tanpa keterangan)") : Pesan(ex);
         }
 
         static string Dua() { return Environment.NewLine + Environment.NewLine; }

@@ -49,11 +49,11 @@ namespace Phoron.App.Pages
             var p = _e.Active;
             if (php == null || p == null)
             {
-                TxtInfo.Text = "Profil aktif belum menunjuk versi PHP.";
+                TxtInfo.Text = Lang.T("Profil aktif belum menunjuk versi PHP.");
                 return;
             }
-            TxtInfo.Text = "Ekstensi yang tersedia di " + php.Id + ". Centangan disimpan di profil \""
-                         + p.Name + "\", jadi tiap profil bisa punya daftar sendiri.";
+            TxtInfo.Text = Lang.T("Ekstensi yang tersedia di {0}. Centangan disimpan di profil \"{1}\", jadi tiap profil bisa punya daftar sendiri.",
+                                  php.Id, p.Name);
 
             var aktif = new HashSet<string>(p.PhpExtensions, StringComparer.OrdinalIgnoreCase);
             _kotak.Clear();
@@ -130,16 +130,16 @@ namespace Phoron.App.Pages
         void BtnAmbil_Click(object sender, RoutedEventArgs e)
         {
             var php = _e.Php;
-            if (php == null) { AppState.Warn("Profil belum menunjuk PHP."); return; }
+            if (php == null) { AppState.Warn(Lang.T("Profil belum menunjuk PHP.")); return; }
             var dasar = ConfigWriter.EkstensiDariPhpIniDasar(php);
             if (dasar.Count == 0)
             {
-                AppState.Info("php.ini asli di " + php.Id + " tidak mengaktifkan ekstensi apa pun.");
+                AppState.Info(Lang.T("php.ini asli di {0} tidak mengaktifkan ekstensi apa pun.", php.Id));
                 return;
             }
-            if (!AppState.Ask("php.ini asli mengaktifkan " + dasar.Count + " ekstensi:\n\n"
+            if (!AppState.Ask(Lang.T("php.ini asli mengaktifkan {0} ekstensi:", dasar.Count) + "\n\n"
                               + string.Join(", ", dasar)
-                              + "\n\nGanti centangan sekarang dengan daftar itu?")) return;
+                              + "\n\n" + Lang.T("Ganti centangan sekarang dengan daftar itu?"))) return;
 
             var set = new HashSet<string>(dasar, StringComparer.OrdinalIgnoreCase);
             foreach (var cb in _kotak) cb.IsChecked = set.Contains((cb.Tag ?? "").ToString());
@@ -147,10 +147,10 @@ namespace Phoron.App.Pages
             var hilang = dasar.Where(d => !_kotak.Any(c =>
                 string.Equals((c.Tag ?? "").ToString(), d, StringComparison.OrdinalIgnoreCase))).ToList();
             if (hilang.Count > 0)
-                AppState.Warn("Tidak ada DLL-nya di " + php.Id + ", jadi dilewati: "
-                              + string.Join(", ", hilang));
+                AppState.Warn(Lang.T("Tidak ada DLL-nya di {0}, jadi dilewati: {1}",
+                                     php.Id, string.Join(", ", hilang)));
             Simpan();
-            AppState.Info("Centangan disesuaikan dan langsung disimpan.");
+            AppState.Info(Lang.T("Centangan disesuaikan dan langsung disimpan."));
         }
 
         void Kotak_Ubah(object sender, RoutedEventArgs e) { Jadwalkan(); }
@@ -198,8 +198,8 @@ namespace Phoron.App.Pages
             foreach (var w in _e.Apply()) _e.Say(w);
 
             if (_e.Services.WebState == ServiceState.Jalan) _perluRestart = true;
-            TxtStatusSimpan.Text = "Tersimpan " + DateTime.Now.ToString("HH:mm:ss")
-                + " - " + p.PhpExtensions.Count + " ekstensi dicentang, php.ini ditulis ulang.";
+            TxtStatusSimpan.Text = Lang.T("Tersimpan {0} - {1} ekstensi dicentang, php.ini ditulis ulang.",
+                DateTime.Now.ToString("HH:mm:ss"), p.PhpExtensions.Count);
             SegarkanBilah();
         }
 
@@ -208,8 +208,7 @@ namespace Phoron.App.Pages
             bool jalan = _e.Services.WebState == ServiceState.Jalan;
             PanelRestart.Visibility = _perluRestart && jalan ? Visibility.Visible : Visibility.Collapsed;
             if (PanelRestart.Visibility == Visibility.Visible)
-                TxtRestart.Text = "php.ini sudah ditulis ulang, tapi web server membacanya HANYA saat start - "
-                    + "jadi perubahan ini belum berlaku di browser sampai dinyalakan ulang.";
+                TxtRestart.Text = Lang.T("php.ini sudah ditulis ulang, tapi web server membacanya HANYA saat start - jadi perubahan ini belum berlaku di browser sampai dinyalakan ulang.");
         }
 
         async void BtnRestart_Click(object sender, RoutedEventArgs e)
@@ -241,7 +240,7 @@ namespace Phoron.App.Pages
             // dan itu terbaca sebagai "centangannya tidak berpengaruh".
             Simpan();
             var dir = _e.LastBuild != null ? _e.LastBuild.PhpIniDir : null;
-            if (dir == null) { AppState.Warn("php.ini belum pernah ditulis."); return; }
+            if (dir == null) { AppState.Warn(Lang.T("php.ini belum pernah ditulis.")); return; }
             Shell.Open(Path.Combine(dir, "php.ini"));
         }
 
@@ -262,14 +261,13 @@ namespace Phoron.App.Pages
             if (!arsitektur && !hilang) return "";
 
             var sb = new System.Text.StringBuilder();
-            sb.Append(Environment.NewLine + Environment.NewLine + "--- Penjelasan ---" + Environment.NewLine);
+            sb.Append(Environment.NewLine + Environment.NewLine + "--- " + Lang.T("Penjelasan") + " ---" + Environment.NewLine);
             if (arsitektur)
-                sb.Append("\"is not a valid Win32 application\" berarti BEDA ARSITEKTUR, dan yang salah "
-                    + "arsitektur biasanya bukan DLL ekstensinya, melainkan pustaka yang dipanggilnya."
+                sb.Append(Lang.T("\"is not a valid Win32 application\" berarti BEDA ARSITEKTUR, dan yang salah arsitektur biasanya bukan DLL ekstensinya, melainkan pustaka yang dipanggilnya.")
                     + Environment.NewLine);
             if (hilang)
-                sb.Append("\"The specified module could not be found\" berarti DLL ekstensinya ADA, tapi "
-                    + "pustaka yang dibutuhkannya tidak ketemu sama sekali." + Environment.NewLine);
+                sb.Append(Lang.T("\"The specified module could not be found\" berarti DLL ekstensinya ADA, tapi pustaka yang dibutuhkannya tidak ketemu sama sekali.")
+                    + Environment.NewLine);
 
             // Kasus tersering sejauh ini: oci8. Karena itu keadaan NYATA komputer
             // ini ikut dilaporkan, bukan cuma teori umum - dugaan yang terdengar
@@ -277,29 +275,28 @@ namespace Phoron.App.Pages
             if (t.IndexOf("oci", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 var o = Oracle.Periksa(_e.Php);
-                sb.Append(Environment.NewLine + "Oracle Instant Client di komputer ini: ");
+                sb.Append(Environment.NewLine + Lang.T("Oracle Instant Client di komputer ini:") + " ");
                 sb.Append(o.Ada
-                    ? o.JalurDll + " (" + (o.Arsitektur.Length > 0 ? o.Arsitektur : "arsitektur tak terbaca") + ")"
-                    : "TIDAK DITEMUKAN di PATH");
+                    ? o.JalurDll + " (" + (o.Arsitektur.Length > 0 ? o.Arsitektur : Lang.T("arsitektur tak terbaca")) + ")"
+                    : Lang.T("TIDAK DITEMUKAN di PATH"));
                 sb.Append(o.Pesan.Length > 0
-                    ? Environment.NewLine + Environment.NewLine + o.Pesan
-                    : Environment.NewLine + "Arsitekturnya sepadan dengan PHP, jadi sebab galatnya ada di tempat lain.");
+                    ? Environment.NewLine + Environment.NewLine + Lang.T(o.Pesan)
+                    : Environment.NewLine + Lang.T("Arsitekturnya sepadan dengan PHP, jadi sebab galatnya ada di tempat lain."));
             }
 
             sb.Append(Environment.NewLine + Environment.NewLine
-                + "Phoron tidak bisa memperbaiki ini dari sini: Instant Client dan PATH itu "
-                + "milik Windows, bukan milik profil.");
+                + Lang.T("Phoron tidak bisa memperbaiki ini dari sini: Instant Client dan PATH itu milik Windows, bukan milik profil."));
             return sb.ToString();
         }
 
         void BtnUji_Click(object sender, RoutedEventArgs e)
         {
             var php = _e.Php;
-            if (php == null) { AppState.Warn("Profil belum menunjuk PHP."); return; }
+            if (php == null) { AppState.Warn(Lang.T("Profil belum menunjuk PHP.")); return; }
             Simpan();
             var res = Shell.Run(Path.Combine(php.Path, "php.exe"), "-m", php.Path, 30000,
                                 ServiceManager.EnvFor(php, ConfigWriter.FolderPhpIni(php, _e.Settings.PhpIniKeFolderPhp)));
-            AppState.Info(res.All + Petunjuk(res.All), "Modul yang benar-benar dimuat");
+            AppState.Info(res.All + Petunjuk(res.All), Lang.T("Modul yang benar-benar dimuat"));
         }
     }
 }

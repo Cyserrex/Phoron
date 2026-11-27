@@ -21,7 +21,7 @@ namespace Phoron.App.Pages
 
         void Isi()
         {
-            TxtVersi.Text = Lang.T("Versi") + " " + AppInfo.Version;
+            TxtVersi.Text = Lang.T("Versi {0}", AppInfo.Version);
             TxtHakCipta.Text = AppInfo.HakCipta;
             PasangLogo();
             PasangRincian();
@@ -101,7 +101,7 @@ namespace Phoron.App.Pages
                 if (hasil != null && hasil.Galat == null && hasil.LebihBaru)
                     UpdateDialog.Tawarkan(_e, hasil);
                 else if (hasil != null && hasil.Galat != null) AppState.Warn(hasil.Galat);
-                else AppState.Info("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+                else AppState.Info(Lang.T("Phoron {0} sudah versi terbaru.", AppInfo.Version));
             }
             finally { if (tombol != null) tombol.IsEnabled = true; }
         }
@@ -127,7 +127,7 @@ namespace Phoron.App.Pages
                 Clipboard.SetText(sb.ToString());
                 AppState.Info(Lang.T("Info versi sudah disalin ke papan klip."));
             }
-            catch (Exception ex) { AppState.Warn("Gagal menyalin: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal menyalin: {0}", ex.Message)); }
         }
     }
 }

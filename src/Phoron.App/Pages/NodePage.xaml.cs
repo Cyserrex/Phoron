@@ -96,7 +96,7 @@ namespace Phoron.App.Pages
 
             TxtInfo.Text = _e.NodeAppsList.Count == 0
                 ? Lang.T("Belum ada proyek. Tekan \"Tambah proyek...\" lalu pilih folder yang berisi package.json - boleh di mana saja, tidak harus di dalam www.")
-                : _e.NodeAppsList.Count + " proyek terdaftar. Klik ganda untuk menjalankan atau menghentikan.";
+                : Lang.T("{0} proyek terdaftar. Klik ganda untuk menjalankan atau menghentikan.", _e.NodeAppsList.Count);
             _mengisi = false;
             SegarkanPilihan();
         }

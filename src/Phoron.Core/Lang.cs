@@ -29,7 +29,7 @@ namespace Phoron.Core
     /// "Virsi" - bentuk terakhir ini cuma muncul sekali, sedangkan "versi"
     /// ribuan kali.
     /// </summary>
-    public static class Lang
+    public static partial class Lang
     {
         public const string Indonesia = "id";
         public const string Inggris = "en";
@@ -103,13 +103,46 @@ namespace Phoron.Core
             return string.Format(T(teks), isi);
         }
 
-        static readonly Dictionary<string, Dictionary<string, string>> Kamus =
-            new Dictionary<string, Dictionary<string, string>>
+        static readonly Dictionary<string, Dictionary<string, string>> Kamus = BangunKamus();
+
+        static Dictionary<string, Dictionary<string, string>> BangunKamus()
+        {
+            var k = new Dictionary<string, Dictionary<string, string>>
             {
                 { Inggris, Inggris_() },
                 { Jawa, Jawa_() },
                 { Banjar, Banjar_() },
             };
+            // Kamus tambahan per layar (LangLayar*.cs): satu baris berisi
+            // { Indonesia, Inggris, Jawa, Banjar }. Ditulis per baris, bukan per
+            // bahasa, supaya padanan satu kalimat selalu bersebelahan dan tidak
+            // ada bahasa yang tertinggal saat kalimatnya diubah. Kunci yang sudah
+            // ada di kamus utama TIDAK ditimpa.
+            foreach (var baris in BarisLayar())
+            {
+                if (baris == null || baris.Length != 4 || string.IsNullOrEmpty(baris[0])) continue;
+                if (!k[Inggris].ContainsKey(baris[0])) k[Inggris][baris[0]] = baris[1];
+                if (!k[Jawa].ContainsKey(baris[0])) k[Jawa][baris[0]] = baris[2];
+                if (!k[Banjar].ContainsKey(baris[0])) k[Banjar][baris[0]] = baris[3];
+            }
+            return k;
+        }
+
+        /// <summary>Semua baris kamus tambahan per layar, untuk dibangun dan diuji.</summary>
+        public static IEnumerable<string[]> BarisLayar()
+        {
+            foreach (var kumpulan in KumpulanLayar())
+                foreach (var b in kumpulan)
+                    yield return b;
+        }
+
+        /// <summary>Seluruh pasangan (kunci, padanan) satu bahasa - dipakai uji kamus.</summary>
+        public static IEnumerable<KeyValuePair<string, string>> Padanan(string kode)
+        {
+            Dictionary<string, string> kamus;
+            if (!Kamus.TryGetValue(kode ?? "", out kamus)) return new KeyValuePair<string, string>[0];
+            return kamus;
+        }
 
         static Dictionary<string, string> Inggris_()
         {

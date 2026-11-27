@@ -13,11 +13,11 @@ namespace Phoron.App
     {
         public static void Tawarkan(Engine e, HasilCek hasil)
         {
-            if (hasil == null) { AppState.Info("Belum ada hasil pengecekan."); return; }
+            if (hasil == null) { AppState.Info(Lang.T("Belum ada hasil pengecekan.")); return; }
             if (hasil.Galat != null) { AppState.Warn(hasil.Galat); return; }
             if (!hasil.LebihBaru)
             {
-                AppState.Info("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+                AppState.Info(Lang.T("Phoron {0} sudah versi terbaru.", AppInfo.Version));
                 return;
             }
 
@@ -27,15 +27,17 @@ namespace Phoron.App
             // yang ujungnya tidak terbaca.
             if (catatan.Length > 700) catatan = catatan.Substring(0, 700).TrimEnd() + "\n...";
 
-            var pesan = "Phoron " + hasil.Versi + " sudah rilis.\n"
-                      + "Yang terpasang sekarang: " + AppInfo.Version + ".\n\n"
+            // Catatan rilis ditulis apa adanya (bahasa penulis rilisnya); yang
+            // diterjemahkan hanya kalimat Phoron di sekitarnya.
+            var pesan = Lang.T("Phoron {0} sudah rilis.\nYang terpasang sekarang: {1}.",
+                               hasil.Versi, AppInfo.Version) + "\n\n"
                       + (catatan.Length > 0 ? catatan + "\n\n" : "")
-                      + "Unduh installer-nya sekarang?\n\n"
-                      + "[Ya] unduh lalu jalankan pemasangnya\n"
-                      + "[Tidak] buka halaman rilis di browser\n"
-                      + "[Batal] tidak sekarang";
+                      + Lang.T("Unduh installer-nya sekarang?\n\n"
+                               + "[Ya] unduh lalu jalankan pemasangnya\n"
+                               + "[Tidak] buka halaman rilis di browser\n"
+                               + "[Batal] tidak sekarang");
 
-            var jawab = MessageBox.Show(pesan, "Pembaruan tersedia",
+            var jawab = MessageBox.Show(pesan, Lang.T("Pembaruan tersedia"),
                 MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
             if (jawab == MessageBoxResult.Cancel) return;
             if (jawab == MessageBoxResult.No)
@@ -50,8 +52,8 @@ namespace Phoron.App
         {
             if (string.IsNullOrEmpty(hasil.UrlInstaller))
             {
-                AppState.Warn("Rilis itu tidak menyertakan berkas installer. "
-                              + "Halaman rilisnya akan dibuka di browser.");
+                AppState.Warn(Lang.T("Rilis itu tidak menyertakan berkas installer. "
+                                     + "Halaman rilisnya akan dibuka di browser."));
                 Shell.Open(hasil.UrlHalaman);
                 return;
             }
@@ -71,9 +73,9 @@ namespace Phoron.App
             var berkas = jendela.Berkas;
             e.Say("Installer tersimpan di " + berkas + ".");
 
-            if (!AppState.Ask("Installer sudah diunduh.\n\nJalankan sekarang?\n\n"
-                              + "Phoron akan ditutup lebih dulu supaya Apache dan MySQL berhenti "
-                              + "dengan rapi. Proyek, basis data, dan profil Anda tidak disentuh."))
+            if (!AppState.Ask(Lang.T("Installer sudah diunduh.\n\nJalankan sekarang?\n\n"
+                                     + "Phoron akan ditutup lebih dulu supaya Apache dan MySQL berhenti "
+                                     + "dengan rapi. Proyek, basis data, dan profil Anda tidak disentuh.")))
             {
                 Shell.Open(Paths.Tmp);
                 return;
@@ -91,8 +93,8 @@ namespace Phoron.App
             }
             catch (Exception ex)
             {
-                AppState.Warn("Tidak bisa menjalankan installer: " + ex.Message
-                              + "\n\nBerkasnya ada di " + berkas + ".");
+                AppState.Warn(Lang.T("Tidak bisa menjalankan installer: {0}\n\nBerkasnya ada di {1}.",
+                                     ex.Message, berkas));
             }
         }
     }

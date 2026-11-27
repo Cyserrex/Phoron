@@ -52,7 +52,7 @@ namespace Phoron.App.Pages
 
         List<Row> Rows(BinKind kind)
         {
-            var list = new List<Row> { new Row { Pkg = null, Text = "(tidak dipakai)" } };
+            var list = new List<Row> { new Row { Pkg = null, Text = Lang.T("(tidak dipakai)") } };
             list.AddRange(_e.Of(kind).Select(p => new Row { Pkg = p, Text = LabelPaket(p) }));
             return list;
         }
@@ -156,9 +156,9 @@ namespace Phoron.App.Pages
         {
             var n = p.ProjectRoots.Count;
             var isi = n == 0
-                ? "Belum diisi - memakai folder www bawaan Phoron."
+                ? Lang.T("Belum diisi - memakai folder www bawaan Phoron.")
                 : string.Join(", ", p.ProjectRoots.ToArray());
-            return isi + "  (diatur di halaman Situs)";
+            return isi + "  " + Lang.T("(diatur di halaman Situs)");
         }
 
         static void Pilih(ComboBox box, string tag)
@@ -248,7 +248,7 @@ namespace Phoron.App.Pages
         {
             var masalah = new List<string>();
 
-            if (string.IsNullOrWhiteSpace(TxtNama.Text)) masalah.Add("Nama profil belum diisi.");
+            if (string.IsNullOrWhiteSpace(TxtNama.Text)) masalah.Add(Lang.T("Nama profil belum diisi."));
             else p.Name = TxtNama.Text.Trim();
 
             var httpLama = p.HttpPort;
@@ -263,8 +263,8 @@ namespace Phoron.App.Pages
             // hanya HTTPS, bentroknya tetap ada saat yang diubah justru HTTP.
             if (p.HttpPort == p.HttpsPort)
             {
-                masalah.Add("Port HTTP dan HTTPS tidak boleh sama (" + p.HttpPort + "), "
-                            + "jadi keduanya tetap " + httpLama + " dan " + httpsLama + ".");
+                masalah.Add(Lang.T("Port HTTP dan HTTPS tidak boleh sama ({0}), jadi keduanya tetap {1} dan {2}.",
+                                   p.HttpPort, httpLama, httpsLama));
                 p.HttpPort = httpLama;
                 p.HttpsPort = httpsLama;
             }
@@ -280,7 +280,7 @@ namespace Phoron.App.Pages
 
             var hilang = p.ProjectRoots.Where(r => !System.IO.Directory.Exists(r)).ToList();
             if (hilang.Count > 0)
-                masalah.Add("Folder ini belum ada: " + string.Join(", ", hilang));
+                masalah.Add(Lang.T("Folder ini belum ada: {0}", string.Join(", ", hilang)));
 
             var php = _e.Find(BinKind.Php, p.PhpId);
             var apache = _e.Find(BinKind.Apache, p.ApacheId);
@@ -292,16 +292,14 @@ namespace Phoron.App.Pages
                 // Laragon (x64) dipakai berdampingan, misalnya PHP 5 dari XAMPP
                 // dipasangkan dengan Apache milik Laragon.
                 if (!ProfileStore.ArsitekturSepadan(php.Arch, apache.Arch))
-                    masalah.Add("PHP " + php.Version + " berarsitektur " + php.Arch
-                        + " sedangkan Apache " + apache.Version + " berarsitektur " + apache.Arch
-                        + ". Kombinasi ini TIDAK AKAN pernah jalan - Apache memuat modul PHP ke dalam "
-                        + "dirinya sendiri, jadi keduanya harus sama. Tekan \"Sarankan otomatis\".");
+                    masalah.Add(Lang.T("PHP {0} berarsitektur {1} sedangkan Apache {2} berarsitektur {3}. Kombinasi ini TIDAK AKAN pernah jalan - Apache memuat modul PHP ke dalam dirinya sendiri, jadi keduanya harus sama. Tekan \"Sarankan otomatis\".",
+                                       php.Version, php.Arch, apache.Version, apache.Arch));
                 else if (!string.IsNullOrEmpty(php.Compiler) && !string.IsNullOrEmpty(apache.Compiler)
                     && !string.Equals(php.Compiler, apache.Compiler, StringComparison.OrdinalIgnoreCase))
                     // Bukan penghalang - ada kombinasi yang tetap jalan - tapi ini
                     // penyebab paling umum Apache mati seketika tanpa pesan.
-                    masalah.Add("PHP dibangun dengan " + php.Compiler + " sedangkan Apache dengan "
-                        + apache.Compiler + ". Kombinasi beda toolset biasanya membuat Apache gagal start.");
+                    masalah.Add(Lang.T("PHP dibangun dengan {0} sedangkan Apache dengan {1}. Kombinasi beda toolset biasanya membuat Apache gagal start.",
+                                       php.Compiler, apache.Compiler));
             }
 
             // Runtime Visual C++ tidak ikut dalam arsip PHP maupun Apache. Kalau
@@ -316,7 +314,7 @@ namespace Phoron.App.Pages
         {
             int n;
             if (int.TryParse((teks ?? "").Trim(), out n) && n >= 1 && n <= 65535) return n;
-            masalah.Add("Port " + nama + " tidak masuk akal, jadi tetap " + lama + ".");
+            masalah.Add(Lang.T("Port {0} tidak masuk akal, jadi tetap {1}.", nama, lama));
             return lama;
         }
 
@@ -335,7 +333,7 @@ namespace Phoron.App.Pages
             var php = phpRow != null ? phpRow.Pkg : null;
             if (php == null)
             {
-                AppState.Warn("Pilih dulu versi PHP-nya; sisanya disesuaikan dengan itu.");
+                AppState.Warn(Lang.T("Pilih dulu versi PHP-nya; sisanya disesuaikan dengan itu."));
                 return;
             }
 
@@ -346,20 +344,20 @@ namespace Phoron.App.Pages
             if (apache != null)
             {
                 PilihPkg(CmbApache, BinKind.Apache, apache.NilaiSimpan);
-                rincian.Add("Apache " + apache.Version + " (" + apache.Arch
-                            + (apache.Compiler.Length > 0 ? " " + apache.Compiler : "") + ") dari " + apache.SourceRoot);
+                rincian.Add(Lang.T("Apache {0} ({1}) dari {2}", apache.Version,
+                            apache.Arch + (apache.Compiler.Length > 0 ? " " + apache.Compiler : ""), apache.SourceRoot));
             }
-            else rincian.Add("Tidak ada Apache yang cocok dengan PHP " + php.Arch + " di komputer ini.");
+            else rincian.Add(Lang.T("Tidak ada Apache yang cocok dengan PHP {0} di komputer ini.", php.Arch));
 
             if (mysql != null)
             {
                 PilihPkg(CmbMysql, BinKind.MySql, mysql.NilaiSimpan);
-                rincian.Add("MySQL " + mysql.Version + " dari " + mysql.SourceRoot);
+                rincian.Add(Lang.T("MySQL {0} dari {1}", mysql.Version, mysql.SourceRoot));
             }
 
             Simpan();
-            AppState.Info("Disesuaikan dengan PHP " + php.Version + " (" + php.Arch + ") dari "
-                          + php.SourceRoot + ":" + Environment.NewLine + Environment.NewLine
+            AppState.Info(Lang.T("Disesuaikan dengan PHP {0} ({1}) dari {2}:", php.Version, php.Arch, php.SourceRoot)
+                          + Environment.NewLine + Environment.NewLine
                           + string.Join(Environment.NewLine, rincian.ToArray()));
         }
 
@@ -408,8 +406,8 @@ namespace Phoron.App.Pages
                 if (_e.Services.DbState == ServiceState.Jalan) _perluRestartDb = true;
             }
 
-            TxtStatusSimpan.Text = "Tersimpan " + DateTime.Now.ToString("HH:mm:ss")
-                + " ke profiles\\" + _current.FileName + ".ini";
+            TxtStatusSimpan.Text = Lang.T("Tersimpan {0} ke {1}", DateTime.Now.ToString("HH:mm:ss"),
+                "profiles\\" + _current.FileName + ".ini");
             TampilkanMasalah(masalah);
             SegarkanBilah();
             return _current;
@@ -437,9 +435,7 @@ namespace Phoron.App.Pages
             string apa = web && db ? Lang.T("web server dan MySQL")
                        : web ? Lang.T("web server")
                        : "MySQL";
-            TxtRestart.Text = string.Format(
-                Lang.T("Profil yang sedang dipakai sudah berubah, tapi {0} membaca konfigurasinya "
-                       + "HANYA saat start - jadi perubahan ini belum berlaku."), apa);
+            TxtRestart.Text = Lang.T("Profil yang sedang dipakai sudah berubah, tapi {0} membaca konfigurasinya HANYA saat start - jadi perubahan ini belum berlaku.", apa);
             BtnRestart.Content = web && db ? Lang.T("Nyalakan ulang keduanya")
                                : web ? Lang.T("Nyalakan ulang web server")
                                : Lang.T("Nyalakan ulang MySQL");
@@ -490,13 +486,13 @@ namespace Phoron.App.Pages
             _perluRestartWeb = false;
             _perluRestartDb = false;
             SegarkanBilah();
-            AppState.Info("Sekarang memakai profil \"" + target.Name + "\".");
+            AppState.Info(Lang.T("Sekarang memakai profil \"{0}\".", target.Name));
         }
 
         void BtnBaru_Click(object sender, RoutedEventArgs e)
         {
             var php = _e.Of(BinKind.Php).FirstOrDefault();
-            var p = new Profile { Name = "Profil baru" };
+            var p = new Profile { Name = Lang.T("Profil baru") };
             if (php != null)
             {
                 p.PhpId = php.NilaiSimpan;
@@ -519,7 +515,7 @@ namespace Phoron.App.Pages
         {
             if (_current == null) return;
             var copy = _current.Clone();
-            copy.Name = _current.Name + " (salinan)";
+            copy.Name = Lang.T("{0} (salinan)", _current.Name);
             copy.FileName = ProfileStore.UniqueFileName(copy.Name);
             ProfileStore.Save(copy);
             _e.Reload();
@@ -530,8 +526,8 @@ namespace Phoron.App.Pages
         void BtnHapus_Click(object sender, RoutedEventArgs e)
         {
             if (_current == null) return;
-            if (_e.Profiles.Count <= 1) { AppState.Warn("Sisakan minimal satu profil."); return; }
-            if (!AppState.Ask("Hapus profil \"" + _current.Name + "\"?")) return;
+            if (_e.Profiles.Count <= 1) { AppState.Warn(Lang.T("Sisakan minimal satu profil.")); return; }
+            if (!AppState.Ask(Lang.T("Hapus profil \"{0}\"?", _current.Name))) return;
             ProfileStore.Delete(_current);
             _e.Reload();
             AppState.RaiseChanged();

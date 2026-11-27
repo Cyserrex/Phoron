@@ -51,14 +51,13 @@ namespace Phoron.App.Pages
             _e.RefreshSites();
             var roots = SiteScanner.Roots(_e.Active);
             TxtInfo.Text = roots.Count == 1
-                ? "Tiap subfolder di " + roots[0] + " otomatis dapat alamat sendiri. "
-                  + "Klik ganda untuk membuka di browser."
-                : "Memindai " + roots.Count + " folder proyek: " + string.Join(", ", roots)
-                  + ". Klik ganda untuk membuka di browser.";
+                ? Lang.T("Tiap subfolder di {0} otomatis dapat alamat sendiri. Klik ganda untuk membuka di browser.", roots[0])
+                : Lang.T("Memindai {0} folder proyek: {1}. Klik ganda untuk membuka di browser.",
+                         roots.Count, string.Join(", ", roots));
 
             LblFolderProyek.Text = _e.Active != null
-                ? "Folder proyek profil \"" + _e.Active.Name + "\""
-                : "Folder proyek";
+                ? Lang.T("Folder proyek profil \"{0}\"", _e.Active.Name)
+                : Lang.T("Folder proyek");
             _mengisi = true;
             TxtDocRoot.Text = _e.Active != null
                 ? string.Join(Environment.NewLine, _e.Active.ProjectRoots)
@@ -82,9 +81,9 @@ namespace Phoron.App.Pages
                           && s.DocRoot.Length > s.Path.Length
                           && s.DocRoot.StartsWith(s.Path, StringComparison.OrdinalIgnoreCase)
                     ? s.DocRoot.Substring(s.Path.Length).TrimStart('\\')
-                    : "(akar folder)",
-                Hosts = s.InHosts ? "ada" : "-",
-                Vhost = s.HasVhost ? "ada" : "-",
+                    : Lang.T("(akar folder)"),
+                Hosts = s.InHosts ? Lang.T("ada") : "-",
+                Vhost = s.HasVhost ? Lang.T("ada") : "-",
                 Situs = s,
             }).ToList();
             foreach (Baris b in (List<Baris>)Daftar.ItemsSource) IsiPilihanPhp(b);
@@ -202,10 +201,8 @@ namespace Phoron.App.Pages
             {
                 var berkas = PhpValueDiHtaccess(b.Situs);
                 if (berkas != null)
-                    AppState.Warn(".htaccess di " + b.Situs.Folder + " memakai php_value atau php_flag ("
-                                  + berkas + "). Di PHP " + dipakai.Version
-                                  + " situs ini dilayani lewat FastCGI, dan baris semacam itu diabaikan. "
-                                  + "Pindahkan setelannya ke .user.ini di folder yang sama.");
+                    AppState.Warn(Lang.T(".htaccess di {0} memakai php_value atau php_flag ({1}). Di PHP {2} situs ini dilayani lewat FastCGI, dan baris semacam itu diabaikan. Pindahkan setelannya ke .user.ini di folder yang sama.",
+                                         b.Situs.Folder, berkas, dipakai.Version));
             }
             IsiPilihanPhp(b);
             TampilkanPerluRestart();
@@ -241,8 +238,8 @@ namespace Phoron.App.Pages
             PanelInfo.Visibility = pesan.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (pesan.Count == 0) return;
             LblInfo.Text = pesan.Count == 1
-                ? "1 catatan tentang daftar situs"
-                : pesan.Count + " catatan tentang daftar situs";
+                ? Lang.T("1 catatan tentang daftar situs")
+                : Lang.T("{0} catatan tentang daftar situs", pesan.Count);
             TxtInfoSitus.Text = string.Join(Environment.NewLine + Environment.NewLine, pesan.ToArray());
         }
 
@@ -302,8 +299,8 @@ namespace Phoron.App.Pages
             var hilang = _e.Active.ProjectRoots
                 .Where(r => !System.IO.Directory.Exists(r)).ToList();
             TxtStatusRoot.Text = hilang.Count > 0
-                ? "Tersimpan, tapi folder ini belum ada: " + string.Join(", ", hilang.ToArray())
-                : "Tersimpan " + DateTime.Now.ToString("HH:mm:ss") + ".";
+                ? Lang.T("Tersimpan, tapi folder ini belum ada: {0}", string.Join(", ", hilang.ToArray()))
+                : Lang.T("Tersimpan {0}.", DateTime.Now.ToString("HH:mm:ss"));
         }
 
         void BtnPilihFolder_Click(object sender, RoutedEventArgs e)
@@ -311,7 +308,7 @@ namespace Phoron.App.Pages
             if (_e.Active == null) return;
             using (var dlg = new Forms.FolderBrowserDialog())
             {
-                dlg.Description = "Pilih folder proyek untuk ditambahkan ke profil ini";
+                dlg.Description = Lang.T("Pilih folder proyek untuk ditambahkan ke profil ini");
                 dlg.SelectedPath = Paths.Www;
                 if (dlg.ShowDialog() != Forms.DialogResult.OK) return;
                 // Ditambahkan sebagai baris baru, bukan menimpa: tombol ini ada
@@ -322,7 +319,7 @@ namespace Phoron.App.Pages
                                                dlg.SelectedPath.TrimEnd('\\'),
                                                StringComparison.OrdinalIgnoreCase)))
                 {
-                    AppState.Info("Folder itu sudah ada di daftar.");
+                    AppState.Info(Lang.T("Folder itu sudah ada di daftar."));
                     return;
                 }
                 TxtDocRoot.Text = ada.Length == 0
@@ -351,8 +348,7 @@ namespace Phoron.App.Pages
                 return;
             }
             if (_e.Services.WebState != ServiceState.Jalan
-                && !AppState.Ask("Web server belum jalan, jadi halamannya kemungkinan besar tidak terbuka. "
-                                 + "Tetap buka?")) return;
+                && !AppState.Ask(Lang.T("Web server belum jalan, jadi halamannya kemungkinan besar tidak terbuka. Tetap buka?"))) return;
             Shell.Open(url);
         }
 
@@ -377,7 +373,7 @@ namespace Phoron.App.Pages
             Isi();
             if (warnings.Any(w => w.Contains("Administrator")))
             {
-                if (Program.RestartAsAdmin("Berkas hosts hanya bisa disunting dengan hak Administrator.")) return;
+                if (Program.RestartAsAdmin(Lang.T("Berkas hosts hanya bisa disunting dengan hak Administrator."))) return;
             }
             TampilkanInfo();
         }
@@ -386,18 +382,17 @@ namespace Phoron.App.Pages
 
         void BtnBuat_Click(object sender, RoutedEventArgs e)
         {
-            var nama = InputDialog.Tanya(Window.GetWindow(this), "Buat situs",
-                "Nama folder proyek baru. Phoron membuat foldernya berikut index.php "
-                + "contoh, lalu mendaftarkan alamatnya.",
-                "Akan dibuat di " + (CmbRootBaru.SelectedItem as string
-                                     ?? SiteScanner.DocumentRoot(_e.Active)));
+            var nama = InputDialog.Tanya(Window.GetWindow(this), Lang.T("Buat situs"),
+                Lang.T("Nama folder proyek baru. Phoron membuat foldernya berikut index.php contoh, lalu mendaftarkan alamatnya."),
+                Lang.T("Akan dibuat di {0}", CmbRootBaru.SelectedItem as string
+                                             ?? SiteScanner.DocumentRoot(_e.Active)));
             if (nama == null) return;
             if (nama.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-            { AppState.Warn("Nama folder mengandung karakter yang tidak boleh dipakai."); return; }
+            { AppState.Warn(Lang.T("Nama folder mengandung karakter yang tidak boleh dipakai.")); return; }
 
             var root = CmbRootBaru.SelectedItem as string ?? SiteScanner.DocumentRoot(_e.Active);
             var dir = Path.Combine(root, nama);
-            if (Directory.Exists(dir)) { AppState.Warn("Folder itu sudah ada."); return; }
+            if (Directory.Exists(dir)) { AppState.Warn(Lang.T("Folder itu sudah ada.")); return; }
             try
             {
                 Directory.CreateDirectory(dir);
@@ -418,9 +413,9 @@ namespace Phoron.App.Pages
                 _e.Apply();
                 Isi();
                 _e.Say("Situs " + host + " dibuat.");
-                AppState.Info("Situs siap di " + host + ".");
+                AppState.Info(Lang.T("Situs siap di {0}.", host));
             }
-            catch (Exception ex) { AppState.Warn("Gagal membuat situs: " + ex.Message); }
+            catch (Exception ex) { AppState.Warn(Lang.T("Gagal membuat situs: {0}", ex.Message)); }
         }
     }
 }
