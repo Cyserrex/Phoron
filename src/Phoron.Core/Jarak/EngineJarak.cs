@@ -639,6 +639,12 @@ namespace Phoron.Core
                     terkirim = new Dictionary<string, string>();
                     foreach (var kv in nilai)
                     {
+                        // Milik daemon, bukan setelan biasa: profil aktif diganti
+                        // lewat ganti_profil, situs terakhir lewat
+                        // catat_situs_dibuka. Daemon MENOLAK ubah_setelan yang
+                        // menyebut keduanya - dan menolak seluruh perubahan itu,
+                        // termasuk medan lain yang sah di dalamnya.
+                        if (kv.Key == "active_profile" || kv.Key == "situs_terakhir") continue;
                         var json = Protokol.Tulis(kv.Value);
                         string dulu;
                         if (_potret.TryGetValue(kv.Key, out dulu) && dulu == json) continue;
