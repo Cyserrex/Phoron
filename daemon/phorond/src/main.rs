@@ -30,6 +30,7 @@ mod baki;
 mod keamanan;
 mod nama;
 mod pelaksana;
+mod pelaksana_engine;
 mod penyiar;
 mod pipa;
 mod siklus;
@@ -196,8 +197,18 @@ fn jalankan(arg: Argumen) {
     }
 
     let penyiar = Penyiar::baru();
-    // Titik pasang Engine Rust: ganti PelaksanaSementara di sini.
-    let dasar: Box<dyn Pelaksana> = Box::new(PelaksanaSementara::baru(penyiar.clone()));
+    // Engine Rust sungguhan. Daemon uji (nama berakhiran) memakai pelaksana
+    // sementara kecuali diminta lain: Engine memindai folder bin sungguhan dan
+    // uji siklus hidup tidak membutuhkannya.
+    let pakai_engine = !nama.uji() || std::env::var("PHORON_UJI_ENGINE").as_deref() == Ok("1");
+    let mut nyala_otomatis = false;
+    let dasar: Box<dyn Pelaksana> = if pakai_engine {
+        let e = pelaksana_engine::PelaksanaEngine::baru(penyiar.clone());
+        nyala_otomatis = e.mulai_otomatis();
+        Box::new(e)
+    } else {
+        Box::new(PelaksanaSementara::baru(penyiar.clone()))
+    };
     let pelaksana: Arc<dyn Pelaksana> = if nama.uji() && std::env::var("PHORON_UJI_PELAKSANA").as_deref() == Ok("1") {
         Arc::new(PelaksanaUji::bungkus(dasar))
     } else {
@@ -214,6 +225,17 @@ fn jalankan(arg: Argumen) {
         let _ = std::thread::Builder::new().name("nyalakan-awal".into()).spawn(move || {
             if !siklus::gerbang_tertutup() {
                 let _ = aman(|| p.nyalakan_awal(&daftar));
+            }
+        });
+    }
+    // Setelan "nyalakan layanan saat Phoron dibuka". Tidak dipakai bila daemon
+    // ini pengganti ber-Administrator: daftar --nyalakan sudah menyebut persis
+    // apa yang tadi hidup.
+    if nyala_otomatis && arg.nyalakan.is_empty() {
+        let p = pelaksana.clone();
+        let _ = std::thread::Builder::new().name("nyala-otomatis".into()).spawn(move || {
+            if !siklus::gerbang_tertutup() {
+                let _ = pelaksana::tangani_aman(&*p, phoron_inti::protokol::Perintah::NyalakanSemua);
             }
         });
     }

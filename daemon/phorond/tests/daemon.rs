@@ -637,3 +637,106 @@ fn sinkron_hosts_tanpa_admin_keluar_dengan_kode_tidak_berhak() {
     let _ = std::fs::remove_dir_all(&akar);
     assert_eq!(kode, Some(phoron_inti::hosts::KELUAR_TIDAK_BERHAK));
 }
+
+// ---------------------------------------------------------------- Engine
+
+/// Port TCP bebas di 127.0.0.1.
+fn port_bebas() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
+}
+
+fn jawaban_lama(k: &mut Klien, id: u64, batas: Duration) -> Value {
+    let mulai = Instant::now();
+    while mulai.elapsed() < batas {
+        if let Some(v) = k.pesan(Duration::from_secs(5)) {
+            if v.get("id").and_then(Value::as_u64) == Some(id) {
+                return v;
+            }
+        }
+    }
+    panic!("jawaban {id} tidak datang dalam {batas:?}");
+}
+
+fn get_http(port: u16) -> String {
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).expect("web server tidak menjawab");
+    s.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    s.write_all(b"GET / HTTP/1.0\r\nHost: localhost\r\n\r\n").unwrap();
+    let mut b = Vec::new();
+    let _ = s.read_to_end(&mut b);
+    String::from_utf8_lossy(&b).into_owned()
+}
+
+/// Ujung ke ujung dengan Engine SUNGGUHAN di dalam phorond: paket dari
+/// C:\laragon\bin (hanya dibaca), semua berkas lain di akar sandbox, port acak.
+#[test]
+fn engine_sungguhan_lewat_pipe() {
+    if !std::path::Path::new(r"C:\laragon\bin\apache").is_dir() {
+        eprintln!(r"C:\laragon\bin tidak ada; uji Engine dilewati");
+        return;
+    }
+    let ak = akhiran("engine");
+    let akar = std::env::temp_dir().join(format!("phorond{ak}-engine"));
+    let _ = std::fs::remove_dir_all(&akar);
+    std::fs::create_dir_all(&akar).unwrap();
+    std::fs::write(
+        akar.join("phoron.ini"),
+        concat!(
+            "[umum]\r\n",
+            r"bin_roots=C:\laragon\bin",
+            "\r\nbahasa=id\r\ncek_pembaruan=0\r\nkelola_hosts=0\r\nauto_start=0\r\n"
+        ),
+    )
+    .unwrap();
+    let mut c = Command::new(env!("CARGO_BIN_EXE_phorond"));
+    c.args(["--baki", "--akar"]).arg(&akar).args(["--pipe-uji", &ak]).env("PHORON_UJI_ENGINE", "1");
+    c.env_remove("PHORON_PIPE").env_remove("PHORON_NAMA_UJI");
+    let mut d = Daemon { anak: c.spawn().unwrap(), akar: akar.clone(), akhiran: ak.clone() };
+
+    let mut k = Klien::sambung(&ak);
+    k.halo();
+    let id = k.kirim("keadaan", None);
+    let kd = k.jawaban(id, &mut Vec::new());
+    let aktif = kd["hasil"]["profil_aktif"].as_str().unwrap_or_default().to_string();
+    assert!(!aktif.is_empty(), "profil awal tidak dibuat: {kd}");
+
+    // Port acak untuk profil aktif, lalu minta daemon membaca ulang profil.
+    let (http, https, mysql) = (port_bebas(), port_bebas(), port_bebas());
+    let berkas = akar.join("profiles").join(format!("{aktif}.ini"));
+    let isi = std::fs::read_to_string(&berkas).unwrap();
+    let isi = isi
+        .replace("port_http=80", &format!("port_http={http}"))
+        .replace("port_https=443", &format!("port_https={https}"))
+        .replace("port_mysql=3306", &format!("port_mysql={mysql}"));
+    std::fs::write(&berkas, isi).unwrap();
+    let id = k.kirim("muat_ulang", None);
+    assert_eq!(k.jawaban(id, &mut Vec::new())["status"], "ok");
+
+    // Setelan lewat ubah_setelan: hanya medan yang disebut yang berubah.
+    let id = k.kirim("ubah_setelan", Some(json!({"perubahan": {"tema": "gelap"}})));
+    assert_eq!(k.jawaban(id, &mut Vec::new())["status"], "ok");
+    let ini = std::fs::read_to_string(akar.join("phoron.ini")).unwrap();
+    assert!(ini.contains("tema=gelap") && ini.contains(r"bin_roots=C:\laragon\bin"), "{ini}");
+    let id = k.kirim("ubah_setelan", Some(json!({"perubahan": {"tidak_ada": 1}})));
+    assert_eq!(k.jawaban(id, &mut Vec::new())["status"], "galat");
+
+    // Nyalakan semua: MySQL di-init dari folder data kosong, lalu Apache.
+    let id = k.kirim("nyalakan_semua", None);
+    let j = jawaban_lama(&mut k, id, Duration::from_secs(300));
+    assert_eq!(j["status"], "ok", "{j}");
+    let r = get_http(http);
+    assert!(r.starts_with("HTTP/1."), "jawaban web aneh: {r}");
+    let id = k.kirim("keadaan", None);
+    let kd = k.jawaban(id, &mut Vec::new());
+    assert_eq!(kd["hasil"]["status"]["web"], "Jalan", "{kd}");
+    assert_eq!(kd["hasil"]["status"]["db"], "Jalan", "{kd}");
+
+    // Keluar: layanan dimatikan rapi, port lepas, proses berakhir.
+    let id = k.kirim("keluar", None);
+    let _ = jawaban_lama(&mut k, id, Duration::from_secs(30));
+    assert_eq!(d.tunggu_keluar(Duration::from_secs(120)), Some(0));
+    for p in [http, mysql] {
+        assert!(std::net::TcpListener::bind(("127.0.0.1", p)).is_ok(), "port {p} masih dipegang sesudah keluar");
+    }
+    let log = std::fs::read_to_string(akar.join("logs").join("mysql-error.log")).unwrap_or_default();
+    assert!(log.contains("Shutdown complete"), "MySQL tidak dimatikan rapi");
+}
