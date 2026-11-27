@@ -475,7 +475,7 @@ impl Read for Sumber {
 }
 
 /// Seperti BeginOutputReadLine: pemisah \r\n, \n, atau \r sendirian; UTF-8.
-fn per_baris(mut r: impl Read, mut f: impl FnMut(String)) {
+pub(crate) fn per_baris(mut r: impl Read, mut f: impl FnMut(String)) {
     let mut buf = [0u8; 8192];
     let mut baris: Vec<u8> = Vec::new();
     let mut habis_cr = false;

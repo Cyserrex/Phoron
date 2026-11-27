@@ -27,6 +27,7 @@ pub mod process_job;
 pub mod profile_store;
 pub mod protokol;
 pub mod rahasia;
+pub mod services;
 pub mod settings;
 pub mod shell;
 pub mod situs;
