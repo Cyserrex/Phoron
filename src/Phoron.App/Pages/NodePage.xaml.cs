@@ -296,10 +296,8 @@ namespace Phoron.App.Pages
                 && !AppState.Ask(Lang.T("Folder node_modules belum ada di proyek ini, jadi perintahnya kemungkinan besar gagal.")
                                  + "\n\n" + Lang.T("Jalankan juga?"))) return;
 
-            var node = string.IsNullOrEmpty(a.NodeId) ? null : _e.Find(BinKind.Node, a.NodeId);
-            var err = _e.Node.Start(a, node);
+            var err = _e.JalankanNode(a);
             if (err != null) { AppState.Warn(err); return; }
-            _e.Say(Lang.T("Menjalankan {0} ({1} {2}).", a.DisplayName, a.Manager, a.Script));
             Isi();
         }
 

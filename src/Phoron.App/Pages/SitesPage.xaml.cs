@@ -387,7 +387,8 @@ namespace Phoron.App.Pages
             }
             if (_e.Services.WebState != ServiceState.Jalan
                 && !AppState.Ask(Lang.T("Web server belum jalan, jadi halamannya kemungkinan besar tidak terbuka. Tetap buka?"))) return;
-            Shell.Open(url);
+            // Lewat Engine supaya ia ikut tercatat di "situs terakhir" Beranda dan menu baki.
+            _e.BukaSitus(s);
         }
 
         void BtnFolder_Click(object sender, RoutedEventArgs e)

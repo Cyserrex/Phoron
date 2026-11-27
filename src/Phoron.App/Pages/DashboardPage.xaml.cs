@@ -36,6 +36,18 @@ namespace Phoron.App.Pages
                 GambarLog();
             };
             Unloaded += (s, ev) => _e.Log -= OnLog;
+            // Kartu proyek Node ikut hidup: keluaran, keadaan, dan alamatnya.
+            // Pola yang sama: pasang di Loaded, lepas di Unloaded.
+            Loaded += (s, ev) =>
+            {
+                LepasNode();
+                _e.Node.Output += OnNode;
+                _e.Node.StateChanged += OnNodeState;
+                _e.Node.UrlFound += OnNode;
+                IsiNode();
+                IsiSitusTerakhir();
+            };
+            Unloaded += (s, ev) => LepasNode();
             LoadProfiles();
             RefreshState();
         }
@@ -188,8 +200,11 @@ namespace Phoron.App.Pages
                 : Lang.T("belum dipilih di profil");
 
             TitikKartu();
+            SegarkanRingkas();
 
-            BtnSsl.Content = Lang.T(!SslTool.Exists ? "Buat sertifikat SSL"
+            var ssl = ItemSsl();
+            if (ssl != null)
+                ssl.Header = Lang.T(!SslTool.Exists ? "Buat sertifikat SSL"
                            : !SslTool.IsTrusted ? "Percayai sertifikat SSL"
                            : "Buat ulang sertifikat SSL");
             ShowConflicts();
@@ -472,6 +487,253 @@ namespace Phoron.App.Pages
         {
             if (_loading) return;
             BtnSwitchRun.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+            SegarkanTombolGanti();
+        }
+
+        /// <summary>
+        /// Tombol ganti profil hanya muncul bila kotaknya menunjuk profil lain.
+        /// Selebihnya keduanya cuma menambah dua tombol yang tidak berbuat apa-apa.
+        /// </summary>
+        void SegarkanTombolGanti()
+        {
+            var beda = CmbProfil.SelectedItem != null && !ReferenceEquals(CmbProfil.SelectedItem, _e.Active);
+            BtnSwitchRun.Visibility = BtnSwitch.Visibility = beda ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // ------------------------------------------------------ Baris PHP
+
+        void SegarkanRingkas()
+        {
+            var r = RingkasanLayanan.Hitung(_e);
+            DotRingkas.Fill = WarnaLayanan.Titik(r.Keadaan);
+            TxtRingkas.Text = r.Judul;
+            TxtRingkasRinci.Text = r.Rincian;
+            BtnDayaBeranda.Content = Lang.T(r.AdaYangHidup ? "Hentikan" : "Nyalakan");
+            BtnDayaBeranda.Appearance = r.AdaYangHidup
+                ? Wpf.Ui.Controls.ControlAppearance.Secondary
+                : Wpf.Ui.Controls.ControlAppearance.Primary;
+            BtnDayaBeranda.IsEnabled = !r.Sibuk && _e.Active != null;
+            // Ada yang gagal: rinciannya dibuka sendiri - di situlah sebabnya.
+            if (r.Keadaan == ServiceState.Gagal) LipatRincian.IsExpanded = true;
+            SegarkanTombolGanti();
+        }
+
+        async void BtnDayaBeranda_Click(object sender, RoutedEventArgs e)
+        {
+            BtnDayaBeranda.IsEnabled = false;
+            try
+            {
+                var main = Window.GetWindow(this) as MainWindow;
+                if (main != null) await main.TogglePower();
+            }
+            finally { SegarkanRingkas(); }
+        }
+
+        ContextMenu MenuPintasan { get { return TryFindResource("MenuPintasan") as ContextMenu; } }
+
+        /// <summary>Butir sertifikat di menu pintasan; teksnya mengikuti keadaan sertifikat.</summary>
+        MenuItem ItemSsl()
+        {
+            var menu = MenuPintasan;
+            return menu == null ? null
+                : menu.Items.OfType<MenuItem>().FirstOrDefault(m => "ssl".Equals(m.Tag));
+        }
+
+        void BtnPintasan_Click(object sender, RoutedEventArgs e)
+        {
+            var menu = MenuPintasan;
+            if (menu == null) return;
+            menu.PlacementTarget = BtnPintasan;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+        /// <summary>Nama kerangka dari package.json sebagaimana dikenal orang.</summary>
+        static string NamaKerangka(string k)
+        {
+            switch ((k ?? "").ToLowerInvariant())
+            {
+                case "next": return "Next.js";
+                case "nuxt": return "Nuxt";
+                case "vite": return "Vite";
+                case "astro": return "Astro";
+                case "remix": return "Remix";
+                case "sveltekit": return "SvelteKit";
+                case "gatsby": return "Gatsby";
+                case "express": return "Express";
+                case "nest": case "nestjs": return "NestJS";
+                default: return k;
+            }
+        }
+
+        // ---------------------------------------------------- Proyek Node
+
+        int _nodeTertunda;
+        readonly Dictionary<string, string> _kerangka = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        void LepasNode()
+        {
+            _e.Node.Output -= OnNode;
+            _e.Node.StateChanged -= OnNodeState;
+            _e.Node.UrlFound -= OnNode;
+        }
+
+        void OnNode(string folder, string baris) { MintaIsiNode(); }
+        void OnNodeState(string folder, bool jalan) { MintaIsiNode(); }
+
+        /// <summary>
+        /// Peristiwa Node datang dari utas pembaca keluaran, dan server
+        /// pengembangan mencetak puluhan baris sekaligus. Seperti panel
+        /// Aktivitas: permintaan yang datang selagi satu penggambaran masih
+        /// mengantre ikut menumpang padanya, pada prioritas Background.
+        /// </summary>
+        void MintaIsiNode()
+        {
+            if (System.Threading.Interlocked.Exchange(ref _nodeTertunda, 1) == 1) return;
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                System.Threading.Interlocked.Exchange(ref _nodeTertunda, 0);
+                if (IsLoaded) IsiNode();
+            }));
+        }
+
+        void IsiNode()
+        {
+            var daftar = _e.NodeAppsList ?? new List<NodeApp>();
+            int jalan = daftar.Count(a => _e.Node.IsRunning(a.Path));
+            TxtJumlahNode.Text = daftar.Count == 0 ? "" : Lang.T("{0} jalan · {1} proyek", jalan, daftar.Count);
+            TxtNodeKosong.Visibility = daftar.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            DaftarNode.Children.Clear();
+            // Yang sedang jalan lebih dulu: itulah yang sedang dikerjakan.
+            foreach (var a in daftar.OrderByDescending(x => _e.Node.IsRunning(x.Path)))
+                DaftarNode.Children.Add(KartuNode(a));
+        }
+
+        Border KartuNode(NodeApp a)
+        {
+            bool jalan = _e.Node.IsRunning(a.Path);
+            var url = jalan ? _e.Node.UrlOf(a.Path) : null;
+            // Dibaca sekali per proyek per halaman: kartu ini digambar ulang tiap
+            // kali server pengembangan mencetak sesuatu, dan package.json di disk
+            // tidak perlu dibuka ulang untuk itu.
+            string kerangka;
+            if (!_kerangka.TryGetValue(a.Path ?? "", out kerangka))
+            {
+                try { kerangka = NamaKerangka(PackageJson.DetectFramework(a.Path)); } catch { kerangka = null; }
+                _kerangka[a.Path ?? ""] = kerangka;
+            }
+
+            var isi = new StackPanel();
+            var kepala = new Grid();
+            kepala.ColumnDefinitions.Add(new ColumnDefinition());
+            kepala.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var nama = new StackPanel();
+            nama.Children.Add(new TextBlock { Text = a.DisplayName, FontSize = 16, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            nama.Children.Add(new TextBlock
+            {
+                Text = (string.IsNullOrEmpty(kerangka) ? "" : kerangka + " · ") + a.Manager + " run " + a.Script,
+                FontSize = 12, Opacity = 0.7, TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+            kepala.Children.Add(nama);
+            var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 2, 0, 0) };
+            var keadaan = jalan ? ServiceState.Jalan : ServiceState.Berhenti;
+            status.Children.Add(new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = WarnaLayanan.Titik(keadaan), VerticalAlignment = VerticalAlignment.Center });
+            status.Children.Add(new TextBlock { Text = WarnaLayanan.Teks(keadaan), FontSize = 12, Opacity = 0.85, Margin = new Thickness(6, 0, 0, 0) });
+            Grid.SetColumn(status, 1);
+            kepala.Children.Add(status);
+            isi.Children.Add(kepala);
+
+            if (!string.IsNullOrEmpty(url))
+                isi.Children.Add(new TextBlock { Text = url, FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 0) });
+
+            // Tiga baris terakhir keluarannya - galat saat start terlihat di sini
+            // tanpa perlu pindah ke halaman Node.
+            var ekor = _e.Node.Riwayat(a.Path).Where(b => !string.IsNullOrWhiteSpace(b)).Reverse().Take(3).Reverse().ToList();
+            if (ekor.Count > 0)
+            {
+                var kotak = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)),
+                    CornerRadius = new CornerRadius(6), Padding = new Thickness(10, 8, 10, 8), Margin = new Thickness(0, 10, 0, 0),
+                };
+                kotak.Child = new TextBlock
+                {
+                    Text = string.Join(Environment.NewLine, ekor),
+                    FontFamily = new FontFamily("Consolas"), FontSize = 11,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xD4, 0xD4, 0xD4)),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                };
+                isi.Children.Add(kotak);
+            }
+
+            var tombol = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+            if (!string.IsNullOrEmpty(url))
+            {
+                var buka = new Wpf.Ui.Controls.Button { Content = Lang.T("Buka"), Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Margin = new Thickness(0, 0, 8, 0) };
+                buka.Click += (s, e) => Shell.Open(url);
+                tombol.Children.Add(buka);
+            }
+            var aksi = new Wpf.Ui.Controls.Button
+            {
+                Content = Lang.T(jalan ? "Hentikan" : "Jalankan"),
+                Appearance = jalan ? Wpf.Ui.Controls.ControlAppearance.Secondary : Wpf.Ui.Controls.ControlAppearance.Primary,
+                Margin = new Thickness(0, 0, 8, 0),
+            };
+            aksi.Click += (s, e) => JalankanAtauHentikan(a);
+            tombol.Children.Add(aksi);
+            var folder = new Wpf.Ui.Controls.Button { Content = Lang.T("Folder") };
+            folder.Click += (s, e) => Shell.Open(a.Path);
+            tombol.Children.Add(folder);
+            isi.Children.Add(tombol);
+
+            return new Border
+            {
+                Background = (Brush)FindResource("ControlFillColorDefaultBrush"),
+                CornerRadius = new CornerRadius(8), Padding = new Thickness(14), Margin = new Thickness(0, 0, 12, 12),
+                ToolTip = a.Path, Child = isi,
+            };
+        }
+
+        void JalankanAtauHentikan(NodeApp a)
+        {
+            if (_e.Node.IsRunning(a.Path)) { _e.Node.Stop(a.Path); IsiNode(); return; }
+            // Sama dengan halaman Node: tanpa node_modules perintahnya hampir pasti gagal.
+            if (!PackageJson.HasNodeModules(a.Path)
+                && !AppState.Ask(Lang.T("Folder node_modules belum ada di proyek ini, jadi perintahnya kemungkinan besar gagal.")
+                                 + "\n\n" + Lang.T("Jalankan juga?"))) return;
+            var err = _e.JalankanNode(a);
+            if (err != null) AppState.Warn(err);
+            IsiNode();
+        }
+
+        void BtnKelolaNode_Click(object sender, RoutedEventArgs e)
+        {
+            var main = Window.GetWindow(this) as MainWindow;
+            if (main != null) main.GoTo("node");
+        }
+
+        // ------------------------------------------------- Situs terakhir
+
+        void IsiSitusTerakhir()
+        {
+            PanelSitusTerakhir.Children.Clear();
+            var situs = _e.SitusTerakhirDaftar(5);
+            foreach (var st in situs)
+            {
+                var site = st;
+                var b = new Wpf.Ui.Controls.Button { Content = site.Folder, Margin = new Thickness(0, 0, 8, 8), ToolTip = _e.SiteUrl(site) };
+                b.Click += (s, e) => { _e.BukaSitus(site); IsiSitusTerakhir(); };
+                PanelSitusTerakhir.Children.Add(b);
+            }
+            if (situs.Count == 0)
+                PanelSitusTerakhir.Children.Add(new TextBlock
+                {
+                    Text = Lang.T("Situs yang kamu buka dari Phoron akan muncul di sini."),
+                    Opacity = 0.7, Margin = new Thickness(0, 0, 12, 8), VerticalAlignment = VerticalAlignment.Center,
+                });
+            var semua = new Wpf.Ui.Controls.Button { Content = Lang.T("Semua situs"), Appearance = Wpf.Ui.Controls.ControlAppearance.Transparent, Margin = new Thickness(0, 0, 0, 8) };
+            semua.Click += (s, e) => { var main = Window.GetWindow(this) as MainWindow; if (main != null) main.GoTo("situs"); };
+            PanelSitusTerakhir.Children.Add(semua);
         }
 
         void BtnSwitch_Click(object sender, RoutedEventArgs e) { Pindah(false); }

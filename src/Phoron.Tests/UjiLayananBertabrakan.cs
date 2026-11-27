@@ -71,7 +71,7 @@ namespace Phoron.Tests
                 Ok("Layanan dimatikan hanya pada WM_ENDSESSION yang sungguhan",
                    mw.Contains("msg == WM_ENDSESSION && wParam != IntPtr.Zero"), "");
                 Ok("Menu baki dinonaktifkan saat layanan sibuk",
-                   mw.Contains("Items[0].Enabled = !busy"),
+                   mw.Contains("_itemDaya.Enabled = !busy"),
                    "menu baki jadi pintu belakang untuk start kedua");
             }
 

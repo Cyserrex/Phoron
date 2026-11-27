@@ -10,110 +10,144 @@
             <Setter Property="Padding" Value="14"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
         </Style>
+        <!-- Pintasan yang jarang dipakai, dibuka dari tombol "..." di baris PHP.
+             Disimpan sebagai resource dan dibuka dari kode: ContextMenu yang
+             ditempel ke tombol WPF UI tidak pernah terbuka, baik lewat klik
+             maupun klik kanan. -->
+        <ContextMenu x:Key="MenuPintasan">
+            <MenuItem Header="{loc:T 'Buka www'}" Click="BtnWww_Click"/>
+            <MenuItem Header="{loc:T 'Buka localhost'}" Click="BtnLocalhost_Click"/>
+            <MenuItem Header="{loc:T 'Beranda Phoron'}" Click="BtnBeranda_Click"/>
+            <MenuItem Header="{loc:T 'Terminal'}" Click="BtnTerminal_Click"/>
+            <Separator/>
+            <MenuItem Header="phpinfo()" Click="BtnPhpInfo_Click"/>
+            <MenuItem Header="{loc:T 'Uji konfigurasi Apache'}" Click="BtnTest_Click"/>
+            <MenuItem Tag="ssl" Header="{loc:T 'Buat sertifikat SSL'}" Click="BtnSsl_Click"/>
+            <MenuItem Header="{loc:T 'Folder etc'}" Click="BtnEtc_Click"/>
+        </ContextMenu>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,6,0">
         <StackPanel Margin="4,8,4,4">
-            <TextBlock Text="{loc:T 'Beranda'}" Style="{StaticResource Judul}"/>
-            <TextBlock Style="{StaticResource SubJudul}"
-                       Text="{loc:T 'Pilih profil, lalu nyalakan. Ganti profil berarti ganti versi PHP, Apache, dan MySQL sekaligus.'}"/>
+            <TextBlock Text="{loc:T 'Beranda'}" Style="{StaticResource Judul}" Margin="0,0,0,10"/>
 
-            <!-- Pemilih profil: inti dari seluruh aplikasi, jadi ditaruh paling atas. -->
-            <Border Style="{StaticResource Kartu}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                        <TextBlock Text="{loc:T 'Profil aktif'}" Style="{StaticResource Label}" Margin="0,0,0,4"/>
-                        <ComboBox x:Name="CmbProfil" SelectionChanged="CmbProfil_Changed"
-                                  HorizontalAlignment="Stretch"/>
-                    </StackPanel>
-                    <ui:Button Grid.Column="1" x:Name="BtnSwitchRun" Content="{loc:T 'Switch &amp; Jalankan'}"
-                               Appearance="Primary" VerticalAlignment="Bottom" Margin="0,0,8,0"
-                               ToolTip="{loc:T 'Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL'}"
-                               Click="BtnSwitchRun_Click"/>
-                    <ui:Button Grid.Column="2" x:Name="BtnSwitch" Content="{loc:T 'Switch'}"
-                               VerticalAlignment="Bottom"
-                               ToolTip="{loc:T 'Pindah ke profil ini tanpa mengubah keadaan layanan'}"
-                               Click="BtnSwitch_Click"/>
-                </Grid>
+            <!-- Baris PHP. Bagi kebanyakan orang tumpukan PHP adalah latar: ia
+                 menyala sendiri dan situsnya tinggal dibuka. Jadi cukup satu
+                 baris yang tenang, dan baru mencolok kalau ada yang salah.
+                 Rinciannya (kartu PHP, web server, MySQL) tetap ada, dilipat. -->
+            <Border Style="{StaticResource Kartu}" Padding="14,10">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Ellipse x:Name="DotRingkas" Width="12" Height="12" VerticalAlignment="Center" Margin="2,0,12,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <TextBlock x:Name="TxtRingkas" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="TxtRingkasRinci" FontSize="12" Opacity="0.75" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <ComboBox Grid.Column="2" x:Name="CmbProfil" SelectionChanged="CmbProfil_Changed" Width="250"
+                                  VerticalAlignment="Center" ToolTip="{loc:T 'Profil aktif'}"/>
+                        <!-- Hanya muncul bila profil lain dipilih di kotaknya. -->
+                        <ui:Button Grid.Column="3" x:Name="BtnSwitchRun" Content="{loc:T 'Switch &amp; Jalankan'}"
+                                   Appearance="Primary" VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Collapsed"
+                                   ToolTip="{loc:T 'Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL'}"
+                                   Click="BtnSwitchRun_Click"/>
+                        <ui:Button Grid.Column="4" x:Name="BtnSwitch" Content="{loc:T 'Switch'}"
+                                   VerticalAlignment="Center" Margin="8,0,0,0" Visibility="Collapsed"
+                                   ToolTip="{loc:T 'Pindah ke profil ini tanpa mengubah keadaan layanan'}"
+                                   Click="BtnSwitch_Click"/>
+                        <ui:Button Grid.Column="5" x:Name="BtnDayaBeranda" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Click="BtnDayaBeranda_Click"/>
+                        <!-- Pintasan yang jarang dipakai: satu tombol, bukan delapan. -->
+                        <ui:Button Grid.Column="6" x:Name="BtnPintasan" VerticalAlignment="Center" Margin="8,0,0,0"
+                                   Padding="10,6" ToolTip="{loc:T 'Pintasan'}" Click="BtnPintasan_Click">
+                            <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
+                        </ui:Button>
+                    </Grid>
+                    <Expander x:Name="LipatRincian" Header="{loc:T 'Rincian layanan'}" Margin="0,10,0,0" Padding="0,10,0,0">
+
+                                <UniformGrid Columns="3" Margin="0,0,0,0">
+                                    <Border Style="{StaticResource Kartu}" Margin="0,0,6,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Melebar sampai ke kolom status: status hanya menempati
+                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
+                                                <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
+                                                <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
+                                                <Ellipse x:Name="DotKartuPhp" Width="10" Height="10" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtStatusKartuPhp" FontSize="12" Opacity="0.8"
+                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Melebar sampai ke kolom status: status hanya menempati
+                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
+                                                <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
+                                                <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
+                                                <Ellipse x:Name="DotKartuWeb" Width="10" Height="10" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtStatusKartuWeb" FontSize="12" Opacity="0.8"
+                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Melebar sampai ke kolom status: status hanya menempati
+                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
+                                                <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
+                                                <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
+                                                <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
+                                                <Ellipse x:Name="DotKartuDb" Width="10" Height="10" VerticalAlignment="Center"/>
+                                                <TextBlock x:Name="TxtStatusKartuDb" FontSize="12" Opacity="0.8"
+                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </UniformGrid>
+                    </Expander>
+                </StackPanel>
             </Border>
 
-            <UniformGrid Columns="3" Margin="0,0,0,0">
-                <Border Style="{StaticResource Kartu}" Margin="0,0,6,12">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <!-- Melebar sampai ke kolom status: status hanya menempati
-                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                            <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
-                            <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                    HorizontalAlignment="Right" Margin="8,2,0,0">
-                            <Ellipse x:Name="DotKartuPhp" Width="10" Height="10" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtStatusKartuPhp" FontSize="12" Opacity="0.8"
-                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-                <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <!-- Melebar sampai ke kolom status: status hanya menempati
-                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                            <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
-                            <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                    HorizontalAlignment="Right" Margin="8,2,0,0">
-                            <Ellipse x:Name="DotKartuWeb" Width="10" Height="10" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtStatusKartuWeb" FontSize="12" Opacity="0.8"
-                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-                <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <!-- Melebar sampai ke kolom status: status hanya menempati
-                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                            <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
-                            <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                    HorizontalAlignment="Right" Margin="8,2,0,0">
-                            <Ellipse x:Name="DotKartuDb" Width="10" Height="10" VerticalAlignment="Center"/>
-                            <TextBlock x:Name="TxtStatusKartuDb" FontSize="12" Opacity="0.8"
-                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </UniformGrid>
 
             <Border x:Name="PanelPeringatan" Style="{StaticResource Kartu}" Visibility="Collapsed"
                     Background="#33E0A020">
@@ -152,43 +186,47 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource Kartu}">
-                <StackPanel>
-                    <TextBlock Text="{loc:T 'Pintasan'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
-                    <WrapPanel>
-                        <ui:Button Content="{loc:T 'Buka www'}" Margin="0,0,8,8" Click="BtnWww_Click"/>
-                        <ui:Button Content="{loc:T 'Buka localhost'}" Margin="0,0,8,8" Click="BtnLocalhost_Click"/>
-                        <ui:Button Content="{loc:T 'Beranda Phoron'}" Margin="0,0,8,8" Click="BtnBeranda_Click"/>
-                        <ui:Button Content="{loc:T 'Terminal'}" Margin="0,0,8,8" Click="BtnTerminal_Click"/>
-                        <ui:Button Content="phpinfo()" Margin="0,0,8,8" Click="BtnPhpInfo_Click"/>
-                        <ui:Button Content="{loc:T 'Uji konfigurasi Apache'}" Margin="0,0,8,8" Click="BtnTest_Click"/>
-                        <ui:Button x:Name="BtnSsl" Content="{loc:T 'Buat sertifikat SSL'}" Margin="0,0,8,8" Click="BtnSsl_Click"/>
-                        <ui:Button Content="{loc:T 'Folder etc'}" Margin="0,0,8,8" Click="BtnEtc_Click"/>
-                    </WrapPanel>
+            <!-- Proyek Node: aksi yang paling sering dilakukan di Phoron. Kartu
+                 dirakit dari kode (IsiNode); keluarannya dibaca dari
+                 NodeRunner.Riwayat, jadi tetap ada walau halaman ini baru dibuka. -->
+            <Grid Margin="0,6,0,8">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                    <TextBlock Text="{loc:T 'Proyek Node'}" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="TxtJumlahNode" FontSize="13" Opacity="0.7" Margin="10,0,0,2" VerticalAlignment="Bottom"/>
                 </StackPanel>
-            </Border>
+                <ui:Button HorizontalAlignment="Right" Content="{loc:T 'Kelola proyek'}" Click="BtnKelolaNode_Click"/>
+            </Grid>
+            <TextBlock x:Name="TxtNodeKosong" Visibility="Collapsed" TextWrapping="Wrap" Opacity="0.8" Margin="0,0,0,12"
+                       Text="{loc:T 'Belum ada proyek Node. Tambahkan proyek Next.js, Vite, atau Astro di halaman Node, lalu jalankan dari sini atau dari menu baki.'}"/>
+            <UniformGrid x:Name="DaftarNode" Columns="2" Margin="0,0,-12,0"/>
 
-            <Border Style="{StaticResource Kartu}">
-                <StackPanel>
-                    <TextBlock Text="{loc:T 'Aktivitas'}" Style="{StaticResource Label}" Margin="0,0,0,6"/>
-                    <!-- RichTextBox, bukan TextBox: tiap baris perlu warnanya
-                         sendiri, dan teksnya harus tetap bisa disorot lalu
-                         disalin - itulah yang dilakukan orang dengan baris
-                         galat. Padding paragraf dinolkan supaya rapat seperti
-                         keluaran terminal. -->
-                    <RichTextBox x:Name="TxtLog" IsReadOnly="True" IsDocumentEnabled="True"
-                                 VerticalScrollBarVisibility="Auto" Height="150"
-                                 HorizontalScrollBarVisibility="Auto"
-                                 FontFamily="Consolas" FontSize="11"
-                                 Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                 BorderThickness="1">
-                        <RichTextBox.Resources>
-                            <Style TargetType="Paragraph">
-                                <Setter Property="Margin" Value="0"/>
-                            </Style>
-                        </RichTextBox.Resources>
-                    </RichTextBox>
-                </StackPanel>
+            <!-- Situs PHP yang terakhir dibuka lewat Phoron: satu klik ke browser. -->
+            <StackPanel Orientation="Horizontal" Margin="0,4,0,6">
+                <TextBlock Text="{loc:T 'Situs PHP terakhir'}" Style="{StaticResource Label}" Margin="0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <WrapPanel x:Name="PanelSitusTerakhir" Margin="0,0,0,12"/>
+
+            <Border Style="{StaticResource Kartu}" Padding="14,6">
+                <Expander x:Name="LipatAktivitas" Header="{loc:T 'Aktivitas'}" Padding="0,8,0,4">
+
+                            <!-- RichTextBox, bukan TextBox: tiap baris perlu warnanya
+                                 sendiri, dan teksnya harus tetap bisa disorot lalu
+                                 disalin - itulah yang dilakukan orang dengan baris
+                                 galat. Padding paragraf dinolkan supaya rapat seperti
+                                 keluaran terminal. -->
+                            <RichTextBox x:Name="TxtLog" IsReadOnly="True" IsDocumentEnabled="True"
+                                         VerticalScrollBarVisibility="Auto" Height="150"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         FontFamily="Consolas" FontSize="11"
+                                         Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                         BorderThickness="1">
+                                <RichTextBox.Resources>
+                                    <Style TargetType="Paragraph">
+                                        <Setter Property="Margin" Value="0"/>
+                                    </Style>
+                                </RichTextBox.Resources>
+                            </RichTextBox>
+                </Expander>
             </Border>
         </StackPanel>
     </ScrollViewer>

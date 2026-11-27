@@ -283,13 +283,13 @@ namespace Phoron.App
             bool busy = web == ServiceState.Menyalakan || web == ServiceState.Mematikan
                      || db == ServiceState.Menyalakan || db == ServiceState.Mematikan;
             _tray.Text = Lang.T(anyRunning ? "Phoron - berjalan" : "Phoron - berhenti");
-            if (_tray.ContextMenuStrip != null && _tray.ContextMenuStrip.Items.Count > 0)
+            if (_itemDaya != null)
             {
-                _tray.ContextMenuStrip.Items[0].Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
+                _itemDaya.Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
                 // Sama dengan tombol daya di jendela. Dulu hanya tombol itu
                 // yang dinonaktifkan saat sibuk, dan item baki ini jadi pintu
                 // belakang untuk start kedua di tengah start pertama.
-                _tray.ContextMenuStrip.Items[0].Enabled = !busy;
+                _itemDaya.Enabled = !busy;
             }
         }
 
@@ -326,15 +326,16 @@ namespace Phoron.App
             catch { return null; }
         }
 
+        Forms.ToolStripMenuItem _itemDaya;
+
         void SetupTray()
         {
             var menu = new Forms.ContextMenuStrip();
-            menu.Items.Add(Lang.T("Nyalakan semua"), null, async (s, e) => await TogglePower());
-            menu.Items.Add(Lang.T("Buka folder www"), null, (s, e) => Shell.Open(Paths.Www));
-            menu.Items.Add(Lang.T("Buka localhost"), null, (s, e) => Shell.Open(_engine.RootUrl()));
-            menu.Items.Add(new Forms.ToolStripSeparator());
-            menu.Items.Add(Lang.T("Tampilkan Phoron"), null, (s, e) => Tampilkan());
-            menu.Items.Add(Lang.T("Keluar"), null, (s, e) => Keluar());
+            // Dirakit ulang setiap kali dibuka: proyek Node, situs terakhir, dan
+            // profil berubah terus, dan menu yang dirakit sekali di awal akan
+            // menawarkan keadaan yang sudah lewat.
+            menu.Opening += (s, e) => IsiMenuBaki(menu);
+            IsiMenuBaki(menu);
 
             _tray = new Forms.NotifyIcon
             {
@@ -346,6 +347,112 @@ namespace Phoron.App
                 Icon = IkonAplikasi(),
             };
             _tray.DoubleClick += (s, e) => Tampilkan();
+        }
+
+        /// <summary>
+        /// Menu baki: keadaan PHP, proyek Node, situs PHP terakhir, ganti profil.
+        ///
+        /// Bagi yang PHP-nya sudah berjalan sendiri, satu-satunya pekerjaan rutin
+        /// di Phoron adalah menjalankan proyek Node - dan itu cukup dari sini,
+        /// tanpa membuka jendela sama sekali.
+        /// </summary>
+        void IsiMenuBaki(Forms.ContextMenuStrip menu)
+        {
+            menu.Items.Clear();
+            var ringkas = RingkasanLayanan.Hitung(_engine);
+            menu.Items.Add(new Forms.ToolStripMenuItem(ringkas.Judul) { Enabled = false, Image = Titik(ringkas.Keadaan) });
+            _itemDaya = new Forms.ToolStripMenuItem(Lang.T("Nyalakan semua"), null, async (s, e) => await TogglePower());
+            menu.Items.Add(_itemDaya);
+            SegarkanBaki();
+
+            var proyek = _engine.NodeAppsList;
+            if (proyek != null && proyek.Count > 0)
+            {
+                menu.Items.Add(new Forms.ToolStripSeparator());
+                menu.Items.Add(new Forms.ToolStripMenuItem(Lang.T("Proyek Node")) { Enabled = false });
+                foreach (var a in proyek.Take(8))
+                {
+                    var app = a;
+                    if (_engine.Node.IsRunning(app.Path))
+                    {
+                        var url = _engine.Node.UrlOf(app.Path);
+                        var item = new Forms.ToolStripMenuItem(
+                            app.DisplayName + (string.IsNullOrEmpty(url) ? "" : "   " + url),
+                            Titik(ServiceState.Jalan));
+                        if (!string.IsNullOrEmpty(url))
+                            item.DropDownItems.Add(Lang.T("Buka di browser"), null, (s, e) => Shell.Open(url));
+                        item.DropDownItems.Add(Lang.T("Hentikan"), null, (s, e) => _engine.Node.Stop(app.Path));
+                        item.DropDownItems.Add(Lang.T("Buka folder"), null, (s, e) => Shell.Open(app.Path));
+                        menu.Items.Add(item);
+                    }
+                    else
+                    {
+                        menu.Items.Add(Lang.T("Jalankan {0}", app.DisplayName), Titik(ServiceState.Berhenti), (s, e) =>
+                        {
+                            var err = _engine.JalankanNode(app);
+                            if (err != null) AppState.Warn(err);
+                        });
+                    }
+                }
+            }
+
+            var situs = _engine.SitusTerakhirDaftar(3);
+            if (situs.Count > 0)
+            {
+                menu.Items.Add(new Forms.ToolStripSeparator());
+                menu.Items.Add(new Forms.ToolStripMenuItem(Lang.T("Situs PHP terakhir")) { Enabled = false });
+                foreach (var st in situs)
+                {
+                    var site = st;
+                    menu.Items.Add(site.Folder, null, (s, e) => _engine.BukaSitus(site));
+                }
+            }
+
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            if (_engine.Profiles != null && _engine.Profiles.Count > 1)
+            {
+                var ganti = new Forms.ToolStripMenuItem(Lang.T("Ganti profil"));
+                foreach (var pr in _engine.Profiles)
+                {
+                    var profil = pr;
+                    var item = new Forms.ToolStripMenuItem(profil.Name) { Checked = ReferenceEquals(profil, _engine.Active) };
+                    item.Click += async (s, e) =>
+                    {
+                        if (ReferenceEquals(profil, _engine.Active)) return;
+                        await _engine.SwitchAsync(profil);
+                        AppState.RaiseChanged();
+                        SegarkanStatus();
+                    };
+                    ganti.DropDownItems.Add(item);
+                }
+                menu.Items.Add(ganti);
+            }
+            menu.Items.Add(Lang.T("Buka folder proyek"), null,
+                (s, e) => Shell.Open(SiteScanner.DocumentRoot(_engine.Active)));
+            menu.Items.Add(Lang.T("Buka localhost"), null, (s, e) => Shell.Open(_engine.RootUrl()));
+            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(Lang.T("Tampilkan Phoron"), null, (s, e) => Tampilkan());
+            menu.Items.Add(Lang.T("Keluar"), null, (s, e) => Keluar());
+        }
+
+        static readonly System.Collections.Generic.Dictionary<ServiceState, System.Drawing.Bitmap> _titik =
+            new System.Collections.Generic.Dictionary<ServiceState, System.Drawing.Bitmap>();
+
+        /// <summary>Titik warna keadaan untuk menu baki; warnanya sama dengan WarnaLayanan.</summary>
+        static System.Drawing.Bitmap Titik(ServiceState s)
+        {
+            System.Drawing.Bitmap bmp;
+            if (_titik.TryGetValue(s, out bmp)) return bmp;
+            var w = ((System.Windows.Media.SolidColorBrush)WarnaLayanan.Titik(s)).Color;
+            bmp = new System.Drawing.Bitmap(16, 16);
+            using (var g = System.Drawing.Graphics.FromImage(bmp))
+            using (var kuas = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(w.A, w.R, w.G, w.B)))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.FillEllipse(kuas, 4, 4, 8, 8);
+            }
+            _titik[s] = bmp;
+            return bmp;
         }
 
         // ------------------------------------------------------------ Akhir sesi

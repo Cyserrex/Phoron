@@ -14,6 +14,16 @@ namespace Phoron.Core
         /// pilihan versi tanpa mengunduh apa pun.
         /// </summary>
         public List<string> BinRoots = new List<string>();
+
+        /// <summary>
+        /// Folder situs PHP yang terakhir dibuka lewat Phoron, terbaru dulu.
+        /// Dipakai Beranda dan menu baki: alamat situs PHP jarang perlu diatur,
+        /// tapi sering perlu dibuka.
+        /// </summary>
+        public List<string> SitusTerakhir = new List<string>();
+
+        /// <summary>Banyaknya situs terakhir yang diingat.</summary>
+        public const int BatasSitusTerakhir = 5;
         public string ActiveProfile = "";
         public bool AutoStartServices;      // nyalakan Apache+MySQL saat aplikasi dibuka
         public bool MinimizeToTray = true;
@@ -158,6 +168,10 @@ namespace Phoron.Core
                               .Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
             if (s.BinRoots.Count == 0) s.BinRoots = DefaultBinRoots();
             s.ActiveProfile = ini.Get("umum", "profil_aktif", "");
+            // "|" sebagai pemisah: satu-satunya aksara yang mustahil ada di jalur Windows.
+            s.SitusTerakhir = ini.Get("umum", "situs_terakhir", "")
+                .Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(x => x.Trim()).Where(x => x.Length > 0).Take(BatasSitusTerakhir).ToList();
             s.AutoStartServices = ini.GetBool("umum", "auto_start", false);
             s.MinimizeToTray = ini.GetBool("umum", "minimize_ke_tray", true);
             // Bawaannya false. Pemasangan yang sudah ada tidak terpengaruh:
@@ -240,6 +254,7 @@ namespace Phoron.Core
             var ini = Ini.Load(Paths.SettingsFile);
             ini.Set("umum", "bin_roots", string.Join(";", BinRoots));
             ini.Set("umum", "profil_aktif", ActiveProfile ?? "");
+            ini.Set("umum", "situs_terakhir", string.Join("|", SitusTerakhir ?? new List<string>()));
             ini.Set("umum", "auto_start", AutoStartServices ? "1" : "0");
             ini.Set("umum", "minimize_ke_tray", MinimizeToTray ? "1" : "0");
             ini.Set("umum", "auto_vhost", AutoVhost ? "1" : "0");

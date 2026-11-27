@@ -940,6 +940,66 @@ namespace Phoron.Core
             return "http://localhost" + port + "/" + (relatif.Length > 0 ? relatif + "/" : "");
         }
 
+        // ---------------------------------------------------- Situs dan proyek
+
+        /// <summary>
+        /// Buka situs di browser dan ingat bahwa ia baru dibuka. Mengembalikan
+        /// alamatnya, atau null bila situs ini tidak punya alamat tanpa Virtual
+        /// Host (ia ada di folder proyek kedua).
+        /// </summary>
+        public string BukaSitus(Site site)
+        {
+            if (site == null) return null;
+            var url = SiteUrl(site);
+            if (string.IsNullOrEmpty(url)) return null;
+            CatatSitusDibuka(site.Path);
+            Shell.Open(url);
+            return url;
+        }
+
+        /// <summary>Taruh situs ini paling depan di daftar terakhir dibuka.</summary>
+        public void CatatSitusDibuka(string path)
+        {
+            if (string.IsNullOrEmpty(path) || Settings == null) return;
+            var daftar = Settings.SitusTerakhir ?? new List<string>();
+            daftar.RemoveAll(x => string.Equals(x, path, StringComparison.OrdinalIgnoreCase));
+            daftar.Insert(0, path);
+            while (daftar.Count > Core.Settings.BatasSitusTerakhir) daftar.RemoveAt(daftar.Count - 1);
+            Settings.SitusTerakhir = daftar;
+            try { Settings.Save(); } catch { /* daftar ini kenyamanan, bukan data */ }
+        }
+
+        /// <summary>
+        /// Situs yang terakhir dibuka dan masih ada di profil ini, terbaru dulu.
+        /// Folder yang sudah dihapus atau milik profil lain dilewati diam-diam.
+        /// </summary>
+        public List<Site> SitusTerakhirDaftar(int maks)
+        {
+            var hasil = new List<Site>();
+            if (Settings == null || Settings.SitusTerakhir == null) return hasil;
+            foreach (var p in Settings.SitusTerakhir)
+            {
+                var s = Sites.FirstOrDefault(x => string.Equals(x.Path, p, StringComparison.OrdinalIgnoreCase));
+                if (s != null) hasil.Add(s);
+                if (hasil.Count >= maks) break;
+            }
+            return hasil;
+        }
+
+        /// <summary>
+        /// Jalankan proyek Node dengan Node pilihannya. Mengembalikan pesan galat,
+        /// atau null bila prosesnya dimulai. Dipakai halaman Node, Beranda, dan
+        /// menu baki - satu jalur, supaya ketiganya berperilaku sama.
+        /// </summary>
+        public string JalankanNode(NodeApp app)
+        {
+            if (app == null) return Lang.T("Proyek belum dipilih.");
+            var node = string.IsNullOrEmpty(app.NodeId) ? null : Find(BinKind.Node, app.NodeId);
+            var err = Node.Start(app, node);
+            if (err == null) Say(Lang.T("Menjalankan {0} ({1} {2}).", app.DisplayName, app.Manager, app.Script));
+            return err;
+        }
+
         public string RootUrl()
         {
             if (Active == null) return "http://localhost/";

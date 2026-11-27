@@ -79,7 +79,7 @@ namespace Phoron.App
         public void TerapkanBahasa()
         {
             var terpilih = Nav.SelectedIndex;
-            foreach (ListBoxItem item in Nav.Items)
+            foreach (var item in Nav.Items.OfType<ListBoxItem>())
             {
                 var panel = item.Content as StackPanel;
                 if (panel == null || panel.Children.Count < 2) continue;
@@ -99,7 +99,6 @@ namespace Phoron.App
                     case "tentang": teks.Text = Lang.T("Tentang"); break;
                 }
             }
-            BtnKeluar.Content = Lang.T("Keluar");
             BtnKeluar.ToolTip = Lang.T("Tutup Phoron sepenuhnya dan matikan semua layanan");
             RefreshStatus();
 
@@ -200,7 +199,7 @@ namespace Phoron.App
 
         public void GoTo(string tag)
         {
-            foreach (ListBoxItem item in Nav.Items)
+            foreach (var item in Nav.Items.OfType<ListBoxItem>())
                 if ((item.Tag ?? "").ToString() == tag) { Nav.SelectedItem = item; return; }
         }
 
@@ -225,9 +224,14 @@ namespace Phoron.App
             TxtDb.Text = Lang.T("MySQL") + " " + Lang.T(pakaiDb
                 ? db.ToString().ToLowerInvariant() : "tidak dipakai");
             TxtProfil.Text = _engine.Active != null ? _engine.Active.Name : Lang.T("(belum ada profil)");
+            // Di rail, keadaannya dibawa titik; kalimatnya ada di tooltip.
+            DotWeb.ToolTip = TxtProfil.Text + Environment.NewLine + TxtWeb.Text;
+            DotDb.ToolTip = TxtProfil.Text + Environment.NewLine + TxtDb.Text;
 
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
-            BtnPower.Content = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
+            // Ikon putar/henti; kalimatnya di tooltip - rail terlalu sempit untuk teks.
+            IkonPower.Text = anyRunning ? "" : "";
+            BtnPower.ToolTip = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
             // Merah saat tombolnya berarti "matikan": warnanya harus menyatakan
             // akibat penekanan, bukan sekadar menonjol. Biru untuk aksi yang
             // menghidupkan dan untuk aksi yang mematikan membuat keduanya
