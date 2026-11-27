@@ -61,13 +61,13 @@ daemon/
 | A | protokol pipe | tipe pesan JSON (v1) | selesai |
 | B | `BinScanner`, `BinProbe`, `RuntimeVc` | pemindai versi (`bin.rs`) | selesai |
 | B | `SiteScanner`, `NodeApps`, `PortCheck` | situs, proyek Node, port (`situs.rs`, `node_apps.rs`, `port.rs`) | selesai |
-| C | `ConfigWriter` (1.473 baris) | httpd.conf, nginx, php.ini, my.ini, vhost | |
-| C | `HostsFile`, `HostsTool`, `SslTool`, `HstsPeriksa` | hosts, sertifikat | |
-| D | `ProcessJob`, `ServiceManager` (1.114) | start/stop, Job Object | |
-| D | `NodeRunner`, `Engine` (1.062), `LogFile`, `Crash` | orkestrasi, log | |
-| D | `phorond`: pipe server, baki, sinyal keluar, mutex | daemon (`phorond/`, Engine dipasang lewat trait `Pelaksana`) | kerangka selesai |
-| E | UI WPF jadi klien pipe | `Engine` diganti proxy | |
-| E | `Updater`, `Downloader`, `MySqlKlien`, `MySqlSkema` | sisa | |
+| C | `ConfigWriter` (1.473 baris) | httpd.conf, nginx, php.ini, my.ini, vhost (`config.rs`, `beranda.rs`, `oracle.rs`) | selesai |
+| C | `HostsFile`, `HostsTool`, `SslTool`, `HstsPeriksa` | hosts, sertifikat (`hosts.rs`, `ssl.rs`, `hsts.rs`) | selesai |
+| D | `ProcessJob`, `ServiceManager` (1.114) | start/stop, Job Object (`process_job.rs`, `services/`) | selesai |
+| D | `NodeRunner`, `Engine` (1.062), `LogFile`, `Crash` | orkestrasi, log (`node_runner.rs`, `engine.rs`, `log_file.rs`; crash di phorond) | selesai |
+| D | `phorond`: pipe server, baki, sinyal keluar, mutex | daemon (`phorond/`, Engine dipasang lewat `PelaksanaEngine`) | selesai |
+| E | UI WPF jadi klien pipe | `Engine` mode jarak (`src/Phoron.Core/Jarak`) | selesai |
+| E | `Updater`, `Downloader`, `MySqlKlien`, `MySqlSkema`, `KlienLuar`, `CatatanDitutup` | tetap C# di sisi UI (hanya dipakai saat jendela terbuka) | diputuskan |
 
 `Lang*`/`Bantuan` (teks UI) tetap di C#: daemon hanya mengirim kunci pesan
 dan argumennya, UI yang menerjemahkan.
@@ -107,3 +107,28 @@ Uji setara juga bisa dijalankan pada SALINAN data sungguhan: salin
   angka romawi/pecahan Unicode di nama profil.
 - `cek_terakhir` berzona selain UTC ditulis ulang sebagai UTC (C# hanya
   pernah menulis UTC).
+
+## Status (27 November 2026)
+
+Semua tahap selesai dan diuji ujung ke ujung:
+
+- 212 uji Rust (termasuk uji nyata Apache/Nginx/MySQL/Node dari Laragon di
+  sandbox) dan 945 uji C# lulus; uji setara config/hosts/proses identik
+  dengan C#.
+- UI WPF sungguhan + phorond di sandbox: Nyalakan semua -> Apache + MySQL
+  jalan, HTTP 200; Keluar -> MySQL "Shutdown complete", daemon dan UI
+  berakhir, port lepas.
+- Dengan data pemasangan sungguhan (PHORON_HOME=C:\Phoron): profil aktif dan
+  situs terbaca sama, phoron.ini tidak berubah, Apache + PHP 5.6 melayani
+  http://localhost/.
+- phorond diam di baki: sekitar 11 MB working set, 2 MB private.
+
+## Sisa sebelum rilis
+
+1. Pemasang (`installer/setup.iss`) belum diuji dengan Inno Setup sungguhan.
+2. Operasi hosts/sertifikat yang dijalankan dari halaman Pengaturan (Pulihkan /
+   Bersihkan hosts, pasang sertifikat) masih berjalan di proses UI; perlu
+   perintah protokol supaya ikut hak Administrator daemon.
+3. Dipakai harian minimal satu minggu (gerbang rilis butir 4).
+4. Keputusan pengguna: Apache/MySQL tetap mendengar di semua alamat (perilaku
+   C#) atau hanya 127.0.0.1.
