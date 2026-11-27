@@ -513,8 +513,6 @@ namespace Phoron.App.Pages
                 ? Wpf.Ui.Controls.ControlAppearance.Secondary
                 : Wpf.Ui.Controls.ControlAppearance.Primary;
             BtnDayaBeranda.IsEnabled = !r.Sibuk && _e.Active != null;
-            // Ada yang gagal: rinciannya dibuka sendiri - di situlah sebabnya.
-            if (r.Keadaan == ServiceState.Gagal) LipatRincian.IsExpanded = true;
             SegarkanTombolGanti();
         }
 

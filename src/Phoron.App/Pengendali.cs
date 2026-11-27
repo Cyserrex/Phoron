@@ -218,12 +218,37 @@ namespace Phoron.App
         /// atau 960x640 - tapi tidak pernah lebih dari 70% lebar dan 82% tinggi
         /// layar. Dulu 1120x740 tetap, yang di layar 1366x768 nyaris memenuhi layar.
         /// </summary>
+        /// <summary>
+        /// Ukuran bawaan untuk layar ini: 1040x660, tapi tidak lebih dari sekitar
+        /// 80% x 88% area kerja - di layar 1366x768 itu 1040x640.
+        /// </summary>
+        static Size UkuranBawaan(Rect area)
+        {
+            return new Size(Math.Min(1040, area.Width * 0.80), Math.Min(660, area.Height * 0.88));
+        }
+
+        /// <summary>
+        /// Ukuran bawaan versi 1.41 (960x640, paling besar 70% x 82%). Versi itu
+        /// menyimpan ukuran setiap kali jendela ditutup, walau orangnya tidak
+        /// pernah mengubahnya, sehingga ukuran lama ikut "terkunci". Nilai yang
+        /// persis sama dengan bawaan lama dianggap tidak pernah diatur.
+        /// </summary>
+        static bool BawaanLama(int lebar, int tinggi, Rect area)
+        {
+            return Mirip(lebar, Math.Min(960, area.Width * 0.70)) && Mirip(tinggi, Math.Min(640, area.Height * 0.82));
+        }
+
+        static bool Mirip(double a, double b) { return Math.Abs(a - b) <= 2; }
+
         void UkuranAwal(MainWindow w)
         {
             var area = SystemParameters.WorkArea;
             var s = _engine.Settings;
-            double lebar = s.JendelaLebar > 0 ? s.JendelaLebar : Math.Min(960, area.Width * 0.70);
-            double tinggi = s.JendelaTinggi > 0 ? s.JendelaTinggi : Math.Min(640, area.Height * 0.82);
+            var bawaan = UkuranBawaan(area);
+            bool tersimpan = s.JendelaLebar > 0 && s.JendelaTinggi > 0
+                             && !BawaanLama(s.JendelaLebar, s.JendelaTinggi, area);
+            double lebar = tersimpan ? s.JendelaLebar : bawaan.Width;
+            double tinggi = tersimpan ? s.JendelaTinggi : bawaan.Height;
             w.Width = Math.Max(w.MinWidth, Math.Min(lebar, area.Width));
             w.Height = Math.Max(w.MinHeight, Math.Min(tinggi, area.Height));
         }
@@ -233,6 +258,10 @@ namespace Phoron.App
             if (!letak.HasValue || _engine.Settings == null) return;
             var lebar = (int)Math.Round(letak.Value.Width);
             var tinggi = (int)Math.Round(letak.Value.Height);
+            // Hanya ukuran yang memang diubah orangnya yang disimpan. Ukuran
+            // bawaan dicatat 0, jadi bawaan versi berikutnya tetap berlaku.
+            var bawaan = UkuranBawaan(SystemParameters.WorkArea);
+            if (Mirip(lebar, bawaan.Width) && Mirip(tinggi, bawaan.Height)) { lebar = 0; tinggi = 0; }
             if (lebar == _engine.Settings.JendelaLebar && tinggi == _engine.Settings.JendelaTinggi) return;
             _engine.Settings.JendelaLebar = lebar;
             _engine.Settings.JendelaTinggi = tinggi;

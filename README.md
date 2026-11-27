@@ -166,8 +166,8 @@ running, Phoron stops them, rewrites the configuration and starts them again.
 
 The rail on the left reaches every page (Home, Sites, Databases, Node, Profiles,
 Versions, PHP extensions, Logs, Settings); **Start all** and **Quit** sit at its
-bottom as plain text buttons. The window starts at 960×640, never more than about
-70% × 82% of the screen, and remembers the size you give it.
+bottom as plain text buttons. The window starts at 1040×660, never more than about
+80% × 88% of the screen, and remembers the size only if you change it.
 
 Right-click the tray icon to start and stop services, **run a Node project**,
 open a recently used PHP site, or switch profile — without opening a window.

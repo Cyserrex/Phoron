@@ -3,8 +3,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:loc="clr-namespace:Phoron.App"
-                 Title="Phoron" Width="960" Height="640"
-                 MinWidth="760" MinHeight="520"
+                 Title="Phoron" Width="1040" Height="660"
+                 MinWidth="820" MinHeight="520"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
@@ -15,16 +15,16 @@
              antarversi pustaka. -->
         <Style x:Key="NavIcon" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,0,0,3"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
         </Style>
         <Style x:Key="NavLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10.5"/>
-            <Setter Property="TextAlignment" Value="Center"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="MaxWidth" Value="70"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
         </Style>
     </ui:FluentWindow.Resources>
 
@@ -40,14 +40,14 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="88"/>
+                <ColumnDefinition Width="164"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Rail ikon berlabel. Ikon tanpa tulisan memaksa orang menebak atau
-                 menunggu tooltip; label kecil di bawah ikonnya menjawab itu,
-                 dan rail ini tetap jauh lebih sempit daripada panel 220 px lama,
-                 jadi halaman mendapat ruang lebih.
+            <!-- Rail berlabel: ikon di kiri, nama halaman di kanannya, satu baris.
+                 Label di BAWAH ikon (1.40-1.41) membuat tiap butir dua kali lebih
+                 tinggi, dan di layar 768 px rail-nya sampai perlu digulir. Kolom
+                 164 px tetap lebih sempit daripada panel 220 px lama.
                  Urutannya mengikuti pemakaian: kerja harian di atas, konfigurasi
                  di tengah, sistem di bawah. -->
             <Border Grid.Column="0" Margin="6,0,2,8" CornerRadius="8"
@@ -64,68 +64,68 @@
                              SelectionChanged="Nav_SelectionChanged">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                                <Setter Property="Padding" Value="2,4,2,3"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="Padding" Value="10,7"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Left"/>
                             </Style>
                         </ListBox.ItemContainerStyle>
                         <ListBoxItem Tag="beranda">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE80F;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Beranda'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="node">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE756;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Node / TS'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="situs">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE774;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Situs'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="basisdata">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE968;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Basis data'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
-                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
+                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="120" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
                         <ListBoxItem Tag="profil">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE81E;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Profil'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="versi">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE7B8;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Versi'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="ekstensi">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE71D;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Ekstensi PHP'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
-                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
+                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="120" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
                         <ListBoxItem Tag="log">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE8A5;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Log'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="setelan">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE713;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Pengaturan'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
                         <ListBoxItem Tag="tentang">
-                            <StackPanel>
+                            <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE946;" Style="{StaticResource NavIcon}"/>
                                 <TextBlock Text="{loc:T 'Tentang'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
@@ -152,14 +152,14 @@
                         <ui:Button x:Name="BtnPower" Appearance="Primary" Padding="4,6"
                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                    Click="BtnPower_Click">
-                            <TextBlock x:Name="TxtPower" Text="{loc:T 'Nyalakan semua'}" FontSize="12"
+                            <TextBlock x:Name="TxtPower" Text="{loc:T 'Nyalakan semua'}" FontSize="13"
                                        TextWrapping="Wrap" TextAlignment="Center"/>
                         </ui:Button>
                         <ui:Button x:Name="BtnKeluar" Margin="0,6,0,0" Padding="4,6"
                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
                                    ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
                                    Click="BtnKeluar_Click">
-                            <TextBlock x:Name="TxtKeluar" Text="{loc:T 'Keluar'}" FontSize="12" TextAlignment="Center"/>
+                            <TextBlock x:Name="TxtKeluar" Text="{loc:T 'Keluar'}" FontSize="13" TextAlignment="Center"/>
                         </ui:Button>
                     </StackPanel>
                 </Grid>

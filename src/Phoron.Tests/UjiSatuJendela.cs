@@ -26,7 +26,11 @@ namespace Phoron.Tests
                 Ok("Tampilkan membuka jendela utama",
                    Regex.IsMatch(Potong(pg, "public void Tampilkan(string tab)", "void UkuranAwal("), @"new MainWindow\(_engine, _tab\)"));
                 Ok("Ukuran jendela dibatasi layar",
-                   pg.Contains("area.Width * 0.70") && pg.Contains("area.Height * 0.82"));
+                   pg.Contains("area.Width * 0.80") && pg.Contains("area.Height * 0.88"));
+                Ok("Ukuran bawaan tidak disimpan sebagai pilihan orang",
+                   Regex.IsMatch(Potong(pg, "void SimpanUkuran(", "void JendelaTertutup("), @"lebar = 0; tinggi = 0;"));
+                Ok("Ukuran bawaan lama 1.41 tidak mengunci jendela",
+                   Potong(pg, "void UkuranAwal(", "void SimpanUkuran(").Contains("!BawaanLama("));
             }
             Ok("Berkas panel ringkas sudah tidak ada",
                !File.Exists(Path.Combine(AkarRepo(), "src", "Phoron.App", "PanelRingkas.xaml")));
@@ -36,6 +40,15 @@ namespace Phoron.Tests
                 Ok("Tombol daya dan keluar berteks, bukan ikon saja",
                    xaml.Contains("x:Name=\"TxtPower\"") && xaml.Contains("x:Name=\"TxtKeluar\"")
                    && !xaml.Contains("x:Name=\"IkonPower\""));
+            if (xaml != null)
+                Ok("Rail satu baris per halaman (ikon di samping label), tanpa perlu digulir",
+                   xaml.Contains("<ColumnDefinition Width=\"164\"/>")
+                   && Regex.Matches(xaml, @"<ListBoxItem Tag=""[a-z]+"">\s*<StackPanel Orientation=""Horizontal"">").Count == 10);
+
+            var dash = BacaSumber("Phoron.App", Path.Combine("Pages", "DashboardPage.xaml"));
+            if (dash != null)
+                Ok("Rincian layanan selalu terlihat, bukan dilipat",
+                   !dash.Contains("LipatRincian") && dash.Contains("x:Name=\"TxtPhpSub\""));
 
             // Ukuran tersimpan bertahan lintas sesi.
             var dir = Path.Combine(Path.GetTempPath(), "phoron-uji-ukuran-" + Guid.NewGuid().ToString("N").Substring(0, 6));

@@ -34,7 +34,7 @@
             <!-- Baris PHP. Bagi kebanyakan orang tumpukan PHP adalah latar: ia
                  menyala sendiri dan situsnya tinggal dibuka. Jadi cukup satu
                  baris yang tenang, dan baru mencolok kalau ada yang salah.
-                 Rinciannya (kartu PHP, web server, MySQL) tetap ada, dilipat. -->
+                 Rinciannya (PHP, web server, MySQL) ada tepat di bawahnya. -->
             <Border Style="{StaticResource Kartu}" Padding="14,10">
                 <StackPanel>
                     <Grid>
@@ -71,80 +71,67 @@
                             <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="14"/>
                         </ui:Button>
                     </Grid>
-                    <Expander x:Name="LipatRincian" Header="{loc:T 'Rincian layanan'}" Margin="0,10,0,0" Padding="0,10,0,0">
-
-                                <UniformGrid Columns="3" Margin="0,0,0,0">
-                                    <Border Style="{StaticResource Kartu}" Margin="0,0,6,12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <!-- Melebar sampai ke kolom status: status hanya menempati
-                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                                                <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
-                                                <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                                                <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
-                                                <Ellipse x:Name="DotKartuPhp" Width="10" Height="10" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtStatusKartuPhp" FontSize="12" Opacity="0.8"
-                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                    <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <!-- Melebar sampai ke kolom status: status hanya menempati
-                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                                                <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
-                                                <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                                                <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
-                                                <Ellipse x:Name="DotKartuWeb" Width="10" Height="10" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtStatusKartuWeb" FontSize="12" Opacity="0.8"
-                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                    <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <!-- Melebar sampai ke kolom status: status hanya menempati
-                                                 baris label, jadi subjudul tidak perlu ikut menyempit. -->
-                                            <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
-                                                <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
-                                                <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
-                                                <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
-                                            </StackPanel>
-                                            <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
-                                                 orang, dan abu-abu kecil di pojok mudah terlewat. -->
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
-                                                        HorizontalAlignment="Right" Margin="8,2,0,0">
-                                                <Ellipse x:Name="DotKartuDb" Width="10" Height="10" VerticalAlignment="Center"/>
-                                                <TextBlock x:Name="TxtStatusKartuDb" FontSize="12" Opacity="0.8"
-                                                           Margin="6,0,0,0" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </UniformGrid>
-                    </Expander>
+                    <!-- Rincian PHP, web server, dan MySQL selalu terlihat sebagai satu
+                         baris tiga kolom di dalam kartu yang sama: tidak perlu dibuka,
+                         dan tidak ada kartu di dalam kartu. Garis tipis memisahkannya
+                         dari baris status di atas. -->
+                    <Border BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,10,0,0"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.ColumnSpan="2">
+                                <TextBlock Text="PHP" FontSize="11" Opacity="0.6"/>
+                                <TextBlock x:Name="TxtPhp" Text="-" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                                <Ellipse x:Name="DotKartuPhp" Width="8" Height="8" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtStatusKartuPhp" FontSize="11" Opacity="0.8" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Column="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.ColumnSpan="2">
+                                <TextBlock x:Name="TxtWebKind" Text="Apache" FontSize="11" Opacity="0.6"/>
+                                <TextBlock x:Name="TxtWeb" Text="-" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                                <Ellipse x:Name="DotKartuWeb" Width="8" Height="8" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtStatusKartuWeb" FontSize="11" Opacity="0.8" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Column="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.ColumnSpan="2">
+                                <TextBlock Text="MySQL" FontSize="11" Opacity="0.6"/>
+                                <TextBlock x:Name="TxtDb" Text="-" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="8,0,0,0">
+                                <Ellipse x:Name="DotKartuDb" Width="8" Height="8" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="TxtStatusKartuDb" FontSize="11" Opacity="0.8" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                    </Border>
                 </StackPanel>
             </Border>
 
