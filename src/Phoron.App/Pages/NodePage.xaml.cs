@@ -122,6 +122,7 @@ namespace Phoron.App.Pages
                 if (!skrip.Contains(a.Script)) skrip.Insert(0, a.Script);
                 CmbSkrip.ItemsSource = skrip;
                 CmbSkrip.SelectedItem = a.Script;
+                TxtPort.Text = a.Port > 0 ? a.Port.ToString() : "";
 
                 var rows = CmbNode.ItemsSource as List<object>;
                 if (rows != null)
@@ -271,6 +272,25 @@ namespace Phoron.App.Pages
             a.Script = s;
             NodeAppStore.SaveAll(_e.NodeAppsList);
             Isi();
+        }
+
+        void TxtPort_Lepas(object sender, RoutedEventArgs e)
+        {
+            if (_mengisi) return;
+            var a = Terpilih();
+            if (a == null) return;
+            int port;
+            var teks = (TxtPort.Text ?? "").Trim();
+            if (teks.Length == 0) port = 0;
+            else if (!int.TryParse(teks, out port) || port < 1 || port > 65535)
+            {
+                AppState.Warn(Lang.T("Port harus angka 1 sampai 65535, atau kosong."));
+                TxtPort.Text = a.Port > 0 ? a.Port.ToString() : "";
+                return;
+            }
+            if (port == a.Port) return;
+            a.Port = port;
+            NodeAppStore.SaveAll(_e.NodeAppsList);
         }
 
         void CmbNode_Changed(object sender, SelectionChangedEventArgs e)

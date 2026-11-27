@@ -43,7 +43,7 @@ namespace Phoron.Tests
                    && ktor.Contains("Unloaded += (s, ev) => Lepas();"));
                 Ok("Panel menggambar ulang secara digabung",
                    panel.Contains("Interlocked.Exchange(ref _tertunda, 1) == 1) return;"));
-                Ok("Panel menjalankan Node lewat jalur Engine", panel.Contains("_e.JalankanNode(app)"));
+                Ok("Panel menjalankan Node lewat jalur Engine", panel.Contains("_e.JalankanNode(app"));
             }
 
             var xaml = BacaSumber("Phoron.App", "PanelRingkas.xaml");

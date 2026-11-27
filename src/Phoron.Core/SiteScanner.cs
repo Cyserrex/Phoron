@@ -96,11 +96,27 @@ namespace Phoron.Core
             return Path.Combine(Paths.SitesEnabled, "auto." + site.HostName + ".conf");
         }
 
-        /// <summary>Nama folder bisa mengandung spasi atau garis bawah; nama host tidak boleh.</summary>
+        /// <summary>
+        /// Nama folder bisa mengandung spasi atau garis bawah; nama host tidak boleh.
+        ///
+        /// Hanya a-z, 0-9, dan "-". Dulu huruf Unicode lolos apa adanya: folder
+        /// "kafé" menjadi kafé.test di berkas hosts dan ServerName, padahal
+        /// browser mengirim bentuk punycode (xn--kaf-dma.test) - tidak ada yang
+        /// cocok, dan situsnya tidak pernah terbuka. Huruf beraksen diturunkan
+        /// ke huruf dasarnya (é -> e); aksara lain menjadi "-".
+        /// </summary>
         public static string SafeHost(string folder)
         {
-            var chars = folder.Select(c => char.IsLetterOrDigit(c) || c == '-' ? char.ToLowerInvariant(c) : '-').ToArray();
-            var s = new string(chars).Trim('-');
+            var dasar = (folder ?? "").Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder();
+            foreach (var c in dasar)
+            {
+                if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+                    == System.Globalization.UnicodeCategory.NonSpacingMark) continue;
+                var k = char.ToLowerInvariant(c);
+                sb.Append((k >= 'a' && k <= 'z') || (k >= '0' && k <= '9') || k == '-' ? k : '-');
+            }
+            var s = sb.ToString().Trim('-');
             while (s.Contains("--")) s = s.Replace("--", "-");
             return s.Length == 0 ? "situs" : s;
         }

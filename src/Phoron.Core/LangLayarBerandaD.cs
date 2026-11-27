@@ -45,6 +45,16 @@ namespace Phoron.Core
                 new[] { "{0} memakai PHP lain", "{0} on another PHP", "{0} nganggo PHP liya", "{0} mamakai PHP lain" },
                 new[] { "Tampilan ringkas", "Compact view", "Tampilan ringkes", "Tampilan ringkas" },
 
+                // Port proyek Node
+                new[] { "Proyek belum punya folder.", "The project has no folder yet.", "Proyek durung duwe folder.", "Proyek balum baisi folder." },
+                new[] { "Folder tidak ada: {0}", "Folder not found: {0}", "Folder ora ana: {0}", "Folder kadada: {0}" },
+                new[] { "Tidak ada package.json di {0}.", "There is no package.json in {0}.", "Ora ana package.json ing {0}.", "Kadada package.json di {0}." },
+                new[] { "Port {0} sudah dipakai proses lain.", "Port {0} is already used by another process.", "Port {0} wis dienggo proses liya.", "Port {0} sudah dipakai proses lain." },
+                new[] { "Jalankan di port {0}", "Run on port {0}", "Uripake ing port {0}", "Jalanakan di port {0}" },
+                new[] { "Port {0}", "Port {0}", "Port {0}", "Port {0}" },
+                new[] { "Port harus angka 1 sampai 65535, atau kosong.", "The port must be a number from 1 to 65535, or empty.", "Port kudu angka 1 nganti 65535, utawa kosong.", "Port musti angka 1 sampai 65535, atawa kosong." },
+                new[] { "Kosongkan supaya server pengembangannya memilih port sendiri.", "Leave empty to let the dev server pick its own port.", "Kosongna supaya server pangembangane milih port dhewe.", "Kosongakan supaya server pangembangannya mamilih port saurangan." },
+
                 // Menu baki
                 new[] { "Jalankan {0}", "Run {0}", "Uripake {0}", "Jalanakan {0}" },
                 new[] { "Ganti profil", "Switch profile", "Ganti profil", "Ganti profil" },

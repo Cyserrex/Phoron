@@ -991,13 +991,40 @@ namespace Phoron.Core
         /// atau null bila prosesnya dimulai. Dipakai halaman Node, Beranda, dan
         /// menu baki - satu jalur, supaya ketiganya berperilaku sama.
         /// </summary>
-        public string JalankanNode(NodeApp app)
+        public string JalankanNode(NodeApp app) { return JalankanNode(app, 0); }
+
+        /// <summary>Seperti <see cref="JalankanNode(NodeApp)"/>, dengan port untuk kali ini saja.</summary>
+        public string JalankanNode(NodeApp app, int portSekali)
         {
             if (app == null) return Lang.T("Proyek belum dipilih.");
             var node = string.IsNullOrEmpty(app.NodeId) ? null : Find(BinKind.Node, app.NodeId);
-            var err = Node.Start(app, node);
-            if (err == null) Say(Lang.T("Menjalankan {0} ({1} {2}).", app.DisplayName, app.Manager, app.Script));
+            var err = Node.Start(app, node, portSekali);
+            if (err == null) Say(Lang.T("Menjalankan {0} ({1} {2}).", app.DisplayName, app.Manager, app.Script)
+                                 + (portSekali > 0 ? " · port " + portSekali : ""));
             return err;
+        }
+
+        /// <summary>
+        /// Port bebas pertama mulai dari <paramref name="mulai"/>, melewati port
+        /// web server dan MySQL profil ini. 0 bila 50 port berturut-turut terpakai.
+        /// </summary>
+        public int CariPortBebas(int mulai)
+        {
+            if (mulai <= 0) mulai = 3001;
+            for (int p = mulai; p < mulai + 50 && p < 65536; p++)
+            {
+                if (Active != null && (p == Active.HttpPort || p == Active.HttpsPort || p == Active.MySqlPort)) continue;
+                if (PortCheck.IsFree(p)) return p;
+            }
+            return 0;
+        }
+
+        /// <summary>Port yang ditawarkan untuk proyek yang gagal karena portnya terpakai; 0 bila tidak ada.</summary>
+        public int PortTawaran(NodeApp app)
+        {
+            if (app == null) return 0;
+            var bentrok = Node.PortBentrok(app.Path);
+            return bentrok > 0 ? CariPortBebas(bentrok + 1) : 0;
         }
 
         public string RootUrl()

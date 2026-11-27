@@ -64,15 +64,56 @@ namespace Phoron.Core
         /// </summary>
         static string[] ReadAll()
         {
-            try { return File.ReadAllLines(Paths.HostsFile); }
+            try { Encoding e; return BacaBaris(Paths.HostsFile, out e); }
             catch { return new string[0]; }
         }
 
         /// <summary>Pembacaan yang wajib berhasil; melempar bila gagal.</summary>
         static string[] BacaWajib()
         {
-            if (!File.Exists(Paths.HostsFile)) return new string[0];
-            return File.ReadAllLines(Paths.HostsFile);
+            if (!File.Exists(Paths.HostsFile)) { _encoding = null; return new string[0]; }
+            return BacaBaris(Paths.HostsFile, out _encoding);
+        }
+
+        /// <summary>Encoding berkas hosts saat terakhir dibaca untuk ditulis ulang.</summary>
+        static Encoding _encoding;
+
+        /// <summary>
+        /// Baca baris berkas dengan encoding yang benar-benar dipakainya.
+        ///
+        /// Dulu dibaca selalu sebagai UTF-8 dan ditulis sebagai UTF-8. Berkas
+        /// hosts lama yang tersimpan ANSI (codepage Windows) dan memuat komentar
+        /// berhuruf seperti "é" terbaca sebagai U+FFFD, lalu ditulis kembali
+        /// sebagai karakter pengganti - komentar orang rusak tanpa suara, dan
+        /// penjaga "jangan buang baris orang lain" tidak melihatnya karena ia
+        /// membandingkan teks yang sudah sama-sama rusak.
+        /// </summary>
+        public static string[] BacaBaris(string path, out Encoding encoding)
+        {
+            var b = File.ReadAllBytes(path);
+            encoding = DeteksiEncoding(b);
+            var teks = encoding.GetString(b);
+            if (teks.Length > 0 && teks[0] == '﻿') teks = teks.Substring(1);
+            var hasil = new List<string>();
+            using (var r = new StringReader(teks))
+            {
+                string l;
+                while ((l = r.ReadLine()) != null) hasil.Add(l);
+            }
+            return hasil.ToArray();
+        }
+
+        /// <summary>UTF-8 (dengan BOM bila ada) bila isinya UTF-8 yang sah, selain itu ANSI.</summary>
+        public static Encoding DeteksiEncoding(byte[] b)
+        {
+            if (b != null && b.Length >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF)
+                return new UTF8Encoding(true);
+            try
+            {
+                new UTF8Encoding(false, true).GetString(b ?? new byte[0]);
+                return new UTF8Encoding(false);
+            }
+            catch (DecoderFallbackException) { return Encoding.Default; }
         }
 
         /// <summary>Semua nama host yang ada di berkas hosts (blok siapa pun).</summary>
@@ -165,11 +206,12 @@ namespace Phoron.Core
             TulisLangsung(baru);
         }
 
-        static void TulisLangsung(IEnumerable<string> lines)
+        static void TulisLangsung(IEnumerable<string> lines, Encoding encoding = null)
         {
             // AtomicFile yang mengurus atribut ReadOnly/Hidden milik berkas hosts,
             // sekaligus memastikan berkasnya tidak pernah setengah tertulis.
-            AtomicFile.WriteAllLines(Paths.HostsFile, lines, new UTF8Encoding(false));
+            // Ditulis dengan encoding yang sama seperti saat dibaca.
+            AtomicFile.WriteAllLines(Paths.HostsFile, lines, encoding ?? _encoding ?? new UTF8Encoding(false));
         }
 
         /// <summary>
@@ -329,8 +371,11 @@ namespace Phoron.Core
                 {
                     // Sekali seumur hidup mesin ini, dan tidak pernah dirotasi.
                     // Inilah berkas yang benar-benar dicari orang saat kacau:
-                    // keadaan sebelum Phoron ikut campur.
-                    AtomicFile.WriteAllLines(asli, awal);
+                    // keadaan sebelum Phoron ikut campur. Disalin byte demi byte
+                    // dari berkas aslinya, bukan dari baris yang sudah didekode -
+                    // salinan "asli" yang ikut rusak encoding-nya bukan asli lagi.
+                    if (File.Exists(Paths.HostsFile)) File.Copy(Paths.HostsFile, asli, false);
+                    else AtomicFile.WriteAllLines(asli, awal);
                     return;
                 }
 
@@ -341,9 +386,9 @@ namespace Phoron.Core
                 if (terbaru != null && Sama(terbaru.Path, awal)) return;
                 if (Sama(asli, awal)) return;
 
-                AtomicFile.WriteAllLines(
-                    Path.Combine(folder, "hosts-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak"),
-                    awal);
+                var tujuan = Path.Combine(folder, "hosts-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".bak");
+                if (File.Exists(Paths.HostsFile)) File.Copy(Paths.HostsFile, tujuan, true);
+                else AtomicFile.WriteAllLines(tujuan, awal);
                 Pangkas();
             }
             catch (Exception ex)
@@ -366,7 +411,7 @@ namespace Phoron.Core
 
         static bool Sama(string path, string[] lines)
         {
-            try { return File.ReadAllLines(path).SequenceEqual(lines, StringComparer.Ordinal); }
+            try { Encoding e; return BacaBaris(path, out e).SequenceEqual(lines, StringComparer.Ordinal); }
             catch { return false; }
         }
 
@@ -380,14 +425,15 @@ namespace Phoron.Core
             if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath))
                 throw new FileNotFoundException("Berkas cadangan tidak ditemukan.", backupPath ?? "");
 
-            var isi = File.ReadAllLines(backupPath);
+            Encoding encCadangan;
+            var isi = BacaBaris(backupPath, out encCadangan);
             string[] sekarang = null;
             try { sekarang = BacaWajib(); } catch { }
             if (sekarang != null && sekarang.Length > 0) Cadangkan(sekarang);
 
             // Tanpa PastikanMasukAkal: memulihkan memang boleh menghapus baris,
-            // itulah gunanya.
-            TulisLangsung(isi);
+            // itulah gunanya. Encoding-nya ikut cadangan yang dipulihkan.
+            TulisLangsung(isi, encCadangan);
         }
 
         public static void Clear() { Sync(new string[0]); }

@@ -26,6 +26,8 @@ namespace Phoron.Tests
         {
             if (args.Length > 0 && args[0].Equals("live", StringComparison.OrdinalIgnoreCase))
                 return LiveTest.Jalankan();
+            if (args.Length > 0 && args[0].Equals("ui", StringComparison.OrdinalIgnoreCase))
+                return UjiAsapUi.Jalankan();
 
             // Dipanggil oleh UjiObjekAntarProses: harness ini menjalankan dirinya
             // sendiri dengan hak Low, dan anak itu melapor lewat kode keluar.
@@ -134,6 +136,7 @@ namespace Phoron.Tests
                 UjiBatchTiga();
                 UjiBerandaD(sandbox);
                 UjiPanelRingkas();
+                UjiHostDanPort(sandbox);
             }
             catch (Exception ex)
             {

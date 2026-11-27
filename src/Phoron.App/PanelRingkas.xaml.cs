@@ -184,18 +184,23 @@ namespace Phoron.App
                     buka.Margin = new Thickness(0, 0, 4, 0);
                     tombol.Children.Add(buka);
                 }
-                var aksi = Tombol(Lang.T(jalan ? "Hentikan" : "Jalankan"), !jalan);
+                // Gagal karena portnya dipakai: tombolnya langsung menawarkan port lain.
+                var bentrok = jalan ? 0 : _e.Node.PortBentrok(app.Path);
+                var tawaran = bentrok > 0 ? _e.PortTawaran(app) : 0;
+                var aksi = Tombol(tawaran > 0 ? Lang.T("Port {0}", tawaran) : Lang.T(jalan ? "Hentikan" : "Jalankan"), !jalan);
+                if (tawaran > 0) aksi.ToolTip = Lang.T("Port {0} sudah dipakai proses lain.", bentrok);
                 aksi.Click += (s, e) =>
                 {
                     if (_e.Node.IsRunning(app.Path)) { _e.Node.Stop(app.Path); return; }
                     if (!PackageJson.HasNodeModules(app.Path)
                         && !AppState.Ask(Lang.T("Folder node_modules belum ada di proyek ini, jadi perintahnya kemungkinan besar gagal.")
                                          + "\n\n" + Lang.T("Jalankan juga?"))) return;
-                    var err = _e.JalankanNode(app);
+                    var err = _e.JalankanNode(app, tawaran);
                     if (err != null) AppState.Warn(err);
                 };
                 tombol.Children.Add(aksi);
-                DaftarBaris.Children.Add(Baris(app.DisplayName, "Node", jalan ? ServiceState.Jalan : ServiceState.Berhenti,
+                DaftarBaris.Children.Add(Baris(app.DisplayName, "Node",
+                                               jalan ? ServiceState.Jalan : bentrok > 0 ? ServiceState.Gagal : ServiceState.Berhenti,
                                                Port(url), tombol));
             }
 

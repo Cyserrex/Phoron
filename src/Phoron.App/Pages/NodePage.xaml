@@ -38,6 +38,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="{loc:T 'Skrip'}" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -46,6 +48,11 @@
                 <TextBlock Grid.Column="2" Text="{loc:T 'Node'}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <ComboBox Grid.Column="3" x:Name="CmbNode" MinWidth="200"
                           SelectionChanged="CmbNode_Changed"/>
+                <!-- Port tetap proyek ini. Kosong = biarkan servernya memilih. -->
+                <TextBlock Grid.Column="4" Text="{loc:T 'Port'}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+                <ui:TextBox Grid.Column="5" x:Name="TxtPort" Width="90" PlaceholderText="3000"
+                            LostFocus="TxtPort_Lepas"
+                            ToolTip="{loc:T 'Kosongkan supaya server pengembangannya memilih port sendiri.'}"/>
             </Grid>
             <WrapPanel>
                 <ui:Button x:Name="BtnJalan" Content="{loc:T 'Jalankan'}" Appearance="Primary"

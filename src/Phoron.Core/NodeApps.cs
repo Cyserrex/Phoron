@@ -21,6 +21,8 @@ namespace Phoron.Core
         public string Manager { get; set; }
         /// <summary>Nama folder paket Node yang dipakai; kosong = ikut PATH sistem.</summary>
         public string NodeId { get; set; }
+        /// <summary>Port tetap proyek ini; 0 = biarkan server pengembangannya memilih.</summary>
+        public int Port { get; set; }
 
         public NodeApp()
         {
@@ -61,6 +63,7 @@ namespace Phoron.Core
                     Script = ini.Get(section, "skrip", "dev"),
                     Manager = ini.Get(section, "manager", "npm"),
                     NodeId = ini.Get(section, "node", ""),
+                    Port = Math.Max(0, ini.GetInt(section, "port", 0)),
                 });
             }
             return list;
@@ -77,6 +80,7 @@ namespace Phoron.Core
                 ini.Set(s, "skrip", a.Script ?? "dev");
                 ini.Set(s, "manager", a.Manager ?? "npm");
                 ini.Set(s, "node", a.NodeId ?? "");
+                ini.Set(s, "port", a.Port > 0 ? a.Port.ToString() : "");
             }
             ini.Save(FilePath,
                 "Proyek Node/TypeScript yang terdaftar di Phoron.\n" +

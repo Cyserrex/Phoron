@@ -636,7 +636,11 @@ namespace Phoron.App.Pages
             });
             kepala.Children.Add(nama);
             var status = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8, 2, 0, 0) };
-            var keadaan = jalan ? ServiceState.Jalan : ServiceState.Berhenti;
+            // Gagal karena portnya dipakai proses lain: tandai merah dan tawarkan
+            // port bebas berikutnya - di sini, bukan di halaman lain.
+            var bentrok = jalan ? 0 : _e.Node.PortBentrok(a.Path);
+            var tawaran = bentrok > 0 ? _e.PortTawaran(a) : 0;
+            var keadaan = jalan ? ServiceState.Jalan : bentrok > 0 ? ServiceState.Gagal : ServiceState.Berhenti;
             status.Children.Add(new System.Windows.Shapes.Ellipse { Width = 10, Height = 10, Fill = WarnaLayanan.Titik(keadaan), VerticalAlignment = VerticalAlignment.Center });
             status.Children.Add(new TextBlock { Text = WarnaLayanan.Teks(keadaan), FontSize = 12, Opacity = 0.85, Margin = new Thickness(6, 0, 0, 0) });
             Grid.SetColumn(status, 1);
@@ -666,7 +670,29 @@ namespace Phoron.App.Pages
                 isi.Children.Add(kotak);
             }
 
+            if (bentrok > 0)
+                isi.Children.Add(new TextBlock
+                {
+                    Text = Lang.T("Port {0} sudah dipakai proses lain.", bentrok),
+                    Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap,
+                });
+
             var tombol = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+            if (tawaran > 0)
+            {
+                var lain = new Wpf.Ui.Controls.Button
+                {
+                    Content = Lang.T("Jalankan di port {0}", tawaran),
+                    Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Margin = new Thickness(0, 0, 8, 0),
+                };
+                lain.Click += (s, e) =>
+                {
+                    var err = _e.JalankanNode(a, tawaran);
+                    if (err != null) AppState.Warn(err);
+                    IsiNode();
+                };
+                tombol.Children.Add(lain);
+            }
             if (!string.IsNullOrEmpty(url))
             {
                 var buka = new Wpf.Ui.Controls.Button { Content = Lang.T("Buka"), Appearance = Wpf.Ui.Controls.ControlAppearance.Primary, Margin = new Thickness(0, 0, 8, 0) };

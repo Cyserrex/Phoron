@@ -17,6 +17,56 @@ namespace Phoron.Core
         {
             public Process Proc;
             public string Url;
+            /// <summary>Port yang dikeluhkan "sudah dipakai" di keluarannya; 0 bila tidak ada.</summary>
+            public int Bentrok;
+        }
+
+        // Proyek yang terakhir BERHENTI karena portnya dipakai proses lain.
+        // Dicatat hanya bila prosesnya benar-benar berakhir dengan galat:
+        // next dev versi baru mencetak "Port 3000 is in use, trying 3001
+        // instead" lalu tetap jalan, dan itu bukan kegagalan.
+        readonly Dictionary<string, int> _bentrok =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        static readonly Regex BentrokRx = new Regex(
+            @"EADDRINUSE|address already in use|port\s+(\d+)\s+is\s+(?:already\s+)?in\s+use",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        // Port di ekor baris EADDRINUSE: "...in use :::5173" atau "127.0.0.1:3000".
+        static readonly Regex PortEkorRx = new Regex(@":(\d{2,5})\b", RegexOptions.Compiled);
+
+        /// <summary>Port yang membuat proyek ini gagal start terakhir kali; 0 bila tidak ada.</summary>
+        public int PortBentrok(string folder)
+        {
+            int p;
+            lock (_kunci) return folder != null && _bentrok.TryGetValue(folder, out p) ? p : 0;
+        }
+
+        /// <summary>Port dari baris keluaran yang mengeluhkan port terpakai; 0 bila bukan baris itu.</summary>
+        public static int PortDariKeluhan(string baris)
+        {
+            if (string.IsNullOrEmpty(baris)) return 0;
+            var m = BentrokRx.Match(baris);
+            if (!m.Success) return 0;
+            int p;
+            if (m.Groups[1].Success && int.TryParse(m.Groups[1].Value, out p)) return p;
+            var ekor = PortEkorRx.Matches(baris.Substring(m.Index));
+            if (ekor.Count > 0 && int.TryParse(ekor[ekor.Count - 1].Groups[1].Value, out p)) return p;
+            // EADDRINUSE tanpa angka di baris yang sama: tetap bentrok, port tak diketahui.
+            return -1;
+        }
+
+        /// <summary>
+        /// Kerangka yang tidak membaca variabel PORT dan butuh "--port" di
+        /// baris perintahnya. Next.js dan Nuxt membaca PORT.
+        /// </summary>
+        public static bool ButuhArgumenPort(string kerangka)
+        {
+            switch ((kerangka ?? "").ToLowerInvariant())
+            {
+                case "vite": case "astro": case "sveltekit": case "remix": return true;
+                default: return false;
+            }
         }
 
         /// <summary>
@@ -82,16 +132,24 @@ namespace Phoron.Core
         }
 
         /// <summary>Jalankan skrip. Mengembalikan pesan kesalahan, atau null bila berhasil dimulai.</summary>
-        public string Start(NodeApp app, BinPackage node)
+        public string Start(NodeApp app, BinPackage node) { return Start(app, node, 0); }
+
+        /// <summary>
+        /// Jalankan skrip. <paramref name="portSekali"/> &gt; 0 memakai port itu untuk
+        /// kali ini saja; selain itu port tetap proyeknya (0 = pilihan servernya).
+        /// </summary>
+        public string Start(NodeApp app, BinPackage node, int portSekali)
         {
-            if (app == null || string.IsNullOrWhiteSpace(app.Path)) return "Proyek belum punya folder.";
-            if (!Directory.Exists(app.Path)) return "Folder tidak ada: " + app.Path;
+            if (app == null || string.IsNullOrWhiteSpace(app.Path)) return Lang.T("Proyek belum punya folder.");
+            if (!Directory.Exists(app.Path)) return Lang.T("Folder tidak ada: {0}", app.Path);
             if (!PackageJson.LooksLikeNodeProject(app.Path))
-                return "Tidak ada package.json di " + app.Path + ".";
+                return Lang.T("Tidak ada package.json di {0}.", app.Path);
             if (IsRunning(app.Path)) return Lang.T("Proyek ini sudah jalan.");
+            lock (_kunci) _bentrok.Remove(app.Path);
 
             var manager = string.IsNullOrWhiteSpace(app.Manager) ? "npm" : app.Manager.Trim();
             var skrip = string.IsNullOrWhiteSpace(app.Script) ? "dev" : app.Script.Trim();
+            var port = portSekali > 0 ? portSekali : app.Port;
 
             // Dijalankan lewat cmd.exe: npm/pnpm/yarn di Windows berupa berkas
             // .cmd, dan CreateProcess tidak bisa menjalankan berkas batch
@@ -99,6 +157,16 @@ namespace Phoron.Core
             var perintah = manager == "yarn"
                 ? manager + " " + skrip
                 : manager + " run " + skrip;
+            // Port diteruskan dua cara: variabel PORT (Next.js, Nuxt) selalu,
+            // dan "--port" untuk kerangka yang tidak membacanya. npm dan pnpm
+            // butuh "--" supaya argumennya sampai ke skrip, bukan ke npm.
+            if (port > 0)
+            {
+                string kerangka = null;
+                try { kerangka = PackageJson.DetectFramework(app.Path); } catch { }
+                if (ButuhArgumenPort(kerangka))
+                    perintah += (manager == "yarn" ? " --port " : " -- --port ") + port;
+            }
 
             var psi = new ProcessStartInfo("cmd.exe", "/c " + perintah)
             {
@@ -119,6 +187,7 @@ namespace Phoron.Core
             // di kotak teks biasa.
             psi.EnvironmentVariables["NO_COLOR"] = "1";
             psi.EnvironmentVariables["FORCE_COLOR"] = "0";
+            if (port > 0) psi.EnvironmentVariables["PORT"] = port.ToString();
 
             Process p;
             try
@@ -130,6 +199,8 @@ namespace Phoron.Core
                 DataReceivedEventHandler baca = (s, e) =>
                 {
                     if (string.IsNullOrWhiteSpace(e.Data)) return;
+                    var keluh = PortDariKeluhan(e.Data);
+                    if (keluh != 0 && entri.Bentrok <= 0) entri.Bentrok = keluh;
                     Lapor(app.Path, e.Data);
                     if (entri.Url == null)
                     {
@@ -156,6 +227,11 @@ namespace Phoron.Core
 
                     int kode;
                     try { kode = p.ExitCode; } catch { kode = -1; }
+                    // Berakhir dengan galat sesudah mengeluhkan port: itulah
+                    // sebabnya. Port tak dikenal (-1) dicatat sebagai port yang
+                    // dipakai saat itu, atau 3000 sebagai tebakan terakhir.
+                    if (kode != 0 && entri.Bentrok != 0)
+                        lock (_kunci) _bentrok[app.Path] = entri.Bentrok > 0 ? entri.Bentrok : (port > 0 ? port : 3000);
                     Lapor(app.Path, kode == 0
                         ? Lang.T("-- proses berakhir (kode 0) --")
                         : Lang.T("-- proses berakhir dengan galat (kode {0}) --", kode));
