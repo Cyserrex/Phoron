@@ -23,5 +23,27 @@ namespace Phoron.App
                 default: return new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
             }
         }
+
+        /// <summary>
+        /// Keadaan dalam kata, untuk ditulis di sebelah titiknya - supaya
+        /// artinya tidak hanya dibawa warna. Kuncinya kata kecil yang sudah ada
+        /// di kamus ("jalan", "gagal", ...); huruf pertamanya dibesarkan di sini.
+        /// </summary>
+        public static string Teks(ServiceState s)
+        {
+            switch (s)
+            {
+                case ServiceState.Jalan: return Besar(Lang.T("jalan"));
+                case ServiceState.Menyalakan: return Besar(Lang.T("menyalakan")) + "...";
+                case ServiceState.Mematikan: return Besar(Lang.T("mematikan")) + "...";
+                case ServiceState.Gagal: return Besar(Lang.T("gagal"));
+                default: return Besar(Lang.T("berhenti"));
+            }
+        }
+
+        public static string Besar(string t)
+        {
+            return string.IsNullOrEmpty(t) ? t : char.ToUpper(t[0]) + t.Substring(1);
+        }
     }
 }

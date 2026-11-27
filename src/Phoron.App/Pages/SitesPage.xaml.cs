@@ -22,11 +22,31 @@ namespace Phoron.App.Pages
             public string DocRoot { get; set; }
             public string Hosts { get; set; }
             public string Vhost { get; set; }
+            /// <summary>Baris kecil ketiga di kolom Situs: document root dan folder proyek bila perlu.</summary>
+            public string Keterangan { get; set; }
+            /// <summary>Nama .test bila sudah terdaftar dan punya vhost.</summary>
+            public string StatusTest { get; set; }
+            public string JalurLengkap { get; set; }
             public List<PilihanPhp> PilihanPhp { get; set; }
             public PilihanPhp PhpTerpilih { get; set; }
             /// <summary>php.ini yang dipakai situs ini - tooltip kotak PHP.</summary>
             public string KeteranganPhp { get; set; }
             public Site Situs;
+        }
+
+        /// <summary>
+        /// "Document root: public · D:\kerja": hanya yang berbeda dari biasanya.
+        /// Situs yang dilayani dari akar foldernya sendiri, di satu-satunya
+        /// folder proyek, tidak perlu keterangan apa pun.
+        /// </summary>
+        static string KeteranganSitus(Site s, bool banyakAkar)
+        {
+            var bagian = new List<string>();
+            if (s.DocRoot != null && s.Path != null && s.DocRoot.Length > s.Path.Length
+                && s.DocRoot.StartsWith(s.Path, StringComparison.OrdinalIgnoreCase))
+                bagian.Add(Lang.T("Document root: {0}", s.DocRoot.Substring(s.Path.Length).TrimStart('\\')));
+            if (banyakAkar && !string.IsNullOrEmpty(s.Root)) bagian.Add(s.Root);
+            return string.Join("  ·  ", bagian);
         }
 
         /// <summary>Satu pilihan di kotak PHP. Id kosong = ikut PHP profil.</summary>
@@ -84,8 +104,19 @@ namespace Phoron.App.Pages
                     : Lang.T("(akar folder)"),
                 Hosts = s.InHosts ? Lang.T("ada") : "-",
                 Vhost = s.HasVhost ? Lang.T("ada") : "-",
+                Keterangan = KeteranganSitus(s, roots.Count > 1),
+                StatusTest = !s.HasVhost ? "-"
+                           : s.InHosts ? (s.HostName ?? "-")
+                           : Lang.T("belum di hosts"),
+                JalurLengkap = s.Path,
                 Situs = s,
             }).ToList();
+            // Kolom nama .test hanya berarti bila Virtual Host menyala; tanpa
+            // itu isinya selalu "-" dan cuma memakan tempat.
+            var kolom = ((GridView)Daftar.View).Columns;
+            bool pakaiVhost = _e.Settings != null && _e.Settings.AutoVhost;
+            if (!pakaiVhost && kolom.Contains(KolomNamaTest)) kolom.Remove(KolomNamaTest);
+            else if (pakaiVhost && !kolom.Contains(KolomNamaTest)) kolom.Add(KolomNamaTest);
             foreach (Baris b in (List<Baris>)Daftar.ItemsSource) IsiPilihanPhp(b);
 
             TampilkanInfo();
@@ -116,8 +147,13 @@ namespace Phoron.App.Pages
             // urutan folder bin. Nilai yang disimpan tiap pilihan adalah
             // NilaiSimpan - jalur lengkap bila nama foldernya kembar - jadi
             // salinan di bin Laragon dan di bin Phoron benar-benar dua pilihan.
-            foreach (var p in _e.Of(BinKind.Php))
-                daftar.Add(new PilihanPhp { Id = p.NilaiSimpan, Jalur = p.Path, Teks = LabelPhp(p) });
+            var semuaPhp = _e.Of(BinKind.Php).ToList();
+            foreach (var p in semuaPhp)
+                daftar.Add(new PilihanPhp
+                {
+                    Id = p.NilaiSimpan, Jalur = p.Path,
+                    Teks = LabelPhp(p, semuaPhp.Count(x => x.Version == p.Version && x.Arch == p.Arch) > 1),
+                });
 
             string simpan = null;
             if (_e.Active != null && b.Situs != null) _e.Active.PhpPerSitus.TryGetValue(b.Situs.Path, out simpan);
@@ -150,14 +186,16 @@ namespace Phoron.App.Pages
         /// tidak ditulis: situs yang memilih versi sendiri dilayani php-cgi
         /// sebagai proses terpisah, jadi keduanya tidak berpengaruh.
         ///
-        /// Folder bin asal SELALU ditulis. Nama folder PHP bisa kembar - di bin
-        /// Phoron dan bin Laragon, atau "php" milik XAMPP di C:\ dan D:\ - dan
-        /// dulu dua pilihan tampak sama persis tanpa ada cara membedakannya.
+        /// Folder bin asal ditulis bila versinya KEMBAR - di bin Phoron dan bin
+        /// Laragon, atau "php" milik XAMPP di C:\ dan D:\ - karena dulu dua
+        /// pilihan tampak sama persis tanpa ada cara membedakannya. Bila tidak
+        /// kembar, ia hanya membuat kotaknya terpotong di tabel; jalur lengkap
+        /// paket yang dipakai tetap ada di tooltip kotaknya.
         /// </summary>
-        static string LabelPhp(BinPackage p)
+        static string LabelPhp(BinPackage p, bool kembar)
         {
             var teks = p.Version + (string.IsNullOrEmpty(p.Arch) ? "" : " · " + p.Arch);
-            if (!string.IsNullOrEmpty(p.SourceRoot)) teks += "   —   " + p.SourceRoot;
+            if (kembar && !string.IsNullOrEmpty(p.SourceRoot)) teks += "  —  " + p.SourceRoot;
             return teks;
         }
 

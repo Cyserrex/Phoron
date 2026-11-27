@@ -37,59 +37,86 @@
                 </Grid>
             </Border>
 
-            <ui:ToggleSwitch x:Name="SwWindows" Margin="0,4,0,4"
-                             Content="{loc:T 'Jalankan Phoron saat Windows dinyalakan'}"
-                             Checked="SwWindows_Ubah" Unchecked="SwWindows_Ubah"/>
-            <TextBlock x:Name="TxtWindows" Style="{StaticResource SubJudul}" FontSize="12"
-                       Margin="52,0,0,10"
-                       Text="{loc:T 'Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela.'}"/>
+            <!-- Dikelompokkan per kartu: delapan sakelar berderet tanpa
+                 pembatas membuat orang membaca semuanya untuk menemukan satu. -->
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
+                    Padding="14" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="{loc:T 'Mulai dan baki sistem'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                <ui:ToggleSwitch x:Name="SwWindows" Margin="0,4,0,4"
+                                 Content="{loc:T 'Jalankan Phoron saat Windows dinyalakan'}"
+                                 Checked="SwWindows_Ubah" Unchecked="SwWindows_Ubah"/>
+                <TextBlock x:Name="TxtWindows" Style="{StaticResource SubJudul}" FontSize="12"
+                           Margin="52,0,0,10"
+                           Text="{loc:T 'Phoron mulai langsung mengecil ke baki sistem, tanpa memunculkan jendela.'}"/>
 
-            <ui:ToggleSwitch x:Name="SwAutoStart" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
-                             Content="{loc:T 'Nyalakan layanan otomatis saat Phoron dibuka'}"/>
-            <ui:ToggleSwitch x:Name="SwTray" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
-                             Content="{loc:T 'Tombol tutup mengecilkan ke baki sistem, bukan keluar'}"/>
-            <ui:ToggleSwitch x:Name="SwVhost" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Virtual Host: beri tiap folder proyek alamatnya sendiri'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="{loc:T 'Mati secara bawaan. Alamat seperti tokoonline.test baru hidup kalau namanya ikut masuk ke berkas hosts Windows, dan itu butuh hak Administrator. Tanpa ini, proyek tetap terbuka lewat http://localhost/nama-proyek/.'}"/>
-            <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Sinkronkan berkas hosts Windows (butuh Administrator)'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,6"
-                       Text="{loc:T 'Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.'}"/>
-            <ui:Button x:Name="BtnDaftarHosts" Margin="52,0,0,10"
-                       Content="{loc:T 'Daftarkan nama situs sekali'}" Click="BtnDaftarHosts_Click"/>
+                <ui:ToggleSwitch x:Name="SwAutoStart" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
+                                 Content="{loc:T 'Nyalakan layanan otomatis saat Phoron dibuka'}"/>
+                <ui:ToggleSwitch x:Name="SwTray" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,10"
+                                 Content="{loc:T 'Tombol tutup mengecilkan ke baki sistem, bukan keluar'}"/>
+                </StackPanel>
+            </Border>
 
-            <ui:ToggleSwitch x:Name="SwBerandaAkar" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Tampilkan beranda Phoron di http://localhost/'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="{loc:T 'Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri.'}"/>
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
+                    Padding="14" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="{loc:T 'Situs dan berkas hosts'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                <ui:ToggleSwitch x:Name="SwVhost" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Virtual Host: beri tiap folder proyek alamatnya sendiri'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                           Text="{loc:T 'Mati secara bawaan. Alamat seperti tokoonline.test baru hidup kalau namanya ikut masuk ke berkas hosts Windows, dan itu butuh hak Administrator. Tanpa ini, proyek tetap terbuka lewat http://localhost/nama-proyek/.'}"/>
+                <ui:ToggleSwitch x:Name="SwHosts" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Sinkronkan berkas hosts Windows (butuh Administrator)'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,6"
+                           Text="{loc:T 'Saat dinyalakan Windows lewat autostart, Phoron selalu jalan tanpa hak Administrator - Windows memang begitu, supaya tidak ada kotak UAC di tiap boot. Entri berkas hosts sendiri menetap, jadi cukup didaftarkan sekali: sesudah itu nama .test tetap hidup walau Phoron jalan sebagai pengguna biasa.'}"/>
+                <ui:Button x:Name="BtnDaftarHosts" Margin="52,0,0,10"
+                           Content="{loc:T 'Daftarkan nama situs sekali'}" Click="BtnDaftarHosts_Click"/>
 
-            <ui:ToggleSwitch x:Name="SwOpcache" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Percepat PHP dengan opcache'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="{loc:T 'Menyimpan kode PHP yang sudah diurai, sehingga kerangka kerja tidak dibaca ulang dari nol tiap permintaan. Aman untuk ngoding: berkas yang Anda simpan langsung berlaku pada permintaan berikutnya, tanpa menunggu dan tanpa menyalakan ulang apa pun. Berlaku sesudah web server dinyalakan ulang.'}"/>
+                <ui:ToggleSwitch x:Name="SwBerandaAkar" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Tampilkan beranda Phoron di http://localhost/'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                           Text="{loc:T 'Hanya alamat akar yang dialihkan. Subfolder seperti /simpdam/ tidak tersentuh, dan index.php milik folder proyek tetap bisa dibuka di /index.php. Matikan kalau akar folder proyek Anda memang aplikasi sendiri.'}"/>
+                </StackPanel>
+            </Border>
 
-            <ui:ToggleSwitch x:Name="SwLogRinci" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Catat log rinci'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
-                       Text="{loc:T 'Baku mati agar Phoron ringan: log akses Apache dan seluruh keluaran layanan tidak ditulis (mysqld sendiri mencetak ratusan baris tiap kali menyala). Log GALAT Apache, MySQL, dan PHP tetap menyala — itulah yang menjelaskan kalau ada yang rusak.'}"/>
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
+                    Padding="14" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="{loc:T 'PHP'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                <ui:ToggleSwitch x:Name="SwOpcache" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Percepat PHP dengan opcache'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                           Text="{loc:T 'Menyimpan kode PHP yang sudah diurai, sehingga kerangka kerja tidak dibaca ulang dari nol tiap permintaan. Aman untuk ngoding: berkas yang Anda simpan langsung berlaku pada permintaan berikutnya, tanpa menunggu dan tanpa menyalakan ulang apa pun. Berlaku sesudah web server dinyalakan ulang.'}"/>
 
-            <ui:ToggleSwitch x:Name="SwPhpIni" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
-                             Content="{loc:T 'Tulis php.ini ke dalam folder PHP'}"/>
-            <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10">
-                <TextBlock.Text>
-                    <!-- Bentuk elemen: parser markup extension memakan "\". -->
-                    <loc:T Teks="Baku: php.ini ditulis ke etc\php\&lt;versi&gt;\ dan folder PHP tidak disentuh. Nyalakan kalau Anda ingin php.exe dari editor atau Composer di luar Phoron ikut memakai setelan yang sama. Hati-hati bila versi PHP-nya dipinjam dari Laragon - berkasnya dipakai bersama. php.ini asli dicadangkan sekali ke php.ini.sebelum-phoron."/>
-                </TextBlock.Text>
-            </TextBlock>
+                <ui:ToggleSwitch x:Name="SwPhpIni" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Tulis php.ini ke dalam folder PHP'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10">
+                    <TextBlock.Text>
+                        <!-- Bentuk elemen: parser markup extension memakan "\". -->
+                        <loc:T Teks="Baku: php.ini ditulis ke etc\php\&lt;versi&gt;\ dan folder PHP tidak disentuh. Nyalakan kalau Anda ingin php.exe dari editor atau Composer di luar Phoron ikut memakai setelan yang sama. Hati-hati bila versi PHP-nya dipinjam dari Laragon - berkasnya dipakai bersama. php.ini asli dicadangkan sekali ke php.ini.sebelum-phoron."/>
+                    </TextBlock.Text>
+                </TextBlock>
+                </StackPanel>
+            </Border>
 
-            <TextBlock Text="{loc:T 'Terminal'}" Style="{StaticResource Label}"/>
-            <ComboBox x:Name="CmbTerminal" Width="240" HorizontalAlignment="Left"
-                      SelectionChanged="CmbTerminal_Ubah">
-                <ComboBoxItem Content="Command Prompt" Tag="cmd"/>
-                <ComboBoxItem Content="PowerShell" Tag="powershell"/>
-                <ComboBoxItem Content="Windows Terminal" Tag="wt"/>
-            </ComboBox>
+            <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
+                    Padding="14" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="{loc:T 'Log dan terminal'}" Style="{StaticResource Label}" Margin="0,0,0,8"/>
+                <ui:ToggleSwitch x:Name="SwLogRinci" Checked="Sw_Ubah" Unchecked="Sw_Ubah" Margin="0,0,0,4"
+                                 Content="{loc:T 'Catat log rinci'}"/>
+                <TextBlock Style="{StaticResource SubJudul}" FontSize="12" Margin="52,0,0,10"
+                           Text="{loc:T 'Baku mati agar Phoron ringan: log akses Apache dan seluruh keluaran layanan tidak ditulis (mysqld sendiri mencetak ratusan baris tiap kali menyala). Log GALAT Apache, MySQL, dan PHP tetap menyala — itulah yang menjelaskan kalau ada yang rusak.'}"/>
+
+                <TextBlock Text="{loc:T 'Terminal'}" Style="{StaticResource Label}"/>
+                <ComboBox x:Name="CmbTerminal" Width="240" HorizontalAlignment="Left"
+                          SelectionChanged="CmbTerminal_Ubah">
+                    <ComboBoxItem Content="Command Prompt" Tag="cmd"/>
+                    <ComboBoxItem Content="PowerShell" Tag="powershell"/>
+                    <ComboBoxItem Content="Windows Terminal" Tag="wt"/>
+                </ComboBox>
+                </StackPanel>
+            </Border>
 
             <Border Background="{DynamicResource ControlFillColorDefaultBrush}" CornerRadius="8"
                     Padding="14" Margin="0,16,0,0">

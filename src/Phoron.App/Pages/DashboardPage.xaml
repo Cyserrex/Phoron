@@ -50,13 +50,21 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <!-- Melebar sampai ke kolom status: status hanya menempati
+                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
                             <TextBlock Text="PHP" Style="{StaticResource Label}" Margin="0"/>
                             <TextBlock x:Name="TxtPhp" Text="-" FontSize="18" FontWeight="SemiBold"/>
                             <TextBlock x:Name="TxtPhpSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <Ellipse x:Name="DotKartuPhp" Grid.Column="1" Width="10" Height="10"
-                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                    HorizontalAlignment="Right" Margin="8,2,0,0">
+                            <Ellipse x:Name="DotKartuPhp" Width="10" Height="10" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtStatusKartuPhp" FontSize="12" Opacity="0.8"
+                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
                 <Border Style="{StaticResource Kartu}" Margin="6,0,6,12">
@@ -65,13 +73,21 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <!-- Melebar sampai ke kolom status: status hanya menempati
+                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
                             <TextBlock x:Name="TxtWebKind" Text="Apache" Style="{StaticResource Label}" Margin="0"/>
                             <TextBlock x:Name="TxtWeb" Text="-" FontSize="18" FontWeight="SemiBold"/>
                             <TextBlock x:Name="TxtWebSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <Ellipse x:Name="DotKartuWeb" Grid.Column="1" Width="10" Height="10"
-                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                    HorizontalAlignment="Right" Margin="8,2,0,0">
+                            <Ellipse x:Name="DotKartuWeb" Width="10" Height="10" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtStatusKartuWeb" FontSize="12" Opacity="0.8"
+                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
                 <Border Style="{StaticResource Kartu}" Margin="6,0,0,12">
@@ -80,13 +96,21 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <StackPanel Grid.Column="0">
+                        <!-- Melebar sampai ke kolom status: status hanya menempati
+                             baris label, jadi subjudul tidak perlu ikut menyempit. -->
+                        <StackPanel Grid.Column="0" Grid.ColumnSpan="2">
                             <TextBlock Text="MySQL" Style="{StaticResource Label}" Margin="0"/>
                             <TextBlock x:Name="TxtDb" Text="-" FontSize="18" FontWeight="SemiBold"/>
                             <TextBlock x:Name="TxtDbSub" Text="" Opacity="0.7" FontSize="11" TextWrapping="Wrap"/>
                         </StackPanel>
-                        <Ellipse x:Name="DotKartuDb" Grid.Column="1" Width="10" Height="10"
-                                 VerticalAlignment="Top" HorizontalAlignment="Right" Margin="8,4,0,0"/>
+                        <!-- Titik saja tidak cukup: warna tidak terbaca oleh semua
+                             orang, dan abu-abu kecil di pojok mudah terlewat. -->
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top"
+                                    HorizontalAlignment="Right" Margin="8,2,0,0">
+                            <Ellipse x:Name="DotKartuDb" Width="10" Height="10" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtStatusKartuDb" FontSize="12" Opacity="0.8"
+                                       Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </UniformGrid>

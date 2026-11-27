@@ -23,6 +23,16 @@ namespace Phoron.Core
             return new[]
             {
                 new[] { "Versi {0}", "Version {0}", "Versi {0}", "Versi {0}" },
+
+                // Kelompok di halaman Pengaturan
+                new[] { "Mulai dan baki sistem", "Startup and system tray", "Miwiti lan baki sistem", "Mulai wan baki sistem" },
+                new[] { "Situs dan berkas hosts", "Sites and the hosts file", "Situs lan berkas hosts", "Situs wan barakas hosts" },
+                new[] { "Log dan terminal", "Logs and terminal", "Log lan terminal", "Log wan terminal" },
+
+                // Tabel Situs
+                new[] { "Nama .test", ".test name", "Jeneng .test", "Ngaran .test" },
+                new[] { "Document root: {0}", "Document root: {0}", "Document root: {0}", "Document root: {0}" },
+                new[] { "belum di hosts", "not in hosts yet", "durung ana ing hosts", "balum di hosts" },
                 new[] { "Pindah ke profil ini, lalu langsung nyalakan Apache dan MySQL",
                         "Switch to this profile, then start Apache and MySQL right away",
                         "Pindah menyang profil iki, banjur langsung uripake Apache lan MySQL",

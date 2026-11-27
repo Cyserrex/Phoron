@@ -238,6 +238,15 @@ namespace Phoron.App.Pages
             DotKartuPhp.ToolTip = !adaPhp
                 ? "PHP " + Lang.T("tidak dipakai")
                 : "PHP " + Lang.T(keadaanPhp == ServiceState.Jalan ? "dilayani" : "belum dilayani");
+
+            // Keadaannya juga ditulis, bukan hanya diwarnai.
+            TxtStatusKartuWeb.Text = pakaiWeb ? WarnaLayanan.Teks(web)
+                                              : WarnaLayanan.Besar(Lang.T("tidak dipakai"));
+            TxtStatusKartuDb.Text = pakaiDb ? WarnaLayanan.Teks(db)
+                                            : WarnaLayanan.Besar(Lang.T("tidak dipakai"));
+            TxtStatusKartuPhp.Text = !adaPhp || !pakaiWeb
+                ? WarnaLayanan.Besar(Lang.T("tidak dipakai"))
+                : WarnaLayanan.Besar(Lang.T(keadaanPhp == ServiceState.Jalan ? "dilayani" : "belum dilayani"));
         }
 
         int _nomorPeringatan;

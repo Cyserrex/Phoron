@@ -88,26 +88,55 @@
                   MouseDoubleClick="Daftar_DoubleClick">
             <ListView.View>
                 <GridView>
-                    <GridViewColumn Header="{loc:T 'Alamat'}" Width="215" DisplayMemberBinding="{Binding Alamat}"/>
-                    <GridViewColumn Header="{loc:T 'Folder'}" Width="150" DisplayMemberBinding="{Binding Folder}"/>
+                    <!-- Satu kolom "Situs" menggantikan Alamat, Folder, Folder
+                         proyek, dan Document root. Tujuh kolom selebar 980 px
+                         tidak pernah muat di jendela biasa: alamatnya terpotong
+                         dan orang harus menggulir ke samping untuk melihat hal
+                         yang sama di setiap baris. Folder proyek hanya ditulis
+                         bila profil punya lebih dari satu; jalur lengkapnya ada
+                         di tooltip. -->
+                    <GridViewColumn Header="{loc:T 'Situs'}" Width="320">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="0,3" ToolTip="{Binding JalurLengkap}">
+                                    <TextBlock Text="{Binding Folder}" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Alamat}" FontSize="12" Opacity="0.75"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Keterangan}" FontSize="11" Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <Trigger Property="Text" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
                     <!-- Versi PHP per situs. SelectedItem diikat ke PROPERTI
                          (PhpTerpilih) - pengikatan ke medan gagal tanpa suara.
                          Perubahannya ditangani CmbPhpSitus_Changed, yang
                          membandingkan dengan pilihan tersimpan dulu: SelectionChanged
                          juga menyala saat kotaknya pertama kali digambar. -->
-                    <GridViewColumn Header="{loc:T 'PHP'}" Width="185">
+                    <GridViewColumn Header="{loc:T 'PHP'}" Width="250">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <ComboBox ItemsSource="{Binding PilihanPhp}" SelectedItem="{Binding PhpTerpilih}"
-                                          ToolTip="{Binding KeteranganPhp}" MinWidth="165"
+                                          ToolTip="{Binding KeteranganPhp}" Width="230"
                                           SelectionChanged="CmbPhpSitus_Changed"/>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>
                     </GridViewColumn>
-                    <GridViewColumn Header="{loc:T 'Folder proyek'}" Width="160" DisplayMemberBinding="{Binding Root}"/>
-                    <GridViewColumn Header="{loc:T 'Document root'}" Width="130" DisplayMemberBinding="{Binding DocRoot}"/>
-                    <GridViewColumn Header="{loc:T 'hosts'}" Width="70" DisplayMemberBinding="{Binding Hosts}"/>
-                    <GridViewColumn Header="{loc:T 'vhost'}" Width="70" DisplayMemberBinding="{Binding Vhost}"/>
+                    <!-- hosts dan vhost jadi satu kolom, dan hanya ditampilkan
+                         bila Virtual Host menyala - tanpa itu keduanya selalu "-". -->
+                    <GridViewColumn x:Name="KolomNamaTest" Header="{loc:T 'Nama .test'}" Width="120"
+                                    DisplayMemberBinding="{Binding StatusTest}"/>
                 </GridView>
             </ListView.View>
         </ListView>
