@@ -165,6 +165,7 @@ impl Pelaksana for PelaksanaSementara {
             Perintah::Halo { .. } => ok(HasilHalo {
                 versi_daemon: phoron_inti::VERSI.to_string(),
                 protokol: phoron_inti::protokol::VERSI_PROTOKOL,
+                akar: phoron_inti::paths::root().to_string_lossy().into_owned(),
             }),
             Perintah::Keadaan => ok(Keadaan {
                 status: StatusLayanan {

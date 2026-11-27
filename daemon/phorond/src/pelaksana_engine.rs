@@ -85,6 +85,7 @@ impl Pelaksana for PelaksanaEngine {
                 hasil: serde_json::to_value(HasilHalo {
                     versi_daemon: phoron_inti::VERSI.to_string(),
                     protokol: phoron_inti::protokol::VERSI_PROTOKOL,
+                    akar: phoron_inti::paths::root().to_string_lossy().into_owned(),
                 })
                 .unwrap_or_default(),
                 peringatan: Vec::new(),

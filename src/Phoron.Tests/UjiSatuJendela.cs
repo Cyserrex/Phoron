@@ -53,11 +53,22 @@ namespace Phoron.Tests
             if (program != null)
                 Ok("Engine mode daemon menerima penjadwal UI sejak dibuat",
                    Regex.IsMatch(program, @"new Phoron\.Core\.Engine\(klien, kerja => d\.BeginInvoke\(kerja\)\)"));
+            if (program != null)
+                Ok("UI menyebut akarnya sendiri ke klien daemon (menolak daemon folder lain)",
+                   program.Contains("AkarHarapan = Phoron.Core.Paths.Root"));
 
             var dash = BacaSumber("Phoron.App", Path.Combine("Pages", "DashboardPage.xaml"));
             if (dash != null)
                 Ok("Rincian layanan selalu terlihat, bukan dilipat",
                    !dash.Contains("LipatRincian") && dash.Contains("x:Name=\"TxtPhpSub\""));
+            // Peringatan HTTPS menyuruh menekan tombol "di bawah"; dulu tombol itu
+            // hanya ada di menu "...", jadi kalimatnya menunjuk sesuatu yang tidak ada.
+            var dashCs = BacaSumber("Phoron.App", Path.Combine("Pages", "DashboardPage.xaml.cs"));
+            if (dash != null && dashCs != null)
+                Ok("Peringatan sertifikat punya tombolnya sendiri di panel Perhatian",
+                   Regex.IsMatch(Potong(dash, "x:Name=\"PanelPeringatan\"", "</Border>"),
+                                 @"x:Name=""BtnSslPeringatan""[^>]*Click=""BtnSsl_Click""")
+                   && dashCs.Contains("BtnSslPeringatan.Visibility = terlihat(barisSsl)"));
 
             // Ukuran tersimpan bertahan lintas sesi.
             var dir = Path.Combine(Path.GetTempPath(), "phoron-uji-ukuran-" + Guid.NewGuid().ToString("N").Substring(0, 6));

@@ -332,8 +332,9 @@ namespace Phoron.App.Pages
             // lagi memang mentok tanpa Administrator. Hanya yang kedua yang boleh
             // memunculkan tombol naik hak akses.
             bool perluAdmin = false;
+            string barisSsl = null;
             if (!SslTool.Exists)
-                pesan.Add(Lang.T("HTTPS belum aktif: sertifikat belum ada, jadi port {0} tidak dibuka. Pakai http:// (bukan https://), atau tekan \"Buat sertifikat SSL\" di bawah.",
+                pesan.Add(barisSsl = Lang.T("HTTPS belum aktif: sertifikat belum ada, jadi port {0} tidak dibuka. Pakai http:// (bukan https://), atau tekan \"Buat sertifikat SSL\" di bawah.",
                           _e.Active != null ? _e.Active.HttpsPort.ToString() : "443"));
             else if (!SslTool.IsTrusted)
             {
@@ -341,8 +342,8 @@ namespace Phoron.App.Pages
                 // menjebak: https menjawab, lalu browser menuduh situsnya palsu.
                 // Pada host ber-HSTS (mis. localhost yang pernah dipasangi header
                 // itu), tombol "tambah pengecualian" pun tidak ditawarkan.
-                pesan.Add(Lang.T("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser akan memperingatkan - dan pada host ber-HSTS tidak ada tombol pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah."));
-                barisAdmin.Add(pesan[pesan.Count - 1]);
+                pesan.Add(barisSsl = Lang.T("Sertifikat HTTPS sudah ada tapi belum tepercaya, jadi browser akan memperingatkan - dan pada host ber-HSTS tidak ada tombol pengecualian sama sekali. Tekan \"Percayai sertifikat SSL\" di bawah."));
+                barisAdmin.Add(barisSsl);
                 perluAdmin = true;   // memasang ke Trusted Root butuh Administrator
             }
             // Versi yang dicatat profil tapi tidak ada di komputer ini. Phoron
@@ -388,6 +389,10 @@ namespace Phoron.App.Pages
             TxtPeringatan.Text = string.Join(Environment.NewLine, tampil);
             PanelPeringatan.Visibility = tampil.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnRestartKonfig.Visibility = terlihat(barisRestart) ? Visibility.Visible : Visibility.Collapsed;
+            // Kalimatnya menyuruh menekan tombol "di bawah" - jadi tombolnya
+            // memang harus ada di sini, bukan hanya di menu "...".
+            BtnSslPeringatan.Content = Lang.T(SslTool.Exists ? "Percayai sertifikat SSL" : "Buat sertifikat SSL");
+            BtnSslPeringatan.Visibility = terlihat(barisSsl) ? Visibility.Visible : Visibility.Collapsed;
             BtnAdmin.Visibility = perluAdmin && !_e.HakAdmin && barisAdmin.Any(terlihat)
                 ? Visibility.Visible : Visibility.Collapsed;
             BtnDaftarHosts.Visibility = (barisHosts != null ? terlihat(barisHosts) : belumDaftar.Count > 0)

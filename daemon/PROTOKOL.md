@@ -46,7 +46,7 @@ kunci `data`.
 
 | perintah | data | hasil (`hasil`) |
 |---|---|---|
-| `halo` | `{versi_ui, protokol: 2}` | `{versi_daemon, protokol}` |
+| `halo` | `{versi_ui, protokol: 2}` | `{versi_daemon, protokol, akar}`; UI menolak bila `akar` bukan folder akarnya sendiri (kosong = daemon 1.42.0, diterima) |
 | `keadaan` | - | `Keadaan` |
 | `muat_ulang` | - | - (membaca ulang profil dan apps.ini, memindai ulang paket dan situs; phoron.ini TIDAK dibaca ulang - setelan di memori daemon sumber kebenaran) |
 | `simpan_setelan` | `{setelan: Settings}` | - (`active_profile` dan `situs_terakhir` di dalamnya diabaikan) |

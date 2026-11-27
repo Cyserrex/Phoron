@@ -19,6 +19,8 @@ namespace Phoron.Tests
     {
         public readonly string Nama = "phoron-uji-" + Guid.NewGuid().ToString("N").Substring(0, 8);
         public int ProtokolDaemon = Protokol.Versi;
+        /// <summary>Akar yang disebut di halo; null = tidak disebut (seperti daemon 1.42.0).</summary>
+        public string AkarDaemon;
 
         /// <summary>Perintah yang tidak pernah dijawab (uji batas waktu).</summary>
         public readonly HashSet<string> Diam = new HashSet<string>();
@@ -102,6 +104,8 @@ namespace Phoron.Tests
                                   { "status", "ok" },
                                   { "hasil", new Dictionary<string, object> { { "versi_daemon", "uji-0.1" }, { "protokol", ProtokolDaemon } } },
                               };
+                        if (AkarDaemon != null && ui == ProtokolDaemon)
+                            ((Dictionary<string, object>)isi["hasil"])["akar"] = AkarDaemon;
                     }
                     else isi = (Jawab != null ? Jawab(perintah, data) : null) ?? new Dictionary<string, object> { { "status", "ok" } };
                     isi["id"] = Protokol.Ambil(d, "id");
@@ -300,6 +304,34 @@ namespace Phoron.Tests
                    galat != null ? galat.Message : "(tidak melempar)");
                 Thread.Sleep(300);
                 Ok("Protokol beda tidak disambung ulang terus-menerus", lama.Hitung("halo") == 1, "halo " + lama.Hitung("halo"));
+            }
+
+            // ------------------------------------------------------ Akar beda
+            // Nama pipe sama untuk semua salinan Phoron: jendela dari folder lain
+            // tidak boleh mengendalikan daemon milik C:\Phoron.
+            using (var lain = new DaemonPalsu { AkarDaemon = @"C:\Phoron" })
+            using (var k = new KlienDaemon(lain.Nama) { AkarHarapan = @"C:\Claude\phoron\dist" })
+            {
+                GalatDaemon galat = null;
+                try { k.Sambung(); } catch (GalatDaemon g) { galat = g; }
+                Ok("Daemon berakar lain ditolak dengan pesan yang menyebut kedua folder",
+                   galat != null && galat.Jenis == "akar_beda" && galat.Message.Contains(@"C:\Phoron")
+                   && galat.Message.Contains(@"C:\Claude\phoron\dist") && !k.Aktif,
+                   galat != null ? galat.Message : "(tidak melempar)");
+                Thread.Sleep(300);
+                Ok("Akar beda tidak disambung ulang terus-menerus", lain.Hitung("halo") == 1, "halo " + lain.Hitung("halo"));
+            }
+            using (var sama = new DaemonPalsu { AkarDaemon = @"c:\phoron\" })
+            using (var k = new KlienDaemon(sama.Nama) { AkarHarapan = @"C:\Phoron" })
+            {
+                k.Sambung();
+                Ok("Akar sama walau beda huruf besar dan garis miring di ujung", k.Aktif && k.AkarDaemon == @"c:\phoron\");
+            }
+            using (var lama = new DaemonPalsu())
+            using (var k = new KlienDaemon(lama.Nama) { AkarHarapan = @"C:\Phoron" })
+            {
+                k.Sambung();
+                Ok("Daemon 1.42.0 tanpa akar tetap diterima", k.Aktif && k.AkarDaemon == "");
             }
 
             UjiKlienDasar();

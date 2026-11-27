@@ -173,6 +173,12 @@ pub enum Galat {
 pub struct HasilHalo {
     pub versi_daemon: String,
     pub protokol: u32,
+    /// Folder akar Phoron yang dipegang daemon ini. Nama pipe sama untuk semua
+    /// salinan Phoron, jadi UI dari folder lain bisa tersambung ke sini - lalu
+    /// menampilkan berkas foldernya sendiri sambil mengendalikan layanan milik
+    /// folder ini. UI menolak bila akarnya berbeda. Kosong pada daemon 1.42.0.
+    #[serde(default)]
+    pub akar: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

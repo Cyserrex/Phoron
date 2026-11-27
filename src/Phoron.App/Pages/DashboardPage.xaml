@@ -159,6 +159,10 @@
                         <ui:Button x:Name="BtnRestartKonfig" Content="{loc:T 'Nyalakan ulang layanan'}"
                                    Appearance="Primary" Margin="0,0,8,0"
                                    Visibility="Collapsed" Click="BtnRestartKonfig_Click"/>
+                        <!-- Teksnya diisi kode: "Buat" atau "Percayai", sama
+                             dengan butir menu ... yang memanggil aksi yang sama. -->
+                        <ui:Button x:Name="BtnSslPeringatan" Appearance="Primary" Margin="0,0,8,0"
+                                   Visibility="Collapsed" Click="BtnSsl_Click"/>
                         <ui:Button x:Name="BtnDaftarHosts" Content="{loc:T 'Daftarkan nama situs sekali'}"
                                    Appearance="Primary" Margin="0,0,8,0"
                                    Visibility="Collapsed" Click="BtnDaftarHosts_Click"/>

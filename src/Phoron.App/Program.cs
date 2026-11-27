@@ -162,6 +162,7 @@ namespace Phoron.App
             var klien = new Phoron.Core.Jarak.KlienDaemon(Phoron.Core.Jarak.ModeDaemon.NamaPipe)
             {
                 JalurDaemon = Phoron.Core.Jarak.ModeDaemon.JalurDaemon,
+                AkarHarapan = Phoron.Core.Paths.Root,
             };
             try
             {

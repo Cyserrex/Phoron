@@ -50,6 +50,26 @@ namespace Phoron.Core.Jarak
 
         public string VersiDaemon { get; private set; }
 
+        /// <summary>Folder akar yang disebut daemon saat halo; kosong pada daemon 1.42.0.</summary>
+        public string AkarDaemon { get; private set; }
+
+        /// <summary>
+        /// Folder akar UI ini. Bila diisi, daemon yang menyebut akar lain
+        /// ditolak saat jabat tangan (galat akar_beda). Null = tidak diperiksa.
+        /// </summary>
+        public string AkarHarapan;
+
+        /// <summary>Dua jalur folder sama? Tanpa peka besar-kecil, tanpa garis miring di ujung.</summary>
+        public static bool SamaFolder(string a, string b)
+        {
+            Func<string, string> rapi = p =>
+            {
+                try { p = Path.GetFullPath(p); } catch { }
+                return p.TrimEnd('\\', '/');
+            };
+            return string.Equals(rapi(a), rapi(b), StringComparison.OrdinalIgnoreCase);
+        }
+
         public bool Aktif { get { return _pipe != null && _siap; } }
 
         readonly object _kunciTulis = new object();
@@ -175,6 +195,20 @@ namespace Phoron.Core.Jarak
                 throw new GalatDaemon("protokol_beda", Lang.T(
                     "Versi Phoron ({0}) dan daemonnya tidak sepadan (protokol {1} dan {2}). Phoron perlu dipasang ulang.",
                     VersiUi, Protokol.Versi, p));
+            }
+            // Nama pipe sama untuk semua salinan Phoron. Tanpa pemeriksaan ini,
+            // Phoron.exe dari folder lain (mis. build di repo) tersambung ke
+            // daemon C:\Phoron: layarnya membaca profil dan sertifikat foldernya
+            // sendiri, sedangkan tombolnya menyalakan layanan milik folder lain.
+            // Akar kosong = daemon 1.42.0 yang belum menyebutnya; diterima.
+            AkarDaemon = Protokol.Teks(h, "akar") ?? "";
+            if (AkarHarapan != null && AkarDaemon.Length > 0 && !SamaFolder(AkarDaemon, AkarHarapan))
+            {
+                _ditolak = true;
+                Putuskan();
+                throw new GalatDaemon("akar_beda", Lang.T(
+                    "Phoron lain sedang berjalan dari {0}, sedangkan jendela ini milik {1}. Keduanya memakai daemon yang sama, jadi jendela ini tidak dibuka supaya tidak mengendalikan layanan milik folder lain. Keluarkan Phoron yang sedang berjalan (klik kanan ikon baki > Keluar), lalu buka jendela ini lagi.",
+                    AkarDaemon, AkarHarapan));
             }
             _siap = true;
             var ev = Tersambung;

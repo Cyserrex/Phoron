@@ -265,10 +265,14 @@ fn catat(teks: &str) -> Value {
 #[test]
 fn halo_keadaan_dan_kabar_ke_semua_klien() {
     let ak = akhiran("kabar");
-    let _d = Daemon::mulai(&ak);
+    let d = Daemon::mulai(&ak);
     let mut a = Klien::sambung(&ak);
     let mut b = Klien::sambung(&ak);
-    a.halo();
+    // Halo menyebut akar daemon: UI dari salinan Phoron di folder lain
+    // memakai ini untuk menolak tersambung.
+    let h = a.coba_halo();
+    assert_eq!(h["status"], "ok", "{h}");
+    assert_eq!(h["hasil"]["akar"], d.akar.to_string_lossy().as_ref(), "{h}");
     b.halo();
 
     let id = a.kirim("keadaan", None);
