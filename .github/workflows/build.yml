@@ -43,6 +43,7 @@ jobs:
               'src/Phoron.Tests/Phoron.Tests.csproj' = "<Version>$version</Version>"
               'installer/setup.iss'                  = "#define MyAppVersion `"$version`""
               'build_installer.bat'                  = "set `"VERSION=$version`""
+              'daemon/inti/src/lib.rs'               = "pub const VERSI: &str = `"$version`";"
           }
           $bad = @()
           foreach ($file in $expected.Keys) {

@@ -42,4 +42,4 @@ pub mod waktu;
 /// Nomor versi aplikasi. Mengikuti `AppInfo.Version` di C#; selama peralihan
 /// daemon melaporkannya lewat protokol supaya UI bisa menolak daemon yang
 /// tidak sepadan.
-pub const VERSI: &str = "1.41.3";
+pub const VERSI: &str = "1.42.0";
