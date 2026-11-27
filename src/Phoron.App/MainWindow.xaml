@@ -3,8 +3,8 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:loc="clr-namespace:Phoron.App"
-                 Title="Phoron" Width="1120" Height="740"
-                 MinWidth="900" MinHeight="600"
+                 Title="Phoron" Width="960" Height="640"
+                 MinWidth="760" MinHeight="520"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
@@ -15,12 +15,12 @@
              antarversi pustaka. -->
         <Style x:Key="NavIcon" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="FontSize" Value="16"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
         </Style>
         <Style x:Key="NavLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
@@ -64,7 +64,7 @@
                              SelectionChanged="Nav_SelectionChanged">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                                <Setter Property="Padding" Value="2,7,2,6"/>
+                                <Setter Property="Padding" Value="2,4,2,3"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                             </Style>
                         </ListBox.ItemContainerStyle>
@@ -92,7 +92,7 @@
                                 <TextBlock Text="{loc:T 'Basis data'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
-                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,4"/></ListBoxItem>
+                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
                         <ListBoxItem Tag="profil">
                             <StackPanel>
                                 <TextBlock Text="&#xE81E;" Style="{StaticResource NavIcon}"/>
@@ -111,7 +111,7 @@
                                 <TextBlock Text="{loc:T 'Ekstensi PHP'}" Style="{StaticResource NavLabel}"/>
                             </StackPanel>
                         </ListBoxItem>
-                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,4"/></ListBoxItem>
+                        <ListBoxItem IsEnabled="False" Focusable="False" Padding="0" MinHeight="0"><Rectangle Height="1" Width="44" Fill="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,2"/></ListBoxItem>
                         <ListBoxItem Tag="log">
                             <StackPanel>
                                 <TextBlock Text="&#xE8A5;" Style="{StaticResource NavIcon}"/>
@@ -135,27 +135,37 @@
                     <!-- Status selalu terlihat, dalam bentuk ringkas: dua titik
                          (web, MySQL) dengan keterangan di tooltip, tombol daya,
                          dan tombol keluar. Teks lengkapnya ada di baris PHP Beranda. -->
-                    <StackPanel Grid.Row="1" Margin="6,6,6,10">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,8">
-                            <Ellipse x:Name="DotWeb" Width="10" Height="10" Fill="Gray" Margin="0,0,8,0"/>
-                            <Ellipse x:Name="DotDb" Width="10" Height="10" Fill="Gray"/>
+                    <StackPanel Grid.Row="1" Margin="4,4,4,8">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                            <Ellipse x:Name="DotWeb" Width="9" Height="9" Fill="Gray" Margin="0,0,8,0"/>
+                            <Ellipse x:Name="DotDb" Width="9" Height="9" Fill="Gray"/>
                         </StackPanel>
                         <TextBlock x:Name="TxtProfil" Visibility="Collapsed"/>
                         <TextBlock x:Name="TxtWeb" Visibility="Collapsed"/>
                         <TextBlock x:Name="TxtDb" Visibility="Collapsed"/>
-                        <ui:Button x:Name="BtnPower" Appearance="Primary" HorizontalAlignment="Stretch"
-                                   HorizontalContentAlignment="Center" Padding="0,8" Click="BtnPower_Click">
-                            <TextBlock x:Name="IkonPower" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
-                        </ui:Button>
-                        <!-- Keluar ditaruh di sini, bukan hanya di menu baki
-                             sistem: menutup aplikasi tidak seharusnya menuntut
-                             orang mencari ikon tersembunyi lalu klik kanan. -->
-                        <ui:Button x:Name="BtnKeluar" Margin="0,6,0,0" Padding="0,8"
-                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                   ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
-                                   Click="BtnKeluar_Click">
-                            <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="16"/>
-                        </ui:Button>
+                        <!-- Daya, tampilan ringkas, dan keluar dalam satu baris: rail
+                             harus muat di jendela setinggi 600 px tanpa menggulir.
+                             Keluar ditaruh di sini, bukan hanya di menu baki sistem:
+                             menutup aplikasi tidak seharusnya menuntut orang mencari
+                             ikon tersembunyi lalu klik kanan. -->
+                        <UniformGrid Columns="3">
+                            <ui:Button x:Name="BtnPower" Appearance="Primary" Margin="0,0,2,0" Padding="0,7"
+                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                       Click="BtnPower_Click">
+                                <TextBlock x:Name="IkonPower" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BtnRingkas" Margin="1,0,1,0" Padding="0,7"
+                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                       ToolTip="{loc:T 'Tampilan ringkas'}" Click="BtnRingkas_Click">
+                                <TextBlock Text="&#xE73F;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
+                            </ui:Button>
+                            <ui:Button x:Name="BtnKeluar" Margin="2,0,0,0" Padding="0,7"
+                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                       ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
+                                       Click="BtnKeluar_Click">
+                                <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
+                            </ui:Button>
+                        </UniformGrid>
                     </StackPanel>
                 </Grid>
             </Border>

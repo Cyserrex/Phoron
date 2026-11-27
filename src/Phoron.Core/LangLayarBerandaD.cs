@@ -39,6 +39,12 @@ namespace Phoron.Core
                         "Situs nang pian buka matan Phoron bakal muncul di sini." },
                 new[] { "Semua situs", "All sites", "Kabeh situs", "Samunyaan situs" },
 
+                // Panel ringkas
+                new[] { "Menu lengkap", "Full menu", "Menu lengkap", "Menu lengkap" },
+                new[] { "Tutup laci", "Close drawer", "Tutup laci", "Tutup laci" },
+                new[] { "{0} memakai PHP lain", "{0} on another PHP", "{0} nganggo PHP liya", "{0} mamakai PHP lain" },
+                new[] { "Tampilan ringkas", "Compact view", "Tampilan ringkes", "Tampilan ringkas" },
+
                 // Menu baki
                 new[] { "Jalankan {0}", "Run {0}", "Uripake {0}", "Jalanakan {0}" },
                 new[] { "Ganti profil", "Switch profile", "Ganti profil", "Ganti profil" },

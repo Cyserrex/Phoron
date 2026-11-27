@@ -62,13 +62,13 @@ namespace Phoron.Tests
             // dan hanya bila memang tidak ada jendela.
             var mulai = Potong(pg, "async Task MulaiAsync()", "async Task MulaiIntiAsync()");
             Ok("Start tanpa jendela ikut memangkas memori sesudah start selesai",
-               mulai.Contains("finally") && mulai.Contains("if (_jendela == null && !_keluar) JadwalkanLepasMemori();"),
+               mulai.Contains("finally") && mulai.Contains("if (!AdaJendela && !_keluar) JadwalkanLepasMemori();"),
                "start --tray tetap memegang memori yang tidak dipakai");
             Ok("Membuka jendela membatalkan pemangkasan yang terjadwal",
                Potong(pg, "public void Tampilkan()", "void JendelaTertutup(").Contains("_pelepasMemori.Stop()"),
                "GC penuh bisa berjalan di tengah jendela yang baru dibuka");
             Ok("Pemangkasan memeriksa ulang jendela saat waktunya tiba",
-               pg.Contains("if (_jendela != null || _keluar) return;"), "");
+               pg.Contains("if (AdaJendela || _keluar) return;"), "");
         }
     }
 }

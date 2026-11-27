@@ -81,6 +81,10 @@ namespace Phoron.Core
         public bool BerandaDiAkar = true;
         /// <summary>"sistem" (ikut Windows), "terang", atau "gelap".</summary>
         public string Tema = "sistem";
+
+        /// <summary>Ukuran terakhir jendela lengkap; 0 = belum pernah, pakai bawaan.</summary>
+        public int JendelaLebar;
+        public int JendelaTinggi;
         /// <summary>Kode bahasa antarmuka: id, en, jv, bjn.</summary>
         public string Bahasa = Lang.Indonesia;
         /// <summary>Cek rilis baru di GitHub saat aplikasi dibuka. Baku menyala.</summary>
@@ -184,6 +188,8 @@ namespace Phoron.Core
             s.LogRinci = ini.GetBool("umum", "log_rinci", false);
             s.BerandaDiAkar = ini.GetBool("umum", "beranda_di_akar", true);
             s.Tema = ini.Get("umum", "tema", "sistem");
+            s.JendelaLebar = Math.Max(0, ini.GetInt("umum", "jendela_lebar", 0));
+            s.JendelaTinggi = Math.Max(0, ini.GetInt("umum", "jendela_tinggi", 0));
             s.Bahasa = ini.Get("umum", "bahasa", Lang.Indonesia);
             if (!Lang.Sah(s.Bahasa)) s.Bahasa = Lang.Indonesia;
             s.CekPembaruan = ini.GetBool("umum", "cek_pembaruan", true);
@@ -264,6 +270,8 @@ namespace Phoron.Core
             ini.Set("umum", "log_rinci", LogRinci ? "1" : "0");
             ini.Set("umum", "beranda_di_akar", BerandaDiAkar ? "1" : "0");
             ini.Set("umum", "tema", Tema ?? "sistem");
+            ini.Set("umum", "jendela_lebar", JendelaLebar.ToString());
+            ini.Set("umum", "jendela_tinggi", JendelaTinggi.ToString());
             ini.Set("umum", "bahasa", Bahasa ?? Lang.Indonesia);
             ini.Set("umum", "cek_pembaruan", CekPembaruan ? "1" : "0");
             // Pernah ada di sini sampai 1.20.x. Dibuang AKTIF, bukan sekadar

@@ -109,7 +109,10 @@ namespace Phoron.App
             Nav.SelectedIndex = terpilih;
         }
 
-        void PasangIkon()
+        void PasangIkon() { PasangIkon(this, BilahJudul); }
+
+        /// <summary>Dipakai juga oleh panel ringkas: satu sumber ikon untuk kedua jendela.</summary>
+        internal static void PasangIkon(Window w, Wpf.Ui.Controls.TitleBar bilah)
         {
             try
             {
@@ -120,8 +123,9 @@ namespace Phoron.App
                     var sumber = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
                         ico.Handle, Int32Rect.Empty,
                         System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
-                    Icon = sumber;
-                    BilahJudul.Icon = new Wpf.Ui.Controls.ImageIcon { Source = sumber, Width = 16, Height = 16 };
+                    w.Icon = sumber;
+                    if (bilah != null)
+                        bilah.Icon = new Wpf.Ui.Controls.ImageIcon { Source = sumber, Width = 16, Height = 16 };
                 }
             }
             catch { /* ikon hilang bukan alasan aplikasi gagal dibuka */ }
@@ -261,6 +265,11 @@ namespace Phoron.App
         public void TutupUntukPembaruan()
         {
             Pengendali.Ini.Keluar();
+        }
+
+        void BtnRingkas_Click(object sender, RoutedEventArgs e)
+        {
+            Pengendali.Ini.TampilkanRingkas();
         }
 
         void BtnKeluar_Click(object sender, RoutedEventArgs e)
