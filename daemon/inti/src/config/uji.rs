@@ -94,6 +94,64 @@ fn httpd_conf_dari_bawaan_vendor() {
     let _ = fs::remove_dir_all(&d);
 }
 
+/// Log bawaan vendor (relatif ke ServerRoot = folder paket di bin) tidak
+/// boleh tersalin: Apache akan menulis ke folder paket, apa pun setelan log
+/// rinci. Yang tersisa hanya log milik Phoron di folder logs.
+#[test]
+fn log_vendor_tidak_tersalin() {
+    let (_g, d) = paths::sandbox_uji("cfg-logvendor");
+    fs::create_dir_all(d.join("www")).unwrap();
+    let conf = format!(
+        "{CONF}ErrorLog \"logs/error.log\"\nErrorLogFormat \"[%t] %M\"\n<IfModule log_config_module>\n\
+         \x20   CustomLog \"logs/access.log\" common\n\x20   customlog logs/lain.log combined\n</IfModule>\n\
+         TransferLog \"C:/vendor/transfer.log\"\n"
+    );
+    let ap = apache_palsu(&d.join("bin"), "2.4.54", &conf);
+    let logs = fwd_p(&paths::logs());
+    for log_akses in [true, false] {
+        let o = Opsi { log_akses, ..Opsi::default() };
+        build(&profil(&d), None, Some(&ap), None, None, &[], &o, Vec::new()).unwrap();
+        let h = isi(&paths::etc_apache().join("httpd.conf"));
+        let aktif: Vec<&str> = h
+            .lines()
+            .map(str::trim_start)
+            .filter(|b| {
+                let l = b.to_ascii_lowercase();
+                l.starts_with("customlog") || l.starts_with("transferlog") || l.starts_with("errorlog ")
+            })
+            .collect();
+        let mut harap = vec![format!("ErrorLog \"{logs}/apache-error.log\"")];
+        if log_akses {
+            harap.push(format!("CustomLog \"{logs}/apache-access.log\" common"));
+        }
+        assert_eq!(aktif, harap, "log_akses={log_akses}");
+        assert!(h.contains("#     CustomLog \"logs/access.log\" common   # dinonaktifkan Phoron"));
+        assert!(h.contains("# ErrorLog \"logs/error.log\"   # dinonaktifkan Phoron"));
+        assert!(h.contains("\r\nErrorLogFormat \"[%t] %M\"\r\n"), "ErrorLogFormat bukan direktif log");
+    }
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Uji yang menyalakan server mendengarkan hanya di 127.0.0.1; bentuk asli
+/// tetap port saja (setara dengan C#).
+#[test]
+fn dengar_lokal_hanya_untuk_uji() {
+    let (_g, d) = paths::sandbox_uji("cfg-dengar");
+    fs::create_dir_all(d.join("www")).unwrap();
+    let ap = apache_palsu(&d.join("bin"), "2.4.54", CONF);
+    let m = BinPackage::baru(BinKind::MySql, "mysql-8", &jalur(&d.join(r"bin\mysql-8")), "8.0.30");
+    let p = Profile { http_port: 8085, mysql_port: 3309, mysql_id: m.id.clone(), ..profil(&d) };
+    build(&p, None, Some(&ap), Some(&m), None, &[], &Opsi::default(), Vec::new()).unwrap();
+    assert!(isi(&paths::etc_apache().join("httpd.conf")).contains("\r\nListen 8085\r\n"));
+    assert!(!isi(&paths::etc_mysql().join("my.ini")).contains("bind-address"));
+    uji_dengar_lokal(true);
+    build(&p, None, Some(&ap), Some(&m), None, &[], &Opsi::default(), Vec::new()).unwrap();
+    uji_dengar_lokal(false);
+    assert!(isi(&paths::etc_apache().join("httpd.conf")).contains("\r\nListen 127.0.0.1:8085\r\n"));
+    assert!(isi(&paths::etc_mysql().join("my.ini")).contains("[mysqld]\r\nport=3309\r\nbind-address=127.0.0.1\r\n"));
+    let _ = fs::remove_dir_all(&d);
+}
+
 #[test]
 fn fastcgi_ditentukan_dll_dan_versi_apache() {
     let (_g, d) = paths::sandbox_uji("cfg-fcgi");

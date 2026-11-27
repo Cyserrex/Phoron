@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::windows::process::CommandExt;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -20,6 +20,8 @@ pub struct RunResult {
     pub stdout: String,
     pub stderr: String,
     pub timed_out: bool,
+    /// Dihentikan karena pemanggil membatalkannya (`run_batal`).
+    pub dibatalkan: bool,
 }
 
 impl RunResult {
@@ -29,7 +31,7 @@ impl RunResult {
     }
 
     pub fn ok(&self) -> bool {
-        self.exit_code == 0 && !self.timed_out
+        self.exit_code == 0 && !self.timed_out && !self.dibatalkan
     }
 }
 
@@ -78,6 +80,26 @@ pub fn run(
     env: Option<&HashMap<String, String>>,
     stdin: Option<&str>,
 ) -> std::io::Result<RunResult> {
+    let lahir = |c: &mut Command| c.creation_flags(CREATE_NO_WINDOW).spawn();
+    run_batal(exe, args, work_dir, timeout_ms, env, stdin, &lahir, &|| false)
+}
+
+/// Seperti [`run`], tetapi proses dilahirkan oleh `lahir` (mis. terikat ke
+/// Job Object daemon, supaya ikut mati bersama daemon) dan pohonnya dibunuh
+/// begitu `batal` benar - diperiksa tiap 20 ms. Hasilnya lalu bertanda
+/// `dibatalkan`. Dipakai untuk langkah start yang lama (`mysqld --initialize`,
+/// `httpd -t`): Stop harus bisa memotongnya, bukan menunggu sampai lima menit.
+#[allow(clippy::too_many_arguments)]
+pub fn run_batal(
+    exe: &str,
+    args: &str,
+    work_dir: Option<&Path>,
+    timeout_ms: i64,
+    env: Option<&HashMap<String, String>>,
+    stdin: Option<&str>,
+    lahir: &dyn Fn(&mut Command) -> std::io::Result<Child>,
+    batal: &dyn Fn() -> bool,
+) -> std::io::Result<RunResult> {
     let mut cmd = Command::new(exe);
     if !args.is_empty() {
         cmd.raw_arg(args);
@@ -93,29 +115,18 @@ pub fn run(
     }
     cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() })
-        .creation_flags(CREATE_NO_WINDOW);
+        .stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
     if let Some(env) = env {
         for (k, v) in env {
             cmd.env(k, v);
         }
     }
-    let mut anak = cmd.spawn()?;
+    let mut anak = lahir(&mut cmd)?;
 
     // Dibaca di utas sendiri: proses yang menulis banyak ke stderr sementara
     // stdout belum dibaca akan menunggu selamanya kalau keduanya dibaca bergiliran.
-    let mut so = anak.stdout.take().unwrap();
-    let mut se = anak.stderr.take().unwrap();
-    let t_out = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = so.read_to_end(&mut b);
-        b
-    });
-    let t_err = std::thread::spawn(move || {
-        let mut b = Vec::new();
-        let _ = se.read_to_end(&mut b);
-        b
-    });
+    let t_out = baca_semua(anak.stdout.take());
+    let t_err = baca_semua(anak.stderr.take());
 
     if let Some(teks) = stdin {
         // Byte UTF-8 mentah, lalu ditutup: mysql.exe membaca sampai akhir
@@ -132,8 +143,11 @@ pub fn run(
             hasil.exit_code = status.code().unwrap_or(-1);
             break;
         }
-        if timeout_ms > 0 && mulai.elapsed() >= Duration::from_millis(timeout_ms as u64) {
-            hasil.timed_out = true;
+        let habis = timeout_ms > 0 && mulai.elapsed() >= Duration::from_millis(timeout_ms as u64);
+        let dibatalkan = !habis && batal();
+        if habis || dibatalkan {
+            hasil.timed_out = habis;
+            hasil.dibatalkan = dibatalkan;
             kill_tree(anak.id());
             let _ = anak.wait();
             break;
@@ -143,6 +157,16 @@ pub fn run(
     hasil.stdout = per_baris(&t_out.join().unwrap_or_default());
     hasil.stderr = per_baris(&t_err.join().unwrap_or_default());
     Ok(hasil)
+}
+
+fn baca_semua(r: Option<impl Read + Send + 'static>) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut b = Vec::new();
+        if let Some(mut r) = r {
+            let _ = r.read_to_end(&mut b);
+        }
+        b
+    })
 }
 
 /// Matikan proses beserta anak-anaknya. httpd dan mysqld memunculkan proses
@@ -177,6 +201,17 @@ mod uji {
         let r = run("cmd.exe", "/c ping -n 30 127.0.0.1 >nul", Some(&tmp()), 300, None, None).unwrap();
         assert!(r.timed_out);
         assert!(!r.ok());
+    }
+
+    #[test]
+    fn dibatalkan_mematikan_pohon() {
+        let mulai = Instant::now();
+        let lahir = |c: &mut Command| c.creation_flags(CREATE_NO_WINDOW).spawn();
+        let batal = || mulai.elapsed() > Duration::from_millis(300);
+        let r = run_batal("cmd.exe", "/c ping -n 30 127.0.0.1 >nul", Some(&tmp()), 60_000, None, None, &lahir, &batal)
+            .unwrap();
+        assert!(r.dibatalkan && !r.timed_out && !r.ok());
+        assert!(mulai.elapsed() < Duration::from_secs(10), "pembatalan tidak memotong proses");
     }
 
     #[test]

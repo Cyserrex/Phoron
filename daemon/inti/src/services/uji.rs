@@ -106,22 +106,38 @@ fn proses_di(folder: &[&str]) -> Vec<(u32, u32, String)> {
     hasil
 }
 
-/// Penjaga proses yatim: proses baru dari folder paket yang masih hidup
-/// sesudah uji selesai.
+/// Penjaga uji nyata: (1) proses baru dari folder paket yang masih hidup
+/// sesudah uji selesai, (2) berkas di folder paket yang ditulisi uji.
+/// Sekalian menyalakan "dengar hanya di 127.0.0.1" untuk config yang ditulis
+/// utas uji ini, supaya Windows Firewall tidak memunculkan dialog.
 struct Penjaga {
     folder: Vec<String>,
     awal: Vec<u32>,
+    paket: crate::uji_paket::JagaPaket,
 }
 
 /// (pid, pid induk, jalur exe).
 type Info = (u32, u32, String);
 
+/// Folder paket yang dipakai uji nyata - hanya boleh dibaca.
+const FOLDER_PAKET: &[&str] = &[
+    r"C:\laragon\bin\apache",
+    r"C:\laragon\bin\php",
+    r"C:\laragon\bin\mysql",
+    r"C:\laragon\bin\nginx",
+    r"C:\xampp\apache",
+    r"C:\xampp\mysql",
+    r"C:\xampp\php",
+];
+
 impl Penjaga {
     fn baru(folder: &[&str]) -> Penjaga {
+        config::uji_dengar_lokal(true);
+        let paket = crate::uji_paket::JagaPaket::baru(&crate::uji_paket::yang_ada(FOLDER_PAKET));
         let folder: Vec<String> = folder.iter().map(|s| s.to_string()).collect();
         let f: Vec<&str> = folder.iter().map(String::as_str).collect();
         let awal = proses_di(&f).into_iter().map(|x| x.0).collect();
-        Penjaga { folder, awal }
+        Penjaga { folder, awal, paket }
     }
 
     fn yatim(&self) -> Vec<Info> {
@@ -136,7 +152,9 @@ impl Penjaga {
         for p in &sisa {
             shell::kill_tree(p.0);
         }
+        config::uji_dengar_lokal(false);
         assert!(ok, "proses yatim tertinggal: {sisa:?}");
+        self.paket.pastikan_utuh();
     }
 }
 
@@ -183,28 +201,6 @@ fn profil_web(d: &Path, web_server: &str, web: &BinPackage, php: &BinPackage) ->
         p.apache_id = web.id.clone();
     }
     p
-}
-
-/// Uji tidak boleh menulis ke folder paket: CustomLog bawaan vendor
-/// ("logs/access.log", relatif ke ServerRoot) yang ikut tersalin ke
-/// httpd.conf dimatikan di sini. Lihat catatan temuan di laporan tahap D.
-fn tanpa_log_vendor(cfg: &config::Hasil) {
-    let Some(conf) = &cfg.httpd_conf else { return };
-    let isi = fs::read_to_string(conf).unwrap();
-    let baru: Vec<String> = isi
-        .split("
-")
-        .map(|b| {
-            let t = b.trim_start();
-            if t.starts_with("CustomLog \"logs/") || t.starts_with("TransferLog \"logs/") {
-                format!("# {b}")
-            } else {
-                b.to_string()
-            }
-        })
-        .collect();
-    fs::write(conf, baru.join("
-")).unwrap();
 }
 
 fn opsi_uji() -> Opsi {
@@ -451,8 +447,9 @@ fn nyata_apache_php() {
     let (_g, d) = paths::sandbox_uji("svc-apache");
     let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
     let p = profil_web(&d, "apache", &ap, &php);
-    let cfg = config::build(&p, Some(&php), Some(&ap), None, None, &[], &opsi_uji(), Vec::new()).unwrap();
-    tanpa_log_vendor(&cfg);
+    // Log akses MENYALA: ditulis ke logs Phoron, bukan ke logs\ paket.
+    let opsi = Opsi { log_akses: true, ..opsi_uji() };
+    let cfg = config::build(&p, Some(&php), Some(&ap), None, None, &[], &opsi, Vec::new()).unwrap();
     assert!(!cfg.php_fastcgi, "PHP 8.1 TS memakai mod_php");
     let port = p.http_port as u16;
 
@@ -469,6 +466,11 @@ fn nyata_apache_php() {
 
     let halaman = ambil(port, "/uji.php").unwrap_or_default();
     assert!(halaman.contains("phoron-uji 8.1.10 apache2handler"), "halaman: {halaman}");
+    let akses = paths::logs().join("apache-access.log");
+    assert!(
+        tunggu(|| fs::read_to_string(&akses).is_ok_and(|s| s.contains("GET /uji.php")), 5000),
+        "log akses tidak ditulis ke logs Phoron"
+    );
 
     // Mati sendiri sesudah jalan: dibunuh dari luar.
     let pid = l.web_pid();
@@ -503,7 +505,6 @@ fn nyata_stop_di_tengah_start() {
     let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
     let p = profil_web(&d, "apache", &ap, &php);
     let cfg = config::build(&p, Some(&php), Some(&ap), None, None, &[], &opsi_uji(), Vec::new()).unwrap();
-    tanpa_log_vendor(&cfg);
     let (l, r) = rekam();
     for jeda in [50u64, 900] {
         let l2 = l.clone();
@@ -535,9 +536,9 @@ fn nyata_stop_di_tengah_start() {
 fn nyata_config_ditolak() {
     let (Some(ap), Some(php)) = (paket(APACHE), paket(PHP81)) else { return };
     let (_g, d) = paths::sandbox_uji("svc-tolak");
+    let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
     let p = profil_web(&d, "apache", &ap, &php);
     let cfg = config::build(&p, Some(&php), Some(&ap), None, None, &[], &opsi_uji(), Vec::new()).unwrap();
-    tanpa_log_vendor(&cfg);
     let conf = cfg.httpd_conf.clone().unwrap();
     let mut isi = fs::read_to_string(&conf).unwrap();
     isi.push_str("\r\nDirektifNgawur On\r\n");
@@ -548,25 +549,149 @@ fn nyata_config_ditolak() {
     assert_eq!(g.kunci, "Konfigurasi Apache ditolak:\r\n{0}{1}");
     assert!(g.args[0].contains("DirektifNgawur"), "keluaran httpd -t: {}", g.args[0]);
     assert_eq!(l.web_pid(), 0);
+    jaga.pastikan_bersih();
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Stop lalu Start cepat selagi start lama masih di `httpd -t`: start baru
+/// TIDAK memakai ulang hasil start yang dibatalkan, jadi Apache akhirnya
+/// jalan. Dulu start kedua menerima `false` milik yang pertama.
+#[test]
+fn nyata_stop_lalu_start_cepat() {
+    let (Some(ap), Some(php)) = (paket(APACHE), paket(PHP81)) else { return };
+    let (_g, d) = paths::sandbox_uji("svc-stopstart");
+    let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
+    let p = profil_web(&d, "apache", &ap, &php);
+    let cfg = config::build(&p, Some(&php), Some(&ap), None, None, &[], &opsi_uji(), Vec::new()).unwrap();
+    let (l, r) = rekam();
+    let l2 = l.clone();
+    let (p2, ap2, php2, cfg2) = (p.clone(), ap.clone(), php.clone(), cfg.clone());
+    let t = std::thread::spawn(move || l2.start_web(&p2, Some(&ap2), Some(&php2), &cfg2));
+    assert!(tunggu(|| l.web_state() == ServiceState::Menyalakan, 10_000));
+    std::thread::sleep(Duration::from_millis(30));
+    l.stop_web();
+    // Start baru selagi start lama mungkin belum selesai berbenah.
+    let baru = l.start_web(&p, Some(&ap), Some(&php), &cfg);
+    assert!(!t.join().unwrap(), "start yang dibatalkan melapor berhasil");
+    assert!(baru, "start sesudah stop tidak menyalakan apa pun: {:#?}", log(&r));
+    assert_eq!(l.web_state(), ServiceState::Jalan);
+    assert!(ambil(p.http_port as u16, "/uji.php").unwrap_or_default().contains("phoron-uji"));
+    assert_eq!(hitung_log(&r, "Apache 2.4.54 jalan di port"), 1);
+    l.stop_web();
+    assert!(tunggu(|| port::is_free(p.http_port as u16), 5000));
+    jaga.pastikan_bersih();
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Badan start yang panik (daemon memakai panic=unwind) tidak meninggalkan
+/// Menyalakan selamanya, dan start berikutnya tidak menunggu selamanya.
+#[test]
+fn panik_di_start_berakhir_gagal() {
+    let (l, r) = rekam();
+    for jenis in [ServiceKind::Web, ServiceKind::Db] {
+        let l2 = l.clone();
+        let hasil = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            l2.antre(jenis, |_| {
+                l2.ubah(jenis, ServiceState::Menyalakan, None);
+                panic!("panik uji");
+            })
+        }));
+        assert!(hasil.is_err());
+        let s = l.status();
+        let (state, galat) = match jenis {
+            ServiceKind::Web => (s.web, s.galat_web),
+            ServiceKind::Db => (s.db, s.galat_db),
+        };
+        assert_eq!(state, ServiceState::Gagal, "{jenis:?} tertinggal di {state:?}");
+        assert!(galat.unwrap().kunci.ends_with("tidak bisa dinyalakan karena galat di dalam Phoron."));
+        // Start berikutnya berjalan (tidak menunggu Mulai yang tak pernah selesai).
+        let (tx, rx) = mpsc::channel();
+        let l3 = l.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(l3.antre(jenis, |_| Ok(true)));
+        });
+        assert_eq!(rx.recv_timeout(Duration::from_secs(5)), Ok(true), "start sesudah panik macet");
+    }
+    assert!(ada_log(&r, "MySQL tidak bisa dinyalakan karena galat di dalam Phoron."));
+}
+
+/// Start yang dibatalkan stop tidak dipakai ulang, start pada giliran yang
+/// sama dipakai ulang.
+#[test]
+fn start_basi_tidak_dipakai_ulang() {
+    let (l, _r) = rekam();
+    let (mulai_tx, mulai_rx) = mpsc::channel();
+    let (lepas_tx, lepas_rx) = mpsc::channel::<()>();
+    let l1 = l.clone();
+    let t1 = std::thread::spawn(move || {
+        l1.antre(ServiceKind::Web, |_| {
+            mulai_tx.send(()).unwrap();
+            lepas_rx.recv().unwrap();
+            Ok(false)
+        })
+    });
+    mulai_rx.recv().unwrap();
+    // Giliran sama: menunggu dan menerima hasil start pertama.
+    let l2 = l.clone();
+    let t2 = std::thread::spawn(move || l2.antre(ServiceKind::Web, |_| Ok(true)));
+    std::thread::sleep(Duration::from_millis(100));
+    // Sesudah stop: start baru menunggu yang lama berbenah, lalu jalan sendiri.
+    l.naikkan_giliran(ServiceKind::Web);
+    let l3 = l.clone();
+    let t3 = std::thread::spawn(move || l3.antre(ServiceKind::Web, |_| Ok(true)));
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(!t3.is_finished(), "start baru tidak menunggu start lama selesai berbenah");
+    lepas_tx.send(()).unwrap();
+    assert!(!t1.join().unwrap());
+    assert!(!t2.join().unwrap(), "start pada giliran yang sama tidak memakai ulang hasilnya");
+    assert!(t3.join().unwrap(), "start sesudah stop memakai ulang hasil start yang dibatalkan");
+}
+
+/// Penanda init yang tertinggal (daemon mati di tengah init): folder data
+/// setengah jadi TIDAK dianggap siap, sisanya disisihkan dulu.
+#[test]
+fn init_terputus_tidak_dianggap_siap() {
+    let (_g, d) = paths::sandbox_uji("svc-initputus");
+    let bin = d.join(r"bin\mariadb-palsu\bin");
+    fs::create_dir_all(&bin).unwrap();
+    let sistem = std::env::var("SystemRoot").unwrap();
+    fs::copy(Path::new(&sistem).join(r"System32\findstr.exe"), bin.join("mysql_install_db.exe")).unwrap();
+    let m = BinPackage::baru(BinKind::MySql, "mariadb-palsu", &jalur(&d.join(r"bin\mariadb-palsu")), "10.4.0");
+    let p = Profile { mysql_id: m.id.clone(), mysql_port: port_bebas() as i32, ..Profile::default() };
+    config::write_my_ini(&p, &m).unwrap();
+    let data_dir = config::mysql_data_dir(&m);
+    // Sisa init yang terputus: folder mysql\ sudah ada, penanda masih ada.
+    fs::create_dir_all(Path::new(&data_dir).join("mysql")).unwrap();
+    fs::write(db::penanda_init(&data_dir), "1").unwrap();
+    let (l, r) = rekam();
+    assert!(!l.start_db(&p, Some(&m)));
+    assert!(ada_log(&r, "Penyiapan folder data sebelumnya terputus sebelum selesai."), "{:#?}", log(&r));
+    assert!(ada_log(&r, "Folder data mariadb-palsu belum ada"), "folder setengah jadi dikira siap");
+    // Dua sisa (yang terputus dan yang baru gagal) disisihkan, tidak berebut nama.
+    let sisih = fs::read_dir(paths::data())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with("mariadb-palsu.gagal-"))
+        .count();
+    assert_eq!(sisih, 2, "{:#?}", log(&r));
+    assert!(!db::penanda_init(&data_dir).exists());
     let _ = fs::remove_dir_all(&d);
 }
 
 /// Nginx + php-cgi FastCGI + satu kolam PHP 7.4 per situs. php-cgi yang
-/// dibunuh dari luar dinyalakan ulang. Nginx disalin ke sandbox: ia menulis
-/// folder *_temp dan logs ke folder awalannya sendiri.
+/// dibunuh dari luar dinyalakan ulang. Nginx dijalankan LANGSUNG dari folder
+/// Laragon (tidak disalin): awalannya (`-p`) folder Phoron, jadi logs dan
+/// temp-nya tidak menulisi folder paket.
 #[test]
 fn nyata_nginx_fastcgi_bangkit() {
-    let (Some(_), Some(php)) = (paket(NGINX), paket(PHP81)) else { return };
+    let (Some(ng), Some(php)) = (paket(NGINX), paket(PHP81)) else { return };
     let php74 = paket(r"C:\laragon\bin\php\php-7.4.22-Win32-VC15-x64");
     if !port::is_free(config::FASTCGI_PORT as u16) || !port::is_free(config::FASTCGI_PORT as u16 + 1) {
         eprintln!("dilewati: port FastCGI 9123/9124 dipakai");
         return;
     }
     let (_g, d) = paths::sandbox_uji("svc-nginx");
-    let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp", &jalur(&d)]);
-    let salinan = d.join(r"bin\nginx-1.22.0");
-    salin_folder(Path::new(NGINX), &salinan);
-    let ng = paket(&jalur(&salinan)).unwrap();
+    let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
     let p = profil_web(&d, "nginx", &ng, &php);
     let www = d.join("www");
     let mut kolam = Vec::new();
@@ -621,18 +746,6 @@ fn nyata_nginx_fastcgi_bangkit() {
     assert!(!ada_log(&r, "nginx berhenti sendiri"));
     jaga.pastikan_bersih();
     let _ = fs::remove_dir_all(&d);
-}
-
-fn salin_folder(dari: &Path, ke: &Path) {
-    fs::create_dir_all(ke).unwrap();
-    for e in fs::read_dir(dari).unwrap().filter_map(|e| e.ok()) {
-        let t = ke.join(e.file_name());
-        if e.path().is_dir() {
-            salin_folder(&e.path(), &t);
-        } else {
-            fs::copy(e.path(), t).unwrap();
-        }
-    }
 }
 
 /// Jalankan satu kueri lewat mysql.exe paket itu.
@@ -694,6 +807,45 @@ fn nyata_mysql_init_dan_rapi() {
     assert!(ada_log(&r, "MySQL dimatikan dengan rapi."));
     assert_eq!(status_terakhir(&r).unwrap().db, ServiceState::Berhenti);
     assert!(tunggu(|| port::is_free(port), 5000));
+    jaga.pastikan_bersih();
+    let _ = fs::remove_dir_all(&d);
+}
+
+/// Stop lalu Start cepat selagi `mysqld --initialize` masih berjalan: init
+/// dibatalkan (prosesnya mati, terikat Job), folder setengah jadinya
+/// disisihkan, dan start baru menyiapkan folder dari awal lalu Jalan. Dulu
+/// init tidak bisa dibatalkan dan start baru menerima `false` milik start
+/// yang dibatalkan.
+#[test]
+fn nyata_mysql_stop_lalu_start_saat_init() {
+    let Some(m) = paket(MYSQL8) else { return };
+    let (_g, d) = paths::sandbox_uji("svc-mysql-batal");
+    let jaga = Penjaga::baru(&[r"C:\laragon\bin", r"C:\xampp"]);
+    let p = Profile { name: "Uji MySQL".into(), mysql_id: m.id.clone(), mysql_port: port_bebas() as i32, ..Profile::default() };
+    config::build(&p, None, None, Some(&m), None, &[], &opsi_uji(), Vec::new()).unwrap();
+    let data_dir = config::mysql_data_dir(&m);
+    let (l, r) = rekam();
+    let l2 = l.clone();
+    let (p2, m2) = (p.clone(), m.clone());
+    let t = std::thread::spawn(move || l2.start_db(&p2, Some(&m2)));
+    assert!(tunggu(|| ada_log(&r, "belum ada - menyiapkan basis data awal"), 10_000));
+    // Init benar-benar sudah menulis sesuatu ke folder data.
+    assert!(tunggu(|| fs::read_dir(&data_dir).is_ok_and(|mut x| x.next().is_some()), 20_000));
+    let init = proses_di(&[m.path.as_str()]);
+    assert!(!init.is_empty(), "mysqld --initialize tidak terlihat");
+    l.stop_db(Some(&p), Some(&m));
+    let baru = l.start_db(&p, Some(&m));
+    assert!(!t.join().unwrap(), "start yang dibatalkan melapor berhasil");
+    assert!(baru, "start sesudah stop tidak menyalakan MySQL: {:#?}", log(&r));
+    assert_eq!(l.db_state(), ServiceState::Jalan);
+    assert!(ada_log(&r, "Penyiapan folder data dibatalkan."), "{:#?}", log(&r));
+    assert!(ada_log(&r, "Sisa percobaan yang gagal dipindah ke"));
+    assert!(init.iter().all(|x| !process_job::masih_hidup(x.0)), "init yang dibatalkan masih hidup");
+    assert!(!db::penanda_init(&data_dir).exists());
+    assert!(kueri(&m, p.mysql_port as u16, "SELECT VERSION()").contains("8.0.30"));
+    l.stop_db(Some(&p), Some(&m));
+    assert!(!ada_log(&r, "dimatikan paksa"), "log: {:#?}", log(&r));
+    assert!(tunggu(|| port::is_free(p.mysql_port as u16), 5000));
     jaga.pastikan_bersih();
     let _ = fs::remove_dir_all(&d);
 }

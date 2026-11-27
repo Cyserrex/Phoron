@@ -35,6 +35,8 @@ pub mod situs;
 pub mod ssl;
 pub mod teks;
 pub mod tulis;
+#[cfg(test)]
+pub(crate) mod uji_paket;
 pub mod waktu;
 
 /// Nomor versi aplikasi. Mengikuti `AppInfo.Version` di C#; selama peralihan

@@ -74,11 +74,34 @@
 //!   lampunya tidak merah. Uji: `tanpa_web_bukan_gagal`.
 //! - Ganti profil berurutan (satu dalam satu waktu): dua yang berpapasan saling
 //!   membaca keadaan setengah jadi dan stop milik yang kedua membatalkan start
-//!   yang pertama. "Hidup" termasuk yang MASIH menyala: MySQL yang sedang
-//!   memulihkan InnoDB dulu dibiarkan lalu menyala hijau dengan profil lama.
-//!   MySQL dimatikan dengan rapi. Uji: `nyata_ujung_ke_ujung`.
+//!   yang pertama. Uji: `ganti_profil_berpapasan`.
+//! - Ganti profil juga diurutkan terhadap start dan Terapkan dari utas lain
+//!   (`kunci_profil`): profil aktif tidak pernah berganti di tengah start.
+//!   Uji: `ganti_profil_menunggu_start`.
+//! - "Hidup" termasuk yang MASIH menyala: MySQL yang sedang memulihkan InnoDB
+//!   atau masih init dulu dibiarkan lalu menyala hijau dengan profil lama.
+//!   MySQL dimatikan dengan rapi. Uji: `nyata_ujung_ke_ujung`,
+//!   `nyata_ganti_profil_saat_mysql_init`.
+//! - Ganti profil yang gagal menulis config tetap mencoba menyalakan ulang
+//!   layanan yang tadi hidup: layanan tidak tertinggal mati.
+//! - Daemon berhenti (`tutup`): gerbang ditutup, start yang berjalan
+//!   dibatalkan, ganti profil dan start yang berbenah ditunggu (paling lama
+//!   `BATAS_TUTUP`), baru semuanya dimatikan - MySQL dengan rapi. Uji:
+//!   `tutup_menolak_start_baru`, `nyata_tutup_di_tengah_init`.
 //! - "Perlu restart" = layanan jalan tapi versi config di cakram sudah lain dari
-//!   saat ia menyala. Uji: `perlu_restart_menurut_versi`.
+//!   saat ia menyala. Start untuk layanan yang SUDAH jalan tidak memadamkan
+//!   penandanya (server masih memakai config lama). Uji:
+//!   `perlu_restart_menurut_versi`.
+//!
+//! Setelan
+//! - phoron.ini dibaca dari cakram hanya saat Engine dibuat; daemon satu-
+//!   satunya penulisnya, jadi setelan di memori sumber kebenaran. Muat ulang
+//!   tidak membacanya lagi. Semua baca-ubah-tulis setelan (ganti profil,
+//!   situs terakhir, simpan/ubah setelan) di bawah kunci tulis data. Uji:
+//!   `muat_ulang_tidak_membaca_phoron_ini`.
+//! - Simpan/ubah setelan tidak menyentuh profil aktif dan situs terakhir;
+//!   `ubah_setelan` yang menyebut profil aktif ditolak. Perubahan log rinci
+//!   langsung sampai ke layanan. Uji: `setelan_tidak_mengganti_profil_aktif`.
 //!
 //! Node dan log
 //! - "Proyek X siap di URL" dicatat Engine (dulu oleh halaman Node, jadi hilang
@@ -101,7 +124,8 @@
 //!   baris keluaran, masing-masing `Pesan` yang bisa diterjemahkan.
 //! - phoron.ini yang gagal disimpan saat ganti profil tidak membatalkan ganti
 //!   profil (layanan tidak tertinggal mati); keluhannya ikut di peringatan.
-//! - `muat_ulang` juga membaca ulang phoron.ini (protokol `muat_ulang`).
+//! - Ekstensi yang diambil alih dari php.ini dasar disimpan di atas isi
+//!   berkas profil TERKINI, bukan salinan memori (profiles\*.ini milik UI).
 
 use crate::config::{self, Hasil, Kolam, Opsi};
 use crate::model::{BinKind, BinPackage, Profile, ServiceState, Site, Versi};
@@ -116,11 +140,16 @@ use crate::waktu::Saat;
 use crate::{bin, hosts, hsts, log_file, paths, profile_store, situs, ssl, tulis};
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::time::{Duration, Instant};
 
 /// Sebanyak ini baris riwayat log disimpan untuk layar.
 pub const RIWAYAT_MAKS: usize = 200;
+
+/// Paling lama sekian `tutup` menunggu ganti profil dan start yang sedang
+/// berjalan selesai atau selesai berbenah.
+pub const BATAS_TUTUP: Duration = Duration::from_secs(60);
 
 /// Penanda "layanan belum pernah menyala di sesi ini".
 const BELUM_NYALA: u64 = u64::MAX;
@@ -596,18 +625,21 @@ struct Inti {
     siar: Arc<Siar>,
     layanan: Layanan,
     node: NodeRunner,
-    /// Menertibkan Terapkan dan Muat Ulang: keduanya memotret data, bekerja di
-    /// luar kunci data, lalu menulis kembali.
+    /// Menertibkan Terapkan, Muat Ulang, dan pergantian profil aktif:
+    /// Terapkan dan Muat Ulang memotret data, bekerja di luar kunci data, lalu
+    /// menulis kembali.
     kunci_terapkan: Mutex<()>,
-    /// Satu ganti profil dalam satu waktu.
-    kunci_ganti: Mutex<()>,
+    /// Ganti profil (tulis) terhadap start dan Terapkan (baca): profil aktif
+    /// tidak pernah berganti di tengah start, dan satu ganti profil dalam
+    /// satu waktu. Stop TIDAK memakainya - stop harus bisa memotong start.
+    /// Urutan kunci: kunci_profil -> kunci_terapkan -> data.
+    kunci_profil: RwLock<()>,
+    /// Gerbang: sesudah `tutup` start baru dan ganti profil ditolak.
+    tertutup: AtomicBool,
     versi_web_nyala: AtomicU64,
     versi_db_nyala: AtomicU64,
     /// Peringatan paket kembar yang sudah dicatat di sesi ini.
     kembar_tercatat: Mutex<HashSet<String>>,
-    /// Uji: dipanggil sesudah Terapkan, sebelum web server dinyalakan.
-    #[cfg(test)]
-    kait_web: Mutex<Option<fn(&Hasil)>>,
 }
 
 impl Drop for Inti {
@@ -636,11 +668,13 @@ fn muat_setelan() -> (Settings, Vec<Pesan>) {
 
 /// Pindahkan medan publik setelan dari UI ke setelan yang sedang dipegang;
 /// keadaan internal (sandi tersandi saat muat, asal berkas) dipertahankan.
+///
+/// `active_profile` dan `situs_terakhir` TIDAK ikut: keduanya milik
+/// `ganti_profil` dan `catat_situs_dibuka`. Salinan UI yang basi dulu
+/// menimpa perubahan dari baki - dan profil aktif yang berbeda membuat muat
+/// ulang berpindah profil tanpa mematikan atau menerapkan ulang layanan.
 fn salin_setelan(ke: &mut Settings, dari: Settings) {
     ke.bin_roots = dari.bin_roots;
-    ke.situs_terakhir = dari.situs_terakhir;
-    ke.situs_terakhir.truncate(settings::BATAS_SITUS_TERAKHIR);
-    ke.active_profile = dari.active_profile;
     ke.auto_start_services = dari.auto_start_services;
     ke.minimize_to_tray = dari.minimize_to_tray;
     ke.auto_vhost = dari.auto_vhost;
@@ -700,15 +734,14 @@ impl Engine {
                 layanan,
                 node,
                 kunci_terapkan: Mutex::new(()),
-                kunci_ganti: Mutex::new(()),
+                kunci_profil: RwLock::new(()),
+                tertutup: AtomicBool::new(false),
                 versi_web_nyala: AtomicU64::new(BELUM_NYALA),
                 versi_db_nyala: AtomicU64::new(BELUM_NYALA),
                 kembar_tercatat: Mutex::new(HashSet::new()),
-                #[cfg(test)]
-                kait_web: Mutex::new(None),
             }),
         };
-        e.muat_ulang_inti(false);
+        e.muat_ulang();
         e
     }
 
@@ -724,6 +757,24 @@ impl Engine {
 
     fn tulis(&self) -> RwLockWriteGuard<'_, Data> {
         self.inti.data.write().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Kunci profil untuk start dan Terapkan (bersama).
+    fn profil_baca(&self) -> RwLockReadGuard<'_, ()> {
+        self.inti.kunci_profil.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Kunci profil untuk ganti profil (sendiri).
+    fn profil_tulis(&self) -> RwLockWriteGuard<'_, ()> {
+        self.inti.kunci_profil.write().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Start baru dan ganti profil ditolak sesudah `tutup`.
+    fn gerbang(&self) -> Result<(), Pesan> {
+        if self.inti.tertutup.load(Ordering::SeqCst) {
+            return Err(Pesan::baru("Phoron sedang ditutup."));
+        }
+        Ok(())
     }
 
     pub fn layanan(&self) -> &Layanan {
@@ -850,20 +901,20 @@ impl Engine {
 
     // -------------------------------------------------------- muat
 
-    /// Baca ulang phoron.ini, profil, apps.ini, lalu pindai ulang paket dan
-    /// situs. Aman dipanggil berkali-kali.
+    /// Baca ulang profil dan apps.ini, lalu pindai ulang paket dan situs. Aman
+    /// dipanggil berkali-kali.
+    ///
+    /// phoron.ini TIDAK dibaca ulang: daemon satu-satunya penulisnya, jadi
+    /// setelan di memori adalah sumber kebenaran (dibaca dari cakram hanya
+    /// saat Engine dibuat). Dulu muat ulang membacanya lagi di luar kunci
+    /// data dan menimpa perubahan dari ganti profil atau situs terakhir yang
+    /// datang di sela waktu itu - dan berkas yang sesaat terkunci membuat
+    /// setelan kembali ke bawaan.
     pub fn muat_ulang(&self) {
-        self.muat_ulang_inti(true);
-    }
-
-    fn muat_ulang_inti(&self, baca_setelan: bool) {
+        // Profil aktif hanya berganti di bawah kunci ini (ganti_profil), jadi
+        // pilihan di bawah tidak bisa basi.
         let _g = kunci(&self.inti.kunci_terapkan);
-        let (settings, masalah_setelan) = if baca_setelan {
-            let (s, m) = muat_setelan();
-            (s, Some(m))
-        } else {
-            (self.settings(), None)
-        };
+        let settings = self.settings();
         self.inti.layanan.set_log_rinci(settings.log_rinci);
         let packages = bin::scan_all(&settings.bin_roots);
         let apps = node_apps::load_all();
@@ -881,10 +932,6 @@ impl Engine {
         let (sites, sw) = pindai_situs(active.as_ref(), settings.auto_vhost);
         {
             let mut d = self.tulis();
-            if let Some(m) = masalah_setelan {
-                d.masalah_setelan = m;
-                d.settings = settings;
-            }
             d.packages = packages;
             d.node_apps = apps;
             // Keluhan profil lama dibuang dulu: tidak menumpuk tiap muat ulang.
@@ -902,6 +949,7 @@ impl Engine {
     /// Tulis ulang config profil aktif tanpa menyentuh layanan. Hasil:
     /// peringatan (juga disimpan untuk `Keadaan::peringatan_terapkan`).
     pub fn terapkan(&self) -> Result<Vec<Pesan>, Pesan> {
+        let _p = self.profil_baca();
         Ok(match self.terapkan_inti()? {
             Some((_, _, w)) => w,
             None => vec![Pesan::baru("Belum ada profil.")],
@@ -909,7 +957,7 @@ impl Engine {
     }
 
     /// Terapkan; hasilnya profil yang diterapkan, hasil build, dan peringatan.
-    /// `None` bila belum ada profil.
+    /// `None` bila belum ada profil. Pemanggil memegang `kunci_profil`.
     fn terapkan_inti(&self) -> Result<Option<(Profile, Hasil, Vec<Pesan>)>, Pesan> {
         let _g = kunci(&self.inti.kunci_terapkan);
         let (settings, packages, profiles, active, masalah) = {
@@ -963,7 +1011,13 @@ impl Engine {
         let diambil = hasil.ekstensi_diambil.clone().filter(|e| !e.is_empty());
         if let Some(ext) = &diambil {
             active.php_extensions = ext.clone();
-            profile_store::save(&mut active).map_err(|e| galat_io("Profil tidak bisa disimpan: {0}", &e))?;
+            // profiles\*.ini milik UI: yang diubah hanya daftar ekstensinya,
+            // di atas isi berkas TERKINI. Menyimpan salinan memori menimpa
+            // suntingan UI yang muat ulangnya belum diproses.
+            let berkas = paths::profiles().join(format!("{}.ini", active.file_name));
+            let mut simpan = profile_store::load(&berkas).unwrap_or_else(|_| active.clone());
+            simpan.php_extensions = ext.clone();
+            profile_store::save(&mut simpan).map_err(|e| galat_io("Profil tidak bisa disimpan: {0}", &e))?;
             self.say(Pesan::dengan(
                 "Profil \"{0}\" mengambil alih {1} ekstensi dari php.ini yang sudah ada: {2}.",
                 &[&active.name, &ext.len().to_string(), &ext.join(", ")],
@@ -1042,54 +1096,104 @@ impl Engine {
     /// Jadikan profil aktif: layanan yang hidup (termasuk yang MASIH menyala)
     /// dimatikan dulu, config ditulis ulang, lalu dinyalakan lagi bila
     /// `restart`. Hanya satu ganti profil dalam satu waktu.
+    ///
+    /// Diurutkan terhadap start dan Terapkan dari utas lain (`kunci_profil`):
+    /// dulu "Nyalakan web" dari baki yang sudah lolos Terapkan profil LAMA
+    /// menyalakan httpd lama sesudah ganti, dan restart milik ganti melihatnya
+    /// Jalan lalu membiarkannya.
     pub fn ganti_profil(&self, file_name: &str, restart: bool) -> Result<Vec<Pesan>, Pesan> {
-        let _g = kunci(&self.inti.kunci_ganti);
-        let (lama, lama_mysql, baru) = {
-            let d = self.baca();
+        self.gerbang()?;
+        if !self.baca().profiles.iter().any(|p| p.file_name == file_name) {
+            return Err(Pesan::dengan("Profil {0} tidak ditemukan.", &[file_name]));
+        }
+        // Dimatikan SEBELUM menunggu kunci: start yang sedang berjalan
+        // (MySQL yang memulihkan InnoDB bisa sampai lima menit) dibatalkan,
+        // bukan ditunggu sampai selesai.
+        let mut sudah_bilang = false;
+        let (mut web_hidup, mut db_hidup) = self.matikan_untuk_ganti(&mut sudah_bilang);
+        let _p = self.profil_tulis();
+        self.gerbang()?;
+        // Start yang menyelinap sebelum kunci didapat: dimatikan juga.
+        let (w2, d2) = self.matikan_untuk_ganti(&mut sudah_bilang);
+        web_hidup |= w2;
+        db_hidup |= d2;
+
+        let simpan = {
+            let _t = kunci(&self.inti.kunci_terapkan);
+            let mut d = self.tulis();
             let Some(baru) = d.profiles.iter().find(|p| p.file_name == file_name).cloned() else {
                 return Err(Pesan::dengan("Profil {0} tidak ditemukan.", &[file_name]));
             };
-            let mysql = d.active.as_ref().and_then(|a| pakai(&d.packages, BinKind::MySql, &a.mysql_id, &a.php_id));
-            (d.active.clone(), mysql, baru)
-        };
-        let l = &self.inti.layanan;
-        let web_hidup = l.web_state().hidup();
-        let db_hidup = l.db_state().hidup();
-        if web_hidup || db_hidup {
-            self.say(Pesan::baru("Mematikan layanan sebelum ganti profil..."));
-            if db_hidup {
-                l.stop_db(Some(lama.as_ref().unwrap_or(&baru)), lama_mysql.as_ref());
-            }
-            if web_hidup {
-                l.stop_web();
-            }
-        }
-        let simpan = {
-            let mut d = self.tulis();
-            d.active = Some(baru.clone());
-            d.settings.active_profile = baru.file_name.clone();
+            d.active = Some(baru);
+            d.settings.active_profile = file_name.to_string();
             d.settings.save()
         };
-        let mut w = self.terapkan()?;
+        // Layanan tidak boleh tertinggal mati: config yang gagal ditulis
+        // tidak menghentikan upaya menyalakan ulang (start menulis config-nya
+        // sendiri dan melaporkan kegagalannya), dan MySQL yang gagal tidak
+        // menghalangi web server.
+        let mut galat: Option<Pesan> = None;
+        let mut w = match self.terapkan_inti() {
+            Ok(Some((_, _, w))) => w,
+            Ok(None) => Vec::new(),
+            Err(e) => {
+                galat = Some(e);
+                Vec::new()
+            }
+        };
         if let Err(e) = simpan {
             w.push(galat_io("Setelan tidak bisa disimpan: {0}", &e));
         }
         if restart {
             if db_hidup {
-                self.nyalakan_db()?;
+                if let Err(e) = self.nyalakan_db_inti() {
+                    galat.get_or_insert(e);
+                }
             }
             if web_hidup {
-                self.nyalakan_web()?;
+                if let Err(e) = self.nyalakan_web_inti() {
+                    galat.get_or_insert(e);
+                }
             }
         }
         self.inti.siar.kirim(Kabar::PerluMuatUlang);
-        Ok(w)
+        match galat {
+            Some(e) => Err(e),
+            None => Ok(w),
+        }
+    }
+
+    /// Matikan layanan yang hidup (termasuk yang MASIH menyala) untuk ganti
+    /// profil. Hasil: (web hidup, MySQL hidup) sebelum dimatikan.
+    fn matikan_untuk_ganti(&self, sudah_bilang: &mut bool) -> (bool, bool) {
+        let l = &self.inti.layanan;
+        let web = l.web_state().hidup();
+        let db = l.db_state().hidup();
+        if (web || db) && !*sudah_bilang {
+            *sudah_bilang = true;
+            self.say(Pesan::baru("Mematikan layanan sebelum ganti profil..."));
+        }
+        if db {
+            self.matikan_db();
+        }
+        if web {
+            l.stop_web();
+        }
+        (web, db)
     }
 
     // -------------------------------------------------------- layanan
 
     /// Nyalakan web server profil aktif. Config SELALU dibangun ulang dulu.
     pub fn nyalakan_web(&self) -> Result<bool, Pesan> {
+        self.gerbang()?;
+        let _p = self.profil_baca();
+        self.nyalakan_web_inti()
+    }
+
+    /// `nyalakan_web` tanpa kunci profil - pemanggil memegangnya.
+    fn nyalakan_web_inti(&self) -> Result<bool, Pesan> {
+        self.gerbang()?;
         let Some(a) = self.active() else { return Ok(false) };
         // Tidak memakai web server adalah pilihan, bukan kegagalan: tidak ada
         // titik merah untuk profil yang sengaja hanya menjalankan MySQL.
@@ -1100,15 +1204,15 @@ impl Engine {
             ));
             return Ok(false);
         }
+        // Sudah jalan: start langsung berhasil tanpa restart, jadi server
+        // masih memakai config lama - penanda "perlu restart" tidak boleh
+        // padam karenanya.
+        let sudah_jalan = self.inti.layanan.web_state() == ServiceState::Jalan;
         let Some((a, hasil, _)) = self.terapkan_inti()? else { return Ok(false) };
-        #[cfg(test)]
-        if let Some(f) = *kunci(&self.inti.kait_web) {
-            f(&hasil);
-        }
         let pk = PaketProfil::dari(&self.baca().packages, &a);
         let versi = tulis::versi_konfig_web();
         let ok = self.inti.layanan.start_web(&a, pk.web(&a), pk.php.as_ref(), &hasil);
-        if ok {
+        if ok && !sudah_jalan {
             self.inti.versi_web_nyala.store(versi, Ordering::SeqCst);
         }
         Ok(ok)
@@ -1120,16 +1224,25 @@ impl Engine {
 
     /// Nyalakan MySQL profil aktif. Config SELALU dibangun ulang dulu.
     pub fn nyalakan_db(&self) -> Result<bool, Pesan> {
+        self.gerbang()?;
+        let _p = self.profil_baca();
+        self.nyalakan_db_inti()
+    }
+
+    /// `nyalakan_db` tanpa kunci profil - pemanggil memegangnya.
+    fn nyalakan_db_inti(&self) -> Result<bool, Pesan> {
+        self.gerbang()?;
         let Some(a) = self.active() else { return Ok(false) };
         if !a.pakai_mysql() {
             self.say(Pesan::dengan("Profil \"{0}\" tidak memakai MySQL, jadi tidak ada yang dinyalakan.", &[&a.name]));
             return Ok(false);
         }
+        let sudah_jalan = self.inti.layanan.db_state() == ServiceState::Jalan;
         let Some((a, _, _)) = self.terapkan_inti()? else { return Ok(false) };
         let pk = PaketProfil::dari(&self.baca().packages, &a);
         let versi = tulis::versi_konfig_db();
         let ok = self.inti.layanan.start_db(&a, pk.mysql.as_ref());
-        if ok {
+        if ok && !sudah_jalan {
             self.inti.versi_db_nyala.store(versi, Ordering::SeqCst);
         }
         Ok(ok)
@@ -1142,8 +1255,12 @@ impl Engine {
     }
 
     pub fn nyalakan_semua(&self) -> Result<(), Pesan> {
-        self.nyalakan_db()?;
-        self.nyalakan_web()?;
+        self.gerbang()?;
+        // Satu kunci untuk keduanya: kunci baca yang diambil dua kali di
+        // utas yang sama bisa buntu bila ada ganti profil yang menunggu.
+        let _p = self.profil_baca();
+        self.nyalakan_db_inti()?;
+        self.nyalakan_web_inti()?;
         Ok(())
     }
 
@@ -1152,10 +1269,33 @@ impl Engine {
         self.matikan_db();
     }
 
-    /// Daemon berhenti: web server dan php-cgi dibunuh, MySQL dimatikan rapi,
-    /// semua proyek Node dihentikan.
+    /// Daemon berhenti. Gerbang ditutup dulu (start dan ganti profil baru
+    /// ditolak), start yang sedang berjalan dibatalkan, ganti profil dan start
+    /// yang masih berbenah ditunggu sampai `BATAS_TUTUP`, baru semuanya
+    /// dimatikan: web server dan php-cgi dibunuh, MySQL dimatikan RAPI, semua
+    /// proyek Node dihentikan.
+    ///
+    /// Dulu tutup tidak menunggu siapa pun: mysqld yang lahir sesudah stop
+    /// dibunuh paksa oleh Job saat daemon keluar, init MySQL tertinggal
+    /// yatim, dan ganti profil yang berpapasan menyalakan layanan lagi.
     pub fn tutup(&self) {
-        self.inti.layanan.stop_all();
+        self.inti.tertutup.store(true, Ordering::SeqCst);
+        let l = &self.inti.layanan;
+        l.batalkan_start();
+        let mulai = Instant::now();
+        // Ganti profil dan start memegang kunci profil selama bekerja.
+        loop {
+            match self.inti.kunci_profil.try_write() {
+                Ok(_) | Err(std::sync::TryLockError::Poisoned(_)) => break,
+                Err(std::sync::TryLockError::WouldBlock) => {}
+            }
+            if mulai.elapsed() >= BATAS_TUTUP {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        l.tunggu_start(BATAS_TUTUP.saturating_sub(mulai.elapsed()));
+        l.stop_all();
         self.inti.node.stop_all();
     }
 
@@ -1287,13 +1427,16 @@ impl Engine {
             .collect()
     }
 
-    /// Setelan dari UI: ganti, simpan ke phoron.ini, lalu muat ulang.
+    /// Setelan dari UI: ganti, simpan ke phoron.ini, lalu muat ulang. Profil
+    /// aktif dan situs terakhir dari UI diabaikan (lihat `salin_setelan`).
     pub fn simpan_setelan(&self, baru: Settings) -> Result<(), Pesan> {
-        {
+        let rinci = {
             let mut d = self.tulis();
             salin_setelan(&mut d.settings, baru);
             d.settings.save().map_err(|e| galat_io("Setelan tidak bisa disimpan: {0}", &e))?;
-        }
+            d.settings.log_rinci
+        };
+        self.inti.layanan.set_log_rinci(rinci);
         self.muat_ulang();
         Ok(())
     }
@@ -1306,8 +1449,19 @@ impl Engine {
     /// terjadi di bawah satu kunci tulis, jadi dua ubahan yang berpapasan tidak
     /// saling menghapus. Medan yang tidak dikenal ditolak, bukan diabaikan:
     /// salah eja nama kunci di UI harus ketahuan, bukan hilang diam-diam.
+    ///
+    /// `active_profile` ditolak (ganti profil mematikan, menerapkan ulang,
+    /// dan menyalakan lagi layanan - setelan tidak), begitu pula
+    /// `situs_terakhir` (dicatat lewat `catat_situs_dibuka`). `cek_terakhir`
+    /// boleh: UI yang mengecek pembaruan.
     pub fn ubah_setelan(&self, perubahan: serde_json::Map<String, serde_json::Value>) -> Result<(), Pesan> {
-        {
+        if perubahan.contains_key("active_profile") {
+            return Err(Pesan::baru("Profil aktif diganti lewat Ganti profil, bukan lewat setelan."));
+        }
+        if perubahan.contains_key("situs_terakhir") {
+            return Err(Pesan::baru("Situs terakhir dicatat lewat Catat situs dibuka, bukan lewat setelan."));
+        }
+        let rinci = {
             let mut d = self.tulis();
             let mut v = serde_json::to_value(&d.settings)
                 .map_err(|e| Pesan::dengan("Setelan tidak sah: {0}", &[&e.to_string()]))?;
@@ -1324,7 +1478,9 @@ impl Engine {
                 .map_err(|e| Pesan::dengan("Setelan tidak sah: {0}", &[&e.to_string()]))?;
             salin_setelan(&mut d.settings, baru);
             d.settings.save().map_err(|e| galat_io("Setelan tidak bisa disimpan: {0}", &e))?;
-        }
+            d.settings.log_rinci
+        };
+        self.inti.layanan.set_log_rinci(rinci);
         self.muat_ulang();
         Ok(())
     }
@@ -1351,10 +1507,6 @@ impl Engine {
         }
     }
 
-    #[cfg(test)]
-    fn pasang_kait_web(&self, f: Option<fn(&Hasil)>) {
-        *kunci(&self.inti.kait_web) = f;
-    }
 }
 
 // ------------------------------------------------------------ protokol

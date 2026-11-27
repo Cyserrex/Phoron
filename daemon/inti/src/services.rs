@@ -30,6 +30,13 @@
 //!   semua" dua kali selagi InnoDB memulihkan diri dulu melahirkan dua mysqld,
 //!   dan yang memegang 3306 tidak bisa dihentikan lagi. Uji:
 //!   `nyata_apache_php` (dua start serentak, satu httpd).
+//! - ...tetapi HANYA bila belum dibatalkan stop (giliran sama). Start sesudah
+//!   stop menunggu start lama selesai berbenah lalu mulai sendiri. Uji:
+//!   `start_basi_tidak_dipakai_ulang`, `nyata_stop_lalu_start_cepat`,
+//!   `nyata_mysql_stop_lalu_start_saat_init`.
+//! - Langkah start yang lama (`httpd -t`, `nginx -t`, init MySQL) terikat Job
+//!   daemon dan dibatalkan stop (`jalankan`): dulu init tidak bisa dihentikan
+//!   sampai lima menit dan tertinggal yatim sesudah daemon keluar.
 //! - Setiap stop menaikkan nomor giliran PALING AWAL; start memeriksanya
 //!   sesudah setiap langkah yang menunggu dan membereskan proses yang sempat
 //!   ia lahirkan. Dulu "Matikan semua" di tengah start web membiarkan Apache
@@ -40,8 +47,12 @@
 //! - Lampu hijau diperiksa SEKALI LAGI sesudah disetel (`selesaikan`): stop
 //!   dari utas lain bisa menyelinap tepat sebelumnya.
 //! - Galat di tengah start (exe dikarantina antivirus, folder data tak bisa
-//!   dibuat) berakhir di Gagal, tidak pernah tersangkut di Menyalakan. Uji:
-//!   `exe_hilang_berakhir_gagal`.
+//!   dibuat) berakhir di Gagal, tidak pernah tersangkut di Menyalakan - juga
+//!   bila badan start PANIK (penjaga `JagaMulai`). Uji:
+//!   `exe_hilang_berakhir_gagal`, `panik_di_start_berakhir_gagal`.
+//! - Proses yang mati di sela pemeriksaan terakhir dan lampu hijau dilaporkan
+//!   (sekali), bukan ditimpa Jalan: pengawas diam selama `dalam_start`, dan
+//!   `selesaikan` memeriksa sekali lagi sesudah menyalakan lampu.
 //!
 //! Web server
 //! - Port HTTP (dan HTTPS bila config membukanya) diperiksa dulu dan
@@ -72,9 +83,12 @@
 //!   mysql_install_db untuk MariaDB). Init dianggap berhasil hanya bila tidak
 //!   terputus dan (kode 0 atau tabel sistem benar-benar ada): dulu init yang
 //!   terputus meninggalkan folder mysql\ dan setiap start sesudahnya gagal.
-//!   Sisa init gagal di folder yang tadinya kosong DIPINDAH ke
-//!   `<folder>.gagal-<waktu>`, tidak dihapus. Uji: `init_berhasil_hanya_bila_tuntas`,
-//!   `init_gagal_dipindah`, `nyata_mysql_init_dan_rapi`, `nyata_mariadb_xampp`.
+//!   Sisa init gagal ATAU dibatalkan di folder yang tadinya kosong DIPINDAH
+//!   ke `<folder>.gagal-<waktu>`, tidak dihapus. Penanda `<folder>.phoron-init`
+//!   ditulis selama init: yang masih ada (daemon mati di tengah init) membuat
+//!   folder itu tidak dianggap siap. Uji: `init_berhasil_hanya_bila_tuntas`,
+//!   `init_gagal_dipindah`, `init_terputus_tidak_dianggap_siap`,
+//!   `nyata_mysql_init_dan_rapi`, `nyata_mariadb_xampp`.
 //! - Basis data lama di folder bernama sama milik MySQL lain disebut terang.
 //! - mysqld dijalankan dengan --console; salinan keluarannya ditulis Phoron ke
 //!   logs\mysql-error.log (--console membuat mysqld mengabaikan log-error).
@@ -114,6 +128,14 @@
 //!   status tersangkut di Menyalakan; kini start sendiri yang melapor.
 //! - mysqld yang diminta stop tepat saat dinyatakan jalan dulu dibunuh paksa;
 //!   kini dimatikan rapi.
+//! - Start yang sudah dibatalkan stop dulu dipakai ulang (lihat di atas).
+//! - Stop MySQL mendahulukan port dan paket yang tercatat saat mysqld
+//!   dinyalakan, bukan profil terkini (yang portnya bisa sudah disunting).
+//! - `sisa_proses` kosong juga selama layanan kita Menyalakan/Mematikan: dulu
+//!   httpd dalam jeda pemeriksaan bisa dibunuh sebagai "sisa".
+//! - Nginx dijalankan dengan awalan (`-p`) folder Phoron (`tmp\nginx`), bukan
+//!   folder paket: logs\error.log dan temp\*_temp-nya dulu menulisi bin.
+//! - Init MySQL bisa dibatalkan (C# tidak memberi token pembatalan).
 
 use crate::config;
 use crate::model::{BinPackage, Profile, ServiceKind, ServiceState};
@@ -122,7 +144,7 @@ use crate::{log_file, port, process_job, shell};
 use std::collections::HashMap;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -133,7 +155,7 @@ mod web;
 #[cfg(test)]
 mod uji;
 
-pub use db::{init_berhasil, minta_mysql_berhenti, mysql_error_log, tabel_sistem_ada};
+pub use db::{init_berhasil, minta_mysql_berhenti, mysql_error_log, penanda_init, tabel_sistem_ada};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -239,14 +261,21 @@ impl Proses {
     }
 }
 
-/// Start yang sedang berjalan; start berikutnya menunggu hasilnya.
-#[derive(Default)]
+/// Start yang sedang berjalan; start berikutnya pada giliran yang SAMA
+/// menunggu hasilnya.
 struct Mulai {
+    /// Nomor giliran saat start ini dimulai. Berbeda dengan giliran kini =
+    /// start ini sudah dibatalkan stop dan tidak boleh dipakai ulang.
+    giliran: u64,
     hasil: Mutex<Option<bool>>,
     cv: Condvar,
 }
 
 impl Mulai {
+    fn baru(giliran: u64) -> Mulai {
+        Mulai { giliran, hasil: Mutex::new(None), cv: Condvar::new() }
+    }
+
     fn selesai(&self) -> bool {
         kunci(&self.hasil).is_some()
     }
@@ -261,9 +290,76 @@ impl Mulai {
         }
     }
 
+    /// Tunggu paling lama `batas`; benar bila start ini sudah selesai.
+    fn tunggu_batas(&self, batas: Duration) -> bool {
+        let mulai = Instant::now();
+        let mut g = kunci(&self.hasil);
+        while g.is_none() {
+            let Some(sisa) = batas.checked_sub(mulai.elapsed()).filter(|s| !s.is_zero()) else { return false };
+            g = self.cv.wait_timeout(g, sisa).map(|(g, _)| g).unwrap_or_else(|e| e.into_inner().0);
+        }
+        true
+    }
+
     fn isi(&self, h: bool) {
         *kunci(&self.hasil) = Some(h);
         self.cv.notify_all();
+    }
+}
+
+/// Penjaga badan start. Bila badan start panik (daemon memakai panic=unwind
+/// dan menangkapnya per perintah), `Drop` tetap mengisi hasil `Mulai` - tanpa
+/// itu setiap start berikutnya menunggu selamanya - dan mengembalikan status
+/// ke Gagal, bukan tertinggal di Menyalakan. Proses yang sempat dilahirkan
+/// start itu dibereskan.
+struct JagaMulai<'a> {
+    layanan: &'a Layanan,
+    jenis: ServiceKind,
+    mulai: &'a Mulai,
+    g: u64,
+    tuntas: bool,
+}
+
+impl Drop for JagaMulai<'_> {
+    fn drop(&mut self) {
+        if self.tuntas {
+            return;
+        }
+        let l = self.layanan;
+        // Hanya proses yang masih dipegang START (dalam_start): yang sudah
+        // dinyatakan jalan bukan urusan penjaga ini.
+        let (sisa, paket, port) = {
+            let mut d = l.data();
+            let (paket, port) = (d.db_paket.clone(), d.db_port);
+            let slot = match self.jenis {
+                ServiceKind::Web => &mut d.web,
+                ServiceKind::Db => &mut d.db,
+            };
+            let sisa =
+                if slot.as_ref().is_some_and(|p| p.dalam_start.load(Ordering::SeqCst)) { slot.take() } else { None };
+            (sisa, paket, port)
+        };
+        if let Some(p) = sisa {
+            match self.jenis {
+                ServiceKind::Web => p.bunuh(),
+                // MySQL tetap dimatikan dengan rapi, panik atau tidak.
+                ServiceKind::Db => {
+                    let _ = l.matikan_mysql_rapi(&p, paket.as_ref(), port);
+                }
+            }
+        }
+        if self.jenis == ServiceKind::Web {
+            l.stop_fastcgi();
+        }
+        self.mulai.isi(false);
+        if !l.batal(self.jenis, self.g) {
+            let kunci_pesan = match self.jenis {
+                ServiceKind::Web => "Web server tidak bisa dinyalakan karena galat di dalam Phoron.",
+                ServiceKind::Db => "MySQL tidak bisa dinyalakan karena galat di dalam Phoron.",
+            };
+            l.gagal(self.jenis, Pesan::baru(kunci_pesan));
+        }
+        // Dibatalkan: stop yang membatalkannya sudah menyetel keadaannya.
     }
 }
 
@@ -408,6 +504,10 @@ impl Layanan {
         self.inti.log_rinci.store(rinci, Ordering::SeqCst);
     }
 
+    pub fn log_rinci(&self) -> bool {
+        self.inti.log_rinci.load(Ordering::SeqCst)
+    }
+
     /// Berapa lama start MySQL menunggu port-nya didengar. Longgar dengan
     /// sengaja: yang ditunggu bisa jadi pemulihan InnoDB.
     pub fn set_batas_siap_db(&self, batas: Duration) {
@@ -506,25 +606,40 @@ impl Layanan {
         self.giliran_ref(jenis).fetch_add(1, Ordering::SeqCst);
     }
 
-    /// Jalankan badan start, atau ikut menunggu start yang masih berjalan.
-    /// MENJAMIN keadaannya tidak tertinggal di Menyalakan bila badan start
-    /// berakhir dengan galat tak terduga.
+    /// Jalankan badan start, atau ikut menunggu start yang masih berjalan pada
+    /// giliran yang sama. MENJAMIN keadaannya tidak tertinggal di Menyalakan
+    /// bila badan start berakhir dengan galat tak terduga ATAU panik.
+    ///
+    /// Start yang sudah dibatalkan stop (gilirannya basi) TIDAK dipakai ulang:
+    /// "Stop lalu Start" cepat, atau ganti profil selagi MySQL masih init, dulu
+    /// menerima hasil `false` milik start yang dibatalkan dan tidak menyalakan
+    /// apa pun. Start baru menunggu start lama selesai berbenah, lalu mulai
+    /// sendiri.
     fn antre(&self, jenis: ServiceKind, kerja: impl FnOnce(u64) -> Lanjut<bool>) -> bool {
-        let (mulai, g) = {
+        let (mulai, g) = loop {
             let mut d = self.data();
+            let g = self.giliran(jenis);
             let slot = match jenis {
                 ServiceKind::Web => &mut d.mulai_web,
                 ServiceKind::Db => &mut d.mulai_db,
             };
-            if let Some(m) = slot.as_ref().filter(|m| !m.selesai()) {
-                let m = m.clone();
-                drop(d);
-                return m.tunggu();
+            match slot.as_ref().filter(|m| !m.selesai()).cloned() {
+                Some(m) if m.giliran == g => {
+                    drop(d);
+                    return m.tunggu();
+                }
+                Some(m) => {
+                    drop(d);
+                    m.tunggu();
+                }
+                None => {
+                    let m = Arc::new(Mulai::baru(g));
+                    *slot = Some(m.clone());
+                    break (m, g);
+                }
             }
-            let m = Arc::new(Mulai::default());
-            *slot = Some(m.clone());
-            (m, self.giliran(jenis))
         };
+        let mut jaga = JagaMulai { layanan: self, jenis, mulai: &mulai, g, tuntas: false };
         // Di luar kunci: badan start langsung mengirim kabar.
         let hasil = match kerja(g) {
             Ok(h) => h,
@@ -542,27 +657,82 @@ impl Layanan {
                 false
             }
         };
+        jaga.tuntas = true;
         mulai.isi(hasil);
         hasil
     }
 
+    /// Batalkan start yang sedang berjalan (web dan MySQL) tanpa mematikan
+    /// yang sudah jalan. Dipakai saat daemon berhenti.
+    pub fn batalkan_start(&self) {
+        self.naikkan_giliran(ServiceKind::Web);
+        self.naikkan_giliran(ServiceKind::Db);
+    }
+
+    /// Tunggu start yang masih berjalan selesai atau selesai berbenah, paling
+    /// lama `batas` untuk keduanya. Benar bila tidak ada lagi yang berjalan.
+    pub fn tunggu_start(&self, batas: Duration) -> bool {
+        let mulai = Instant::now();
+        let (w, d) = {
+            let d = self.data();
+            (d.mulai_web.clone(), d.mulai_db.clone())
+        };
+        w.iter().chain(d.iter()).all(|m| m.tunggu_batas(batas.saturating_sub(mulai.elapsed())))
+    }
+
     /// Langkah terakhir start: nyatakan Jalan, lalu periksa SEKALI LAGI - stop
-    /// dari utas lain bisa menyelinap tepat sebelumnya.
+    /// dari utas lain bisa menyelinap tepat sebelumnya, dan prosesnya bisa
+    /// mati tepat di sela pemeriksaan terakhir dan lampu hijau.
     fn selesaikan(&self, jenis: ServiceKind, g: u64, p: &Arc<Proses>, mysql: Option<&BinPackage>, port: u16) -> bool {
         self.ubah(jenis, ServiceState::Jalan, None);
-        if !self.batal(jenis, g) {
-            return true;
-        }
-        match jenis {
-            ServiceKind::Web => self.buang_web_yatim(p),
-            ServiceKind::Db => {
-                if self.lepas_db_jika(p) {
-                    self.matikan_mysql_rapi(p, mysql, port);
+        if self.batal(jenis, g) {
+            match jenis {
+                ServiceKind::Web => self.buang_web_yatim(p),
+                ServiceKind::Db => {
+                    if self.lepas_db_jika(p) {
+                        self.matikan_mysql_rapi(p, mysql, port);
+                    }
                 }
             }
+            self.ubah(jenis, ServiceState::Berhenti, None);
+            return false;
         }
-        self.ubah(jenis, ServiceState::Berhenti, None);
-        false
+        // Mulai sekarang pengawas yang melaporkan kematiannya. Selama start
+        // berjalan ia diam, jadi proses yang mati tepat sebelum ini (sesudah
+        // pemeriksaan terakhir) dilaporkan di sini - sekali, oleh siapa pun
+        // yang berhasil melepas rujukannya.
+        p.dalam_start.store(false, Ordering::SeqCst);
+        if p.keluar() {
+            let dilepas = match jenis {
+                ServiceKind::Web => self.lepas_web_jika(p),
+                ServiceKind::Db => self.lepas_db_jika(p),
+            };
+            if dilepas {
+                self.lapor_mati(jenis, p);
+            }
+            return false;
+        }
+        true
+    }
+
+    /// Laporkan web server atau mysqld yang mati sendiri (rujukannya sudah
+    /// dilepas pemanggil).
+    fn lapor_mati(&self, jenis: ServiceKind, p: &Arc<Proses>) {
+        let kode = p.kode().to_string();
+        match jenis {
+            ServiceKind::Web => {
+                self.stop_fastcgi();
+                let log = if p.tag == "nginx" { "nginx-error.log" } else { "apache-error.log" };
+                let kunci_pesan = format!("{{0}} berhenti sendiri (kode {{1}}). Lihat logs\\{log}.");
+                self.gagal(ServiceKind::Web, Pesan::dengan(&kunci_pesan, &[&p.tag, &kode]));
+            }
+            ServiceKind::Db => {
+                self.gagal(
+                    ServiceKind::Db,
+                    Pesan::dengan("MySQL berhenti sendiri (kode {0}). Lihat logs\\mysql-error.log.", &[&kode]),
+                );
+            }
+        }
     }
 
     // ------------------------------------------------------------ rujukan
@@ -614,6 +784,32 @@ impl Layanan {
 
     // ------------------------------------------------------------ proses
 
+    /// Lahirkan proses yang terikat ke job (daemon, atau job khusus uji)
+    /// sebelum sempat jalan.
+    fn lahir(&self, cmd: &mut Command) -> std::io::Result<Child> {
+        match &self.inti.job {
+            Some(j) => j.spawn(cmd, CREATE_NO_WINDOW),
+            None => process_job::spawn_terikat(cmd, CREATE_NO_WINDOW),
+        }
+    }
+
+    /// Perintah singkat yang menjadi bagian start (uji config, init MySQL):
+    /// terikat ke job - daemon yang mati ikut mematikannya - dan pohonnya
+    /// dibunuh begitu stop membatalkan start giliran `g`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn jalankan(
+        &self,
+        exe: &str,
+        args: &str,
+        kerja_di: &Path,
+        batas_ms: i64,
+        env: Option<&HashMap<String, String>>,
+        jenis: ServiceKind,
+        g: u64,
+    ) -> std::io::Result<shell::RunResult> {
+        shell::run_batal(exe, args, Some(kerja_di), batas_ms, env, None, &|c| self.lahir(c), &|| self.batal(jenis, g))
+    }
+
     /// Jalankan satu layanan, terikat ke job sebelum sempat jalan. Keluarannya
     /// dibaca per baris; `salin_ke` = berkas log yang menerima seluruhnya.
     #[allow(clippy::too_many_arguments)]
@@ -641,11 +837,7 @@ impl Layanan {
                 cmd.env(k, v);
             }
         }
-        let hasil = match &self.inti.job {
-            Some(j) => j.spawn(&mut cmd, CREATE_NO_WINDOW),
-            None => process_job::spawn_terikat(&mut cmd, CREATE_NO_WINDOW),
-        };
-        let mut anak = match hasil {
+        let mut anak = match self.lahir(&mut cmd) {
             Ok(a) => a,
             Err(e) => {
                 let nama = Path::new(exe).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -718,11 +910,11 @@ impl Layanan {
         }
         let siapa = {
             let mut d = self.data();
+            if (sama(&d.web, p) || sama(&d.db, p)) && p.dalam_start.load(Ordering::SeqCst) {
+                // Start yang melapor (web dengan ekor log dan petunjuknya).
+                return;
+            }
             if sama(&d.web, p) {
-                if p.dalam_start.load(Ordering::SeqCst) {
-                    // Start yang melapor, dengan ekor log dan petunjuknya.
-                    return;
-                }
                 d.web = None;
                 Siapa::Web
             } else if sama(&d.db, p) {
@@ -738,20 +930,9 @@ impl Layanan {
                 return;
             }
         };
-        let kode = p.kode().to_string();
         match siapa {
-            Siapa::Web => {
-                self.stop_fastcgi();
-                let log = if p.tag == "nginx" { "nginx-error.log" } else { "apache-error.log" };
-                let kunci_pesan = format!("{{0}} berhenti sendiri (kode {{1}}). Lihat logs\\{log}.");
-                self.gagal(ServiceKind::Web, Pesan::dengan(&kunci_pesan, &[&p.tag, &kode]));
-            }
-            Siapa::Db => {
-                self.gagal(
-                    ServiceKind::Db,
-                    Pesan::dengan("MySQL berhenti sendiri (kode {0}). Lihat logs\\mysql-error.log.", &[&kode]),
-                );
-            }
+            Siapa::Web => self.lapor_mati(ServiceKind::Web, p),
+            Siapa::Db => self.lapor_mati(ServiceKind::Db, p),
             Siapa::Php => {
                 // Web server sedang menyala atau mati: yang melapor start/stop.
                 if self.web_state() == ServiceState::Jalan {
@@ -796,9 +977,12 @@ impl Layanan {
 
     /// Port profil yang dipegang proses jenis milik Phoron padahal Phoron ini
     /// tidak merasa menjalankannya - biasanya sisa salinan sebelumnya yang
-    /// ditutup paksa. Kosong selama salah satu layanan kita sedang jalan.
+    /// ditutup paksa. Kosong selama salah satu layanan kita sedang jalan,
+    /// menyala, atau dimatikan: httpd yang masih dalam jeda pemeriksaan atau
+    /// mysqld yang baru mengikat port adalah milik kita, bukan sisa.
     pub fn sisa_proses(&self, profile: &Profile, https: bool) -> Vec<port::Usage> {
-        if self.web_state() == ServiceState::Jalan || self.db_state() == ServiceState::Jalan {
+        let sibuk = |s: ServiceState| s.hidup() || s == ServiceState::Mematikan;
+        if sibuk(self.web_state()) || sibuk(self.db_state()) {
             return Vec::new();
         }
         port::conflicts(profile, https, true, true)

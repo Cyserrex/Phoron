@@ -48,9 +48,9 @@ kunci `data`.
 |---|---|---|
 | `halo` | `{versi_ui, protokol: 2}` | `{versi_daemon, protokol}` |
 | `keadaan` | - | `Keadaan` |
-| `muat_ulang` | - | - |
-| `simpan_setelan` | `{setelan: Settings}` | - |
-| `ubah_setelan` | `{perubahan: {medan: nilai, ...}}` hanya medan yang diubah | - (dipakai UI; mencegah menimpa perubahan dari menu baki) |
+| `muat_ulang` | - | - (membaca ulang profil dan apps.ini, memindai ulang paket dan situs; phoron.ini TIDAK dibaca ulang - setelan di memori daemon sumber kebenaran) |
+| `simpan_setelan` | `{setelan: Settings}` | - (`active_profile` dan `situs_terakhir` di dalamnya diabaikan) |
+| `ubah_setelan` | `{perubahan: {medan: nilai, ...}}` hanya medan yang diubah | - (dipakai UI; mencegah menimpa perubahan dari menu baki). Menyebut `active_profile` = `gagal` "Profil aktif diganti lewat Ganti profil, bukan lewat setelan."; `situs_terakhir` juga ditolak (pakai `catat_situs_dibuka`) |
 | `mulai_ulang_admin` | - | - (daemon baru ber-Administrator; layanan hidup dinyalakan lagi; lihat Siklus hidup). UAC dibatalkan = `gagal` "Hak Administrator tidak diberikan." |
 | `terapkan` | - | - (peringatan di `peringatan`) |
 | `ganti_profil` | `{file_name, restart}` | - |
@@ -131,7 +131,9 @@ Bedakan jawaban dan kabar dari ada tidaknya kunci `id`.
   ikut keluar karena menerima kabar `pamit`.
 - Jalur keluar tunggal (perintah `keluar`, menu Keluar, sinyal pemasang,
   `taskkill` tanpa `/f` = WM_CLOSE, akhir sesi Windows, panik di utas utama):
-  gerbang ditutup -> `sebelum_keluar` (Engine mematikan layanan) -> kabar
+  gerbang ditutup -> `sebelum_keluar` (`Engine::tutup`: start dan ganti
+  profil baru ditolak, start yang berjalan dibatalkan dan ditunggu berbenah
+  paling lama 60 detik, lalu layanan dimatikan - MySQL dengan rapi) -> kabar
   `pamit` -> antrean klien dikuras (maks 2 detik) -> ikon baki dihapus ->
   proses berakhir. Begitu gerbang ditutup, perintah baru (termasuk `halo`
   dari sambungan baru) dijawab `gagal` "Phoron sedang ditutup." dan butir
