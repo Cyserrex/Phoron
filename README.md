@@ -60,13 +60,18 @@ projects on Home, every other page one click away on the labelled rail.
   red with the reason. Config that changed under a running server gets a
   **Restart services** button instead of silently serving the old one.
 - **No administrator rights needed** to install or run. Services are ordinary
-  child processes, not Windows services, and they end when Phoron ends — no
+  child processes, not Windows services, and they end when Phoron quits — no
   orphaned `httpd.exe` holding port 80.
+- **Light in the tray.** Since 1.42 the tray icon and the services are run by
+  `phorond.exe`, a small daemon written in Rust: idle, it uses about **11 MB of
+  RAM** (2 MB private). The WPF window, `Phoron.exe`, only lives while it is open,
+  and a crash in the window never takes Apache or MySQL down with it.
 - **More than PHP.** A **Node / TypeScript** page runs Next.js, Astro, Vite and
   other `package.json` projects from any folder. A **Databases** page manages
   MySQL, and the installer can bundle **HeidiSQL 12.21**, opened already connected
   to the active profile.
-- **One 3 MB executable.** Every dependency is embedded. The installer is optional.
+- **Two small executables.** `Phoron.exe` (the window, ~3 MB) and `phorond.exe`
+  (the daemon, ~1.5 MB), every dependency embedded. The installer is optional.
 - **Verifiable releases.** Every release is built by GitHub Actions from a public
   commit, ships SHA-256 checksums, and carries a build-provenance attestation you
   can verify yourself.
@@ -96,8 +101,10 @@ a cross-platform tool. It is a Windows desktop app for local development.
 ## Installation
 
 Download `Phoron-<version>-Setup.exe` from the
-[Releases page](https://github.com/Cyserrex/Phoron/releases), or just take
-`Phoron.exe` — a single file you can run from anywhere.
+[Releases page](https://github.com/Cyserrex/Phoron/releases), or take
+`Phoron.exe` and `phorond.exe` and put them in the same folder — that is all
+Phoron needs. `Phoron.exe` on its own still works: without `phorond.exe` next to
+it, it runs everything inside its own process, exactly like 1.41.
 
 The installer offers two modes:
 
@@ -144,9 +151,9 @@ to you.
 ### Start with Windows
 
 **Settings → Start Phoron when Windows starts** (or tick it during setup).
-Phoron starts minimised to the tray with no window; if **Start services
-automatically when Phoron opens** is also on, Apache and MySQL are ready before
-you open anything.
+Windows starts only `phorond.exe --baki`: the tray icon, no window and no .NET
+runtime. If **Start services automatically when Phoron opens** is also on,
+Apache and MySQL are ready before you open anything.
 It uses your user's `Run` registry key — not a Windows service or scheduled task,
 both of which would need admin rights.
 
@@ -171,6 +178,10 @@ bottom as plain text buttons. The window starts at 1040×660, never more than ab
 
 Right-click the tray icon to start and stop services, **run a Node project**,
 open a recently used PHP site, or switch profile — without opening a window.
+
+Closing the window with **×** only closes the window: the tray icon and the
+services keep running. **Quit** (in the window or the tray menu) stops the
+services — MySQL with a clean shutdown — and ends Phoron completely.
 
 ---
 
@@ -390,6 +401,7 @@ improvements were made, between Phoron 1.28 and 1.34:
 | | |
 |---|---|
 | Phoron idle in the tray, 30 s | **0% CPU**, 0 disk operations |
+| Phoron idle in the tray, memory (1.41 → 1.42) | **12 MB / 90 MB → 11 MB / 2 MB** (working set / private) |
 | Apache, static file | **1.0 ms** |
 | CodeIgniter page, OPcache off → on | **34.8 ms → 17.0 ms** |
 | 10 simultaneous 1-second PHP requests over FastCGI, 1 worker → 4 workers | **10.1 s → 3.0 s** |
@@ -407,7 +419,8 @@ saved file is picked up on the next request. You can switch OPcache off in
 
 ```
 C:\Phoron\
-  Phoron.exe          single file, every DLL embedded
+  Phoron.exe          the window (WPF), every DLL embedded
+  phorond.exe         the daemon (Rust): tray icon, services, configuration
   phoron.ini          global settings (also marks the install root)
   bin\                Phoron's own versions (php\, apache\, mysql\, nginx\, heidisql\)
   profiles\*.ini      one file per profile, easy to edit by hand
@@ -468,6 +481,21 @@ Indonesian.
 
 ## Technical notes
 
+**Two processes since 1.42.** `phorond.exe` (Rust) owns the tray icon and does all
+the work: it scans the `bin` folders, writes every configuration file, edits the
+hosts file, and starts and stops Apache, Nginx, PHP, MySQL and Node projects.
+`Phoron.exe` is a WPF client that talks to it over the named pipe
+`\\.\pipe\phoron` (one JSON message per line, described in
+[`daemon/PROTOKOL.md`](daemon/PROTOKOL.md)). The window reads profiles and sites
+itself but sends every action to the daemon, and the daemon is the only writer of
+`phoron.ini`, so the two never overwrite each other's settings. Every file
+Phoron writes — `phoron.ini`, profiles, `apps.ini`, `httpd.conf`, `php.ini`,
+`my.ini`, virtual hosts, the hosts block — is byte-for-byte identical to what the
+C# version wrote, so you can move between 1.41 and 1.42 without losing anything.
+The pipe, the single-instance mutex and the exit event accept only your user,
+SYSTEM and Administrators, with a medium integrity label so a normal window can
+still talk to a daemon running as Administrator.
+
 **`php.ini` starts from the one already there, not the vendor default.** Order:
 `php.ini.sebelum-phoron` → `php.ini` → `php.ini-development` →
 `php.ini-production`. PHP folders are often borrowed from a tool that has been tuned
@@ -509,15 +537,19 @@ reuses the first; a Stop that arrives mid-start cancels it and cleans up anythin
 it had already launched. A Windows shutdown that another app cancels leaves your
 services running.
 
-**Named objects work across privilege levels.** After "restart as Administrator",
-clicking the taskbar icon starts a normal-privilege copy. Phoron's single-instance
+**Named objects work across privilege levels.** "Restart as Administrator" restarts
+the daemon elevated (it brings back the services that were running); the window
+stays a normal-privilege process. After that, clicking the taskbar icon starts a
+normal-privilege copy. Phoron's single-instance
 mutex and "show window" event carry an explicit per-user ACL and a low integrity
 label, so that copy can still bring the existing window forward instead of
 failing.
 
 **The installer closes Phoron politely, in layers.** First Restart Manager, which
 Phoron answers by stopping Apache and MySQL. Then a named event,
-`Phoron.KeluarSekarang`, that makes Phoron exit through its normal path. Only if
+`Phoron.KeluarSekarang`, that makes Phoron — the daemon, and the window with it —
+exit through its normal path; the installer waits for both the window's and the
+daemon's single-instance mutex. Only if
 neither is answered does it force `taskkill`, and child processes are bound to a
 Job Object so they end too.
 
@@ -534,22 +566,34 @@ every start. Error logs for Apache, MySQL and PHP are always on.
 
 ## Building from source
 
-Requires the .NET SDK (the build targets .NET Framework 4.8, present on every
-Windows 10/11).
+Requires the .NET SDK (the window targets .NET Framework 4.8, present on every
+Windows 10/11) and a Rust toolchain (`cargo`) for the daemon.
 
 ```
-build.bat              Release build -> dist\Phoron.exe (single file, ~3 MB)
+build.bat              Release build -> dist\Phoron.exe (~3 MB) + dist\phorond.exe (~1.5 MB)
 build.bat run          Debug build, then run it
-build.bat test         test harness (835 tests)
+build.bat test         C# test harness (945 tests)
 build.bat live         end-to-end: starts real Apache & MySQL
 build.bat ui           UI smoke test: drives the real Phoron.exe through UI Automation
 build.bat clean
 build_installer.bat    exe + installer (needs Inno Setup 6; downloads HeidiSQL)
-set_version.bat 1.2.0  bump the version in every file at once
+set_version.bat 1.2.0  bump the version in every file at once (daemon included)
+
+cd daemon
+cargo test                                       daemon tests (212), real Apache/MySQL/Node from Laragon if present
+powershell -File uji_setara.ps1                  C# and Rust must write identical files
+powershell -File uji_setara_modul.ps1 config     same, for one feature (config, hosts, proses)
 ```
 
+The daemon is not a line-by-line translation of the C# code; it follows Phoron's
+features. What must stay the same is checked by **parity tests**: the C# test
+harness generates inputs and its own output, and the Rust code must produce
+identical files — settings, profiles, every generated `httpd.conf`/`php.ini`/
+`my.ini` for real Laragon and XAMPP packages (validated again with `httpd -t` and
+`nginx -t`), hosts files in ANSI and UTF-8, and log rotation.
+
 **Releases are automatic.** Pushing to `main` with a new version number makes
-GitHub Actions publish `v<version>` with the exe, the installer and checksums.
+GitHub Actions publish `v<version>` with both executables, the installer and checksums.
 Existing tags are skipped, so an ordinary push never overwrites a release people
 have already downloaded. Use `set_version.bat`; CI refuses to build if the version
 differs between files.
