@@ -13,7 +13,7 @@ namespace Phoron.Core
     /// service butuh hak admin untuk dipasang, terus ada setelah aplikasi ditutup,
     /// dan tidak bisa punya dua versi berbeda yang gampang ditukar.
     /// </summary>
-    public class ServiceManager
+    public class ServiceManager : ILayanan
     {
         /// <summary>
         /// Menjaga tiga rujukan proses di bawah, itu saja. TIDAK pernah dipegang

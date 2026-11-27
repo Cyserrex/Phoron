@@ -11,7 +11,7 @@ namespace Phoron.Core
     /// proses anak Phoron. Beberapa proyek boleh jalan sekaligus - itu memang
     /// lazim: satu frontend, satu API, satu situs dokumentasi.
     /// </summary>
-    public class NodeRunner
+    public class NodeRunner : IProsesNode
     {
         class Berjalan
         {

@@ -148,6 +148,7 @@ namespace Phoron.Tests
                 UjiBerandaD(sandbox);
                 UjiSatuJendela();
                 UjiHostDanPort(sandbox);
+                UjiKlienDaemon();
             }
             catch (Exception ex)
             {

@@ -11,15 +11,23 @@ namespace Phoron.Core
     /// konfigurasi, dan pengendali layanan. UI hanya berbicara dengan kelas ini
     /// supaya urutan "tulis konfigurasi dulu, baru nyalakan" tidak pernah terlewat.
     /// </summary>
-    public class Engine
+    public partial class Engine
     {
         public Settings Settings { get; private set; }
         public List<BinPackage> Packages { get; private set; }
         public List<Profile> Profiles { get; private set; }
         public Profile Active { get; private set; }
-        public ServiceManager Services { get; private set; }
+        /// <summary>
+        /// Keadaan Apache/MySQL. Dalam mode lama ServiceManager di proses ini;
+        /// dalam mode daemon cerminan keadaan di phorond (Jarak.LayananJarak).
+        /// </summary>
+        public ILayanan Services { get; private set; }
         /// <summary>Proyek Node/TypeScript yang terdaftar, dan pengendali prosesnya.</summary>
-        public NodeRunner Node { get; private set; }
+        public IProsesNode Node { get; private set; }
+
+        // Pengendali milik proses ini - hanya ada dalam mode lama.
+        ServiceManager _svc;
+        NodeRunner _node;
         public List<NodeApp> NodeAppsList { get; private set; }
         /// <summary>Hasil pengecekan rilis terakhir; null bila belum pernah dicek.</summary>
         public HasilCek Pembaruan { get; private set; }
@@ -49,13 +57,13 @@ namespace Phoron.Core
             Packages = new List<BinPackage>();
             Profiles = new List<Profile>();
             Sites = new List<Site>();
-            Services = new ServiceManager();
-            Services.Log += Say;
-            Services.LogRinci = Settings.LogRinci;
-            Node = new NodeRunner();
-            Node.UrlFound += PeriksaHsts;
+            Services = _svc = new ServiceManager();
+            _svc.Log += Say;
+            _svc.LogRinci = Settings.LogRinci;
+            Node = _node = new NodeRunner();
+            _node.UrlFound += PeriksaHsts;
             // Dulu dicatat oleh halaman Node, jadi hilang kalau halamannya tertutup.
-            Node.UrlFound += (folder, url) =>
+            _node.UrlFound += (folder, url) =>
                 Say(Lang.T("Proyek {0} siap di {1}", Path.GetFileName((folder ?? "").TrimEnd('\\')), url));
             NodeAppsList = new List<NodeApp>();
         }
@@ -104,6 +112,7 @@ namespace Phoron.Core
         /// </summary>
         public List<PortCheck.Usage> SisaProses()
         {
+            if (ModeJarak) return SisaProsesJarak();
             var hasil = new List<PortCheck.Usage>();
             if (Active == null) return hasil;
             if (Services.WebState == ServiceState.Jalan || Services.DbState == ServiceState.Jalan)
@@ -121,6 +130,7 @@ namespace Phoron.Core
         /// </summary>
         public async Task<List<string>> HentikanSisaAsync()
         {
+            if (ModeJarak) return await AksiJarakAsync("hentikan_sisa", null, BatasLama);
             var gagal = new List<string>();
             foreach (var u in SisaProses())
             {
@@ -243,6 +253,9 @@ namespace Phoron.Core
 
         public void Say(string text)
         {
+            // Mode daemon: log Aktivitas milik daemon. Barisnya kembali sebagai
+            // kabar log, dan baru di situ masuk riwayat dan dikabarkan.
+            if (ModeJarak && CatatJarak(text)) return;
             // Dicatat SEBELUM pendengarnya dipanggil, supaya penggambar layar
             // yang membaca Riwayat() sudah melihat baris ini di dalamnya.
             lock (_riwayat)
@@ -253,6 +266,7 @@ namespace Phoron.Core
 
             var h = Log;
             if (h != null) h(text);
+            if (ModeJarak) return;   // phoron.log ditulis daemon
 
             // Penulisannya diserahkan ke LogFile: ia berputar sebelum berkasnya
             // membesar tanpa batas, dan mengunci supaya baris tidak lenyap saat
@@ -535,6 +549,7 @@ namespace Phoron.Core
             await _gantiProfil.WaitAsync();
             try
             {
+                if (ModeJarak) return await GantiProfilJarakAsync(profile, restartIfRunning);
                 // "Hidup" termasuk yang MASIH menyala. Dulu hanya Jalan yang
                 // dimatikan: MySQL yang sedang memulihkan InnoDB dibiarkan,
                 // my.ini ditulis ulang untuk profil baru, lalu start lamanya
@@ -544,8 +559,8 @@ namespace Phoron.Core
                 if (webWasRunning || dbWasRunning)
                 {
                     Say("Mematikan layanan sebelum ganti profil...");
-                    if (dbWasRunning) await Services.StopDbGracefullyAsync(Active ?? profile, MySql);
-                    if (webWasRunning) await Services.StopWebAsync();
+                    if (dbWasRunning) await _svc.StopDbGracefullyAsync(Active ?? profile, MySql);
+                    if (webWasRunning) await _svc.StopWebAsync();
                 }
 
                 Active = profile;
@@ -575,10 +590,11 @@ namespace Phoron.Core
         public List<string> Apply()
         {
             if (Active == null) return new List<string> { "Belum ada profil." };
+            if (ModeJarak) return TerapkanJarak();
             PastikanHalamanSambutan();
             var awal = PastikanSertifikat();
             RefreshSites();
-            Services.LogRinci = Settings.LogRinci;
+            _svc.LogRinci = Settings.LogRinci;
             LastBuild = ConfigWriter.Build(Active, Php, Apache, MySql, Nginx,
                                            Settings.AutoVhost ? Sites : new List<Site>(),
                                            Settings.PhpIniKeFolderPhp, Settings.LogRinci,
@@ -809,6 +825,7 @@ namespace Phoron.Core
 
         public Task<bool> StartWebAsync()
         {
+            if (ModeJarak) return NyalakanJarakAsync("nyalakan_web", ServiceKind.Web);
             if (Active == null) return Task.FromResult(false);
             // Tidak memakai web server adalah pilihan, bukan kegagalan. Dulu
             // jalur ini berakhir di ServiceManager yang menyetel keadaan jadi
@@ -830,7 +847,7 @@ namespace Phoron.Core
             // yang bukan miliknya adalah kesalahan yang paling sulit dilacak.
             Apply();
             return CatatSaatNyala(ServiceKind.Web, ConfigWriter.VersiKonfigWeb,
-                                  Services.StartWebAsync(Active, WebPackage, Php, LastBuild));
+                                  _svc.StartWebAsync(Active, WebPackage, Php, LastBuild));
         }
 
         // Versi konfigurasi yang dibaca layanan saat ia terakhir menyala - lihat
@@ -856,6 +873,7 @@ namespace Phoron.Core
         {
             get
             {
+                if (ModeJarak) return _perluRestartWebJarak;
                 return Services.WebState == ServiceState.Jalan && _versiWebNyala >= 0
                        && ConfigWriter.VersiKonfigWeb != _versiWebNyala;
             }
@@ -866,15 +884,17 @@ namespace Phoron.Core
         {
             get
             {
+                if (ModeJarak) return _perluRestartDbJarak;
                 return Services.DbState == ServiceState.Jalan && _versiDbNyala >= 0
                        && ConfigWriter.VersiKonfigDb != _versiDbNyala;
             }
         }
 
-        public Task StopWebAsync() { return Services.StopWebAsync(); }
+        public Task StopWebAsync() { return ModeJarak ? AksiJarakAsync("matikan_web", null, BatasLama) : _svc.StopWebAsync(); }
 
         public Task<bool> StartDbAsync()
         {
+            if (ModeJarak) return NyalakanJarakAsync("nyalakan_db", ServiceKind.Db);
             if (Active == null) return Task.FromResult(false);
             if (!Active.PakaiMySql)
             {
@@ -883,19 +903,21 @@ namespace Phoron.Core
             }
             Apply();   // lihat alasannya di StartWebAsync
             return CatatSaatNyala(ServiceKind.Db, ConfigWriter.VersiKonfigDb,
-                                  Services.StartDbAsync(Active, MySql));
+                                  _svc.StartDbAsync(Active, MySql));
         }
 
-        public Task StopDbAsync() { return Services.StopDbGracefullyAsync(Active, MySql); }
+        public Task StopDbAsync() { return ModeJarak ? AksiJarakAsync("matikan_db", null, BatasLama) : _svc.StopDbGracefullyAsync(Active, MySql); }
 
         public async Task StartAllAsync()
         {
+            if (ModeJarak) { await AksiJarakAsync("nyalakan_semua", null, BatasLama); return; }
             await StartDbAsync();
             await StartWebAsync();
         }
 
         public async Task StopAllAsync()
         {
+            if (ModeJarak) { await AksiJarakAsync("matikan_semua", null, BatasLama); return; }
             await StopWebAsync();
             await StopDbAsync();
         }
@@ -992,6 +1014,9 @@ namespace Phoron.Core
             daftar.Insert(0, path);
             while (daftar.Count > Core.Settings.BatasSitusTerakhir) daftar.RemoveAt(daftar.Count - 1);
             Settings.SitusTerakhir = daftar;
+            // Mode daemon: daemon yang mencatat ke phoron.ini; salinan di atas
+            // hanya supaya daftar di layar langsung benar.
+            if (ModeJarak) { CatatSitusJarak(path); return; }
             try { Settings.Save(); } catch { /* daftar ini kenyamanan, bukan data */ }
         }
 
@@ -1023,8 +1048,9 @@ namespace Phoron.Core
         public string JalankanNode(NodeApp app, int portSekali)
         {
             if (app == null) return Lang.T("Proyek belum dipilih.");
+            if (ModeJarak) return JalankanNodeJarak(app, portSekali);
             var node = string.IsNullOrEmpty(app.NodeId) ? null : Find(BinKind.Node, app.NodeId);
-            var err = Node.Start(app, node, portSekali);
+            var err = _node.Start(app, node, portSekali);
             if (err == null) Say(Lang.T("Menjalankan {0} ({1} {2}).", app.DisplayName, app.Manager, app.Script)
                                  + (portSekali > 0 ? " · port " + portSekali : ""));
             return err;

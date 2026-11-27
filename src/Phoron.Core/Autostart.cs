@@ -25,6 +25,18 @@ namespace Phoron.Core
         /// </summary>
         public const string ArgumenTray = "--tray";
 
+        /// <summary>Argumen phorond saat dijalankan Windows: hanya ikon baki dan layanan.</summary>
+        public const string ArgumenBakiDaemon = "--baki";
+
+        /// <summary>
+        /// Exe yang seharusnya dijalankan Windows. Mode daemon: phorond.exe -
+        /// pemilik ikon baki dan layanan; UI baru dibuka saat diminta.
+        /// </summary>
+        public static string ExeTujuan
+        {
+            get { return Jarak.ModeDaemon.Aktif ? Jarak.ModeDaemon.JalurDaemon : ExePath; }
+        }
+
         public static string ExePath
         {
             get
@@ -43,7 +55,7 @@ namespace Phoron.Core
 
         static string NilaiSeharusnya()
         {
-            return "\"" + ExePath + "\" " + ArgumenTray;
+            return "\"" + ExeTujuan + "\" " + (Jarak.ModeDaemon.Aktif ? ArgumenBakiDaemon : ArgumenTray);
         }
 
         /// <summary>Terdaftar untuk exe INI. Entri milik salinan Phoron di folder lain dianggap bukan milik kita.</summary>
@@ -53,7 +65,7 @@ namespace Phoron.Core
             {
                 var nilai = NilaiTerdaftar();
                 if (nilai == null) return false;
-                return MenunjukKe(nilai, ExePath);
+                return MenunjukKe(nilai, ExeTujuan);
             }
         }
 
@@ -61,7 +73,7 @@ namespace Phoron.Core
         public static string EntriAsing()
         {
             var nilai = NilaiTerdaftar();
-            if (nilai == null || MenunjukKe(nilai, ExePath)) return null;
+            if (nilai == null || MenunjukKe(nilai, ExeTujuan)) return null;
             return nilai;
         }
 

@@ -46,7 +46,7 @@ namespace Phoron.App
             bool tertutup = false;
             try
             {
-                _single = ObjekAntarProses.BuatMutex("Phoron.SingleInstance", true, out baru);
+                _single = ObjekAntarProses.BuatMutex(NamaMutex, true, out baru);
             }
             catch (UnauthorizedAccessException)
             {
@@ -84,6 +84,19 @@ namespace Phoron.App
             bool keTray = Array.Exists(args, a =>
                 string.Equals(a, Phoron.Core.Autostart.ArgumenTray, StringComparison.OrdinalIgnoreCase));
 
+            // Mode daemon: phorond.exe ada di sebelah exe ini. Layanan dan ikon
+            // baki milik daemon; UI hanya hidup selama jendelanya terbuka.
+            bool modeDaemon = Phoron.Core.Jarak.ModeDaemon.Aktif;
+            Phoron.Core.Jarak.KlienDaemon klien = null;
+            if (modeDaemon)
+            {
+                klien = SambungDaemon();
+                if (klien == null) return KeluarGalat;
+                // Entri autostart lama (Phoron.exe --tray): cukup pastikan
+                // daemonnya hidup - ikon baki memang miliknya.
+                if (keTray) { klien.Dispose(); return 0; }
+            }
+
             var app = new App();
             app.InitializeComponent();
             // Tanpa ini, mulai dalam keadaan tersembunyi berarti tidak ada jendela
@@ -97,18 +110,15 @@ namespace Phoron.App
             // antivirus yang sedang memindainya - membuat Phoron mati saat start
             // tanpa sepatah pun keterangan.
             Phoron.Core.Engine engine;
-            try { engine = new Phoron.Core.Engine(); }
-            catch (Exception ex)
+            if (klien != null)
             {
-                var jalur = Phoron.Core.Crash.Tulis(ex, "membuat Engine saat start");
-                // Setelan (termasuk bahasanya) justru gagal dibaca di sini, jadi
-                // pesan ini selalu tampil dalam bahasa sumber.
-                MessageBox.Show(
-                    Phoron.Core.Lang.T("Phoron tidak bisa membaca setelannya, jadi tidak bisa dijalankan.")
-                    + "\n\n" + ex.Message
-                    + (jalur != null ? "\n\n" + Phoron.Core.Lang.T("Rincian tersimpan di:") + "\n" + jalur : ""),
-                    "Phoron", MessageBoxButton.OK, MessageBoxImage.Error);
-                return KeluarGalat;
+                try { engine = new Phoron.Core.Engine(klien); }
+                catch (Exception ex) { klien.Dispose(); return GagalMembuatEngine(ex); }
+            }
+            else
+            {
+                try { engine = new Phoron.Core.Engine(); }
+                catch (Exception ex) { return GagalMembuatEngine(ex); }
             }
 
             // Pengendali, bukan jendela, yang memiliki umur aplikasi: ikon baki
@@ -117,12 +127,60 @@ namespace Phoron.App
             return app.Run();
         }
 
+        static int GagalMembuatEngine(Exception ex)
+        {
+            var jalur = Phoron.Core.Crash.Tulis(ex, "membuat Engine saat start");
+            // Setelan (termasuk bahasanya) justru gagal dibaca di sini, jadi
+            // pesan ini selalu tampil dalam bahasa sumber.
+            MessageBox.Show(
+                Phoron.Core.Lang.T("Phoron tidak bisa membaca setelannya, jadi tidak bisa dijalankan.")
+                + "\n\n" + ex.Message
+                + (jalur != null ? "\n\n" + Phoron.Core.Lang.T("Rincian tersimpan di:") + "\n" + jalur : ""),
+                "Phoron", MessageBoxButton.OK, MessageBoxImage.Error);
+            return KeluarGalat;
+        }
+
+        /// <summary>
+        /// Sambung ke phorond, menjalankannya bila belum hidup. Null (sesudah
+        /// kotak pesan) bila tidak bisa - UI tanpa daemon tidak punya apa pun
+        /// untuk dikendalikan, dan diam-diam memegang layanan sendiri justru
+        /// membuat dua pemilik Apache.
+        /// </summary>
+        static Phoron.Core.Jarak.KlienDaemon SambungDaemon()
+        {
+            var klien = new Phoron.Core.Jarak.KlienDaemon(Phoron.Core.Jarak.ModeDaemon.NamaPipe)
+            {
+                JalurDaemon = Phoron.Core.Jarak.ModeDaemon.JalurDaemon,
+            };
+            try
+            {
+                klien.Sambung();
+                return klien;
+            }
+            catch (Exception ex)
+            {
+                klien.Dispose();
+                // Bahasa belum diterapkan di titik ini (setelan belum dimuat).
+                MessageBox.Show(
+                    Phoron.Core.Lang.T("Phoron tidak bisa tersambung ke daemonnya (phorond.exe).")
+                    + "\n\n" + ex.Message,
+                    "Phoron", MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
+            }
+        }
+
         /// <summary>
         /// Nama event yang ditunggu instans yang sedang berjalan (lihat
         /// Pengendali.PasangSinyalTampil). Disetel salinan kedua untuk meminta
         /// jendelanya dimunculkan dari baki sistem.
         /// </summary>
-        public const string NamaSinyalTampil = "Phoron.Tampilkan";
+        public static readonly string NamaSinyalTampil = "Phoron.Tampilkan" + Phoron.Core.Jarak.ModeDaemon.AkhiranObjek;
+
+        /// <summary>
+        /// Mutex instans tunggal UI. Akhiran dari PHORON_INSTANS hanya untuk uji:
+        /// UI uji bisa berjalan di samping Phoron yang sedang dipakai.
+        /// </summary>
+        static readonly string NamaMutex = "Phoron.SingleInstance" + Phoron.Core.Jarak.ModeDaemon.AkhiranObjek;
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -240,7 +298,7 @@ namespace Phoron.App
             try
             {
                 bool baru;
-                _single = ObjekAntarProses.BuatMutex("Phoron.SingleInstance", true, out baru);
+                _single = ObjekAntarProses.BuatMutex(NamaMutex, true, out baru);
             }
             catch { }
         }

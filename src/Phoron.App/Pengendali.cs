@@ -58,6 +58,12 @@ namespace Phoron.App
             Ini = this;
         }
 
+        /// <summary>
+        /// UI ini klien phorond: ikon baki, layanan, dan sinyal keluar milik
+        /// daemon. UI hanya hidup selama jendelanya terbuka.
+        /// </summary>
+        bool ModeDaemon { get { return _engine.ModeJarak; } }
+
         /// <summary>Jendela yang sedang terbuka, atau null bila Phoron hanya ada di baki.</summary>
         public MainWindow Jendela { get { return _jendela; } }
 
@@ -77,11 +83,18 @@ namespace Phoron.App
             // menggambar ulang, jadi utas layanan tidak perlu menunggunya.
             _engine.Services.StateChanged += (kind, state) =>
                 Application.Current.Dispatcher.BeginInvoke(new Action(SegarkanStatus));
+            if (ModeDaemon) PasangKabarDaemon();
             _engine.Reload();
 
-            SetupTray();
-            PasangPendengarSesi();
-            PasangSinyalKeluar();
+            if (!ModeDaemon)
+            {
+                SetupTray();
+                PasangPendengarSesi();
+                // Sinyal Phoron.KeluarSekarang milik daemon dalam mode daemon.
+                // Event-nya AutoReset: kalau UI ikut menunggunya, sinyal dari
+                // pemasang bisa jatuh ke UI dan daemon tidak pernah berhenti.
+                PasangSinyalKeluar();
+            }
             PasangSinyalTampil();
             // Jalur keluar mana pun - termasuk Application.Shutdown() langsung
             // seperti di RestartAsAdmin - tetap mematikan layanan dan mencabut
@@ -129,9 +142,11 @@ namespace Phoron.App
 
         async Task MulaiIntiAsync()
         {
-            _engine.Apply();
+            // Mode daemon: config ditulis dan layanan dinyalakan daemon saat IA
+            // mulai, bukan setiap kali jendela dibuka.
+            if (!ModeDaemon) _engine.Apply();
             SegarkanStatus();
-            if (_engine.Settings.AutoStartServices)
+            if (!ModeDaemon && _engine.Settings.AutoStartServices)
             {
                 _engine.Say("Auto-start aktif - menyalakan layanan...");
                 await _engine.StartAllAsync();
@@ -282,6 +297,9 @@ namespace Phoron.App
             {
                 if (_keluar) return;
                 if (AdaJendela) return;
+                // Mode daemon: tidak ada baki milik UI. Menutup jendela = UI
+                // keluar; Apache, MySQL, dan ikon baki tetap di phorond.
+                if (ModeDaemon) { KeluarUi(); return; }
                 if (_engine.Settings.MinimizeToTray) JadwalkanLepasMemori();
                 else Keluar();
             }));
@@ -640,6 +658,7 @@ namespace Phoron.App
         /// <summary>Tutup Phoron sepenuhnya: layanan dimatikan, ikon baki dicabut.</summary>
         public void Keluar()
         {
+            if (ModeDaemon) { KeluarBersamaDaemon(); return; }
             if (_keluar && _sudahBeres) return;
             _keluar = true;
             if (_jendela != null) { try { _jendela.Close(); } catch { } }
@@ -659,12 +678,20 @@ namespace Phoron.App
         {
             if (_sudahBeres) return;
             _sudahBeres = true;
-            // Layanan adalah proses anak; membiarkannya hidup setelah aplikasi
-            // ditutup berarti port 80 tetap terpakai tanpa ada yang mengaku.
-            try { _engine.Services.StopAll(); } catch { }
-            // Server pengembangan Node juga proses anak; kalau ditinggal hidup,
-            // port 3000/4321 tetap terpakai oleh proses tanpa jendela.
-            try { _engine.Node.StopAll(); } catch { }
+            if (ModeDaemon)
+            {
+                // Layanan milik daemon dan tetap hidup; UI cukup melepas pipe.
+                try { _engine.Lepas(); _engine.Klien.Dispose(); } catch { }
+            }
+            else
+            {
+                // Layanan adalah proses anak; membiarkannya hidup setelah aplikasi
+                // ditutup berarti port 80 tetap terpakai tanpa ada yang mengaku.
+                try { _engine.Services.StopAll(); } catch { }
+                // Server pengembangan Node juga proses anak; kalau ditinggal hidup,
+                // port 3000/4321 tetap terpakai oleh proses tanpa jendela.
+                try { _engine.Node.StopAll(); } catch { }
+            }
             if (_pelepasMemori != null) _pelepasMemori.Stop();
             if (_daftarSinyal != null) { try { _daftarSinyal.Unregister(null); } catch { } }
             if (_sinyalKeluar != null) { try { _sinyalKeluar.Close(); } catch { } }
@@ -672,6 +699,53 @@ namespace Phoron.App
             if (_sinyalTampil != null) { try { _sinyalTampil.Close(); } catch { } }
             if (_tray != null) { try { _tray.Visible = false; _tray.Dispose(); } catch { } }
             if (_pendengarSesi != null) { try { _pendengarSesi.Dispose(); } catch { } }
+        }
+
+        // ----------------------------------------------------------- Mode daemon
+
+        DispatcherTimer _batasPamit;
+
+        /// <summary>Kabar daemon yang mengubah apa yang dilihat UI.</summary>
+        void PasangKabarDaemon()
+        {
+            var d = Application.Current.Dispatcher;
+            // Memuat ulang profil mengganti daftar yang sedang digambar layar,
+            // jadi dikerjakan di utas layar.
+            _engine.PenjadwalUi = kerja => d.BeginInvoke(kerja);
+            _engine.BerubahDariLuar += () =>
+            {
+                AppState.RaiseChanged();
+                SegarkanStatus();
+            };
+            _engine.Pamit += () => d.BeginInvoke(new Action(KeluarUi));
+        }
+
+        /// <summary>
+        /// Tombol Keluar dalam mode daemon: daemon diminta berhenti (layanan
+        /// dimatikan dengan rapi), UI keluar saat daemon berpamitan - atau
+        /// sesudah batas waktu, supaya daemon yang macet tidak menahan jendela.
+        /// </summary>
+        void KeluarBersamaDaemon()
+        {
+            if (_keluar) return;
+            _keluar = true;
+            if (_jendela != null) { try { _jendela.Close(); } catch { } }
+            _engine.Klien.KirimAsync("keluar", null, TimeSpan.FromSeconds(20))
+                   .ContinueWith(t => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
+            _batasPamit = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+            _batasPamit.Tick += (s, e) => { _batasPamit.Stop(); KeluarUi(); };
+            _batasPamit.Start();
+        }
+
+        /// <summary>UI keluar sepenuhnya; daemon dan layanannya tidak disentuh.</summary>
+        public void KeluarUi()
+        {
+            if (_sudahBeres) return;
+            _keluar = true;
+            if (_batasPamit != null) _batasPamit.Stop();
+            if (_jendela != null) { try { _jendela.Close(); } catch { } }
+            Bereskan();
+            Application.Current.Shutdown();
         }
     }
 }

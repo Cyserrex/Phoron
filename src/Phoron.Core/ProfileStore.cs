@@ -110,6 +110,8 @@ namespace Phoron.Core
             foreach (var kv in p.PhpPerSitus)
                 if (!string.IsNullOrWhiteSpace(kv.Value)) ini.Set("php_situs", kv.Key, kv.Value);
             ini.Save(path, "Profil Phoron - boleh disunting tangan.\nNama folder versi harus persis seperti di folder bin.");
+            // Mode daemon: daemon diberi tahu supaya tidak menerapkan profil lama.
+            Jarak.BerkasPengguna.Tandai();
         }
 
         public static void Delete(Profile p)
@@ -117,6 +119,7 @@ namespace Phoron.Core
             if (p == null || string.IsNullOrEmpty(p.FileName)) return;
             var path = Path.Combine(Paths.Profiles, p.FileName + ".ini");
             if (File.Exists(path)) File.Delete(path);
+            Jarak.BerkasPengguna.Tandai();
         }
 
         /// <summary>
