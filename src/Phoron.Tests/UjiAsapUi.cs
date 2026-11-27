@@ -13,8 +13,8 @@ namespace Phoron.Tests
     /// Uji di harness utama sebagian besar membaca sumber ("kabelnya masih
     /// terpasang"), dan itu tidak menangkap tombol yang terpasang tapi tidak
     /// berbuat apa-apa - seperti menu "..." yang sempat tidak pernah terbuka.
-    /// Yang ini menekan tombolnya betulan: panel ringkas, laci, pindah ke
-    /// jendela lengkap, kembali, lalu keluar dengan rapi.
+    /// Yang ini menekan tombolnya betulan: jendela utama, tombol berteks,
+    /// pindah tab lewat rail, menu "..." di Beranda, lalu keluar dengan rapi.
     ///
     /// Sengaja TIDAK ikut uji biasa maupun CI: butuh desktop sungguhan, dan
     /// tidak bisa jalan selama Phoron lain terbuka (mutex instans tunggal).
@@ -56,25 +56,25 @@ namespace Phoron.Tests
             {
                 p = Process.Start(psi);
 
-                var panel = TungguJendela(p.Id, "BtnLaci", 30);
-                Ok("Phoron terbuka sebagai panel ringkas", panel != null);
-                if (panel == null) return Selesai(p, akar);
+                var jendela = TungguJendela(p.Id, "Nav", 30);
+                Ok("Phoron terbuka di jendela utama", jendela != null);
+                if (jendela == null) return Selesai(p, akar);
 
-                Tekan(panel, "BtnLaci");
-                var tombolSitus = Tunggu(() => CariNama(panel, "Situs"), 5);
-                Ok("Laci terbuka dan menampilkan tombol halaman", tombolSitus != null);
-                if (tombolSitus == null) return Selesai(p, akar);
+                Ok("Tombol daya berteks", CariNama(jendela, "Nyalakan semua") != null);
+                Ok("Tombol keluar berteks", CariNama(jendela, "Keluar") != null);
 
-                Invoke(tombolSitus);
-                var lengkap = TungguJendela(p.Id, "Nav", 15);
-                Ok("Tombol Situs membuka jendela lengkap", lengkap != null);
-                Ok("Panel ringkas tertutup sesudahnya", Tunggu(() => CariId(p.Id, "BtnLaci") == null ? "ya" : null, 5) != null);
-                if (lengkap == null) return Selesai(p, akar);
+                // Pindah tab lewat rail: Situs, lalu kembali ke Beranda.
+                Ok("Rail membuka halaman Situs", PilihTab(jendela, 2, "TxtDocRoot"));
+                Ok("Rail kembali ke Beranda", PilihTab(jendela, 0, "BtnPintasan"));
 
-                Tekan(lengkap, "BtnRingkas");
-                Ok("Tombol tampilan ringkas kembali ke panel", TungguJendela(p.Id, "BtnLaci", 15) != null);
-                Ok("Jendela lengkap tertutup sesudahnya", Tunggu(() => CariId(p.Id, "Nav") == null ? "ya" : null, 5) != null);
-                Ok("Phoron tetap berjalan selama berpindah jendela", !p.HasExited);
+                // Menu "..." pernah tidak terbuka sama sekali; yang diperiksa di
+                // sini menunya benar-benar muncul.
+                Tekan(jendela, "BtnPintasan");
+                var butir = Tunggu(() => AutomationElement.RootElement.FindFirst(TreeScope.Descendants, new AndCondition(
+                    new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id),
+                    new PropertyCondition(AutomationElement.NameProperty, "Buka www"))), 5);
+                Ok("Menu pintasan Beranda benar-benar terbuka", butir != null);
+                Ok("Phoron tetap berjalan", !p.HasExited);
             }
             catch (Exception ex)
             {
@@ -146,6 +146,19 @@ namespace Phoron.Tests
                 Thread.Sleep(250);
             }
             return null;
+        }
+
+        /// <summary>Pilih butir rail ke-<paramref name="indeks"/> (pemisah tidak dihitung), tunggu elemen halamannya.</summary>
+        static bool PilihTab(AutomationElement jendela, int indeks, string idDiHalaman)
+        {
+            var nav = jendela.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, "Nav"));
+            var butir = nav.FindAll(TreeScope.Children, new AndCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ListItem),
+                new PropertyCondition(AutomationElement.IsEnabledProperty, true)));
+            if (indeks >= butir.Count) return false;
+            ((SelectionItemPattern)butir[indeks].GetCurrentPattern(SelectionItemPattern.Pattern)).Select();
+            return Tunggu(() => jendela.FindFirst(TreeScope.Descendants,
+                new PropertyCondition(AutomationElement.AutomationIdProperty, idDiHalaman)), 5) != null;
         }
 
         static void Tekan(AutomationElement akar, string id)

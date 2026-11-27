@@ -135,7 +135,7 @@ namespace Phoron.Tests
                 UjiTerjemahanKode();
                 UjiBatchTiga();
                 UjiBerandaD(sandbox);
-                UjiPanelRingkas();
+                UjiSatuJendela();
                 UjiHostDanPort(sandbox);
             }
             catch (Exception ex)

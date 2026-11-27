@@ -44,14 +44,8 @@ namespace Phoron.App
         WindowState _keadaan = WindowState.Normal;
         string _tab;
 
-        // Panel kontrol ringkas - tampilan utama. Hanya satu dari keduanya yang
-        // terbuka pada satu waktu: membuka yang satu menutup yang lain.
-        PanelRingkas _panel;
-        Point? _letakPanel;
-        bool _laciTerbuka;
-
-        /// <summary>Ada jendela Phoron yang sedang terbuka - panel ringkas atau jendela lengkap.</summary>
-        bool AdaJendela { get { return _jendela != null || _panel != null; } }
+        /// <summary>Ada jendela Phoron yang sedang terbuka.</summary>
+        bool AdaJendela { get { return _jendela != null; } }
 
         System.Threading.EventWaitHandle _sinyalKeluar;
         System.Threading.RegisteredWaitHandle _daftarSinyal;
@@ -162,52 +156,18 @@ namespace Phoron.App
 
         // --------------------------------------------------------------- Jendela
 
+        /// <summary>Munculkan jendela; dibuat baru bila sedang tidak ada.</summary>
+        public void Tampilkan() { Tampilkan(null); }
+
         /// <summary>
-        /// Munculkan Phoron: jendela lengkap bila sedang terbuka, selain itu
-        /// panel ringkas. Dipakai ikon baki, menu baki, dan salinan kedua yang
-        /// membangunkan salinan yang sudah berjalan.
+        /// Munculkan jendela di tab tertentu (null = tab terakhir).
+        ///
+        /// Satu jendela utama saja. Panel ringkas terpisah sempat dicoba di
+        /// 1.41.0 dan dibuang: untuk mengatur apa pun orang tetap harus membuka
+        /// jendela lengkap, jadi panel itu menambah satu langkah, bukan
+        /// mengurangi. Yang dijaga sekarang ukuran jendela ini - lihat UkuranAwal.
         /// </summary>
-        public void Tampilkan()
-        {
-            if (_keluar) return;
-            if (_jendela != null) { _jendela.Majukan(); return; }
-            TampilkanRingkas();
-        }
-
-        /// <summary>Buka panel ringkas; jendela lengkap yang terbuka ditutup sesudahnya.</summary>
-        public void TampilkanRingkas()
-        {
-            if (_keluar) return;
-            if (_pelepasMemori != null) _pelepasMemori.Stop();
-
-            if (_panel == null)
-            {
-                var p = new PanelRingkas(_engine, _laciTerbuka);
-                if (_letakPanel.HasValue)
-                {
-                    p.WindowStartupLocation = WindowStartupLocation.Manual;
-                    p.Left = _letakPanel.Value.X;
-                    p.Top = _letakPanel.Value.Y;
-                }
-                p.Closing += (s, e) =>
-                {
-                    if (e.Cancel) return;
-                    if (p.WindowState == WindowState.Normal) _letakPanel = new Point(p.Left, p.Top);
-                    _laciTerbuka = p.LaciTerbuka;
-                };
-                p.Closed += (s, e) => JendelaTertutup(p);
-                _panel = p;
-                Application.Current.MainWindow = p;
-                p.Show();
-            }
-            _panel.Majukan();
-            // Ditutup SESUDAH panel tampil: dengan urutan ini tidak pernah ada
-            // saat tanpa jendela, jadi JendelaTertutup tidak menjadwalkan ke baki.
-            if (_jendela != null) _jendela.Close();
-        }
-
-        /// <summary>Buka jendela lengkap di tab tertentu; panel ringkas ditutup sesudahnya.</summary>
-        public void TampilkanLengkap(string tab)
+        public void Tampilkan(string tab)
         {
             if (_keluar) return;
             if (_pelepasMemori != null) _pelepasMemori.Stop();
@@ -251,7 +211,6 @@ namespace Phoron.App
             }
             else if (!string.IsNullOrEmpty(tab)) _jendela.GoTo(tab);
             _jendela.Majukan();
-            if (_panel != null) _panel.Close();
         }
 
         /// <summary>
@@ -283,7 +242,6 @@ namespace Phoron.App
         void JendelaTertutup(Window w)
         {
             if (_jendela == w) _jendela = null;
-            if (_panel == w) _panel = null;
             if (Application.Current != null && Application.Current.MainWindow == w)
                 Application.Current.MainWindow = null;
 
@@ -294,8 +252,6 @@ namespace Phoron.App
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_keluar) return;
-                // Berpindah antara panel ringkas dan jendela lengkap juga
-                // menutup sebuah jendela - itu bukan "ke baki".
                 if (AdaJendela) return;
                 if (_engine.Settings.MinimizeToTray) JadwalkanLepasMemori();
                 else Keluar();
@@ -360,7 +316,6 @@ namespace Phoron.App
             // RefreshStatus jendela lengkap ikut menyegarkan baki.
             if (_jendela != null) _jendela.RefreshStatus();
             else SegarkanBaki();
-            if (_panel != null) _panel.Segarkan();
         }
 
         /// <summary>Hanya bagian baki - dipanggil juga oleh MainWindow.RefreshStatus.</summary>
@@ -659,7 +614,6 @@ namespace Phoron.App
             if (_keluar && _sudahBeres) return;
             _keluar = true;
             if (_jendela != null) { try { _jendela.Close(); } catch { } }
-            if (_panel != null) { try { _panel.Close(); } catch { } }
             Bereskan();
             Application.Current.Shutdown();
         }

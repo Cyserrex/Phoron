@@ -176,20 +176,46 @@ namespace Phoron.Core
         /// dibatasi 60 permintaan per jam per IP, dan menanyakannya tiap kali
         /// jendela dibuka menghabiskan jatah itu tanpa menghasilkan apa pun baru.
         /// </summary>
-        public async System.Threading.Tasks.Task<HasilCek> CekPembaruanAsync(bool paksa)
+        public System.Threading.Tasks.Task<HasilCek> CekPembaruanAsync(bool paksa)
         {
             if (!paksa)
             {
-                if (!Settings.CekPembaruan) return null;
-                if ((DateTime.UtcNow - Settings.CekTerakhir).TotalHours < 6) return Pembaruan;
+                if (!Settings.CekPembaruan) return Task.FromResult<HasilCek>(null);
+                if ((DateTime.UtcNow - Settings.CekTerakhir).TotalHours < 6) return Task.FromResult(Pembaruan);
             }
+            // Pengecekan yang sedang berjalan dipakai bersama: tombol di Setelan
+            // dan Tentang, ditambah cek saat mulai, tidak menembak GitHub dua kali.
+            var jalan = _cekBerjalan;
+            if (jalan != null && !jalan.IsCompleted) return jalan;
+            return _cekBerjalan = CekSekarangAsync();
+        }
+
+        Task<HasilCek> _cekBerjalan;
+        string _galatCekTerakhir;
+        DateTime _galatCekWaktu;
+
+        async Task<HasilCek> CekSekarangAsync()
+        {
             var hasil = await Updater.CekAsync();
             Settings.CekTerakhir = DateTime.UtcNow;
             Settings.Save();
             Pembaruan = hasil;
-            if (hasil.Galat != null) Say("Cek pembaruan: " + hasil.Galat);
-            else if (hasil.LebihBaru) Say("Pembaruan tersedia: Phoron " + hasil.Versi + ".");
-            else Say("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+            if (hasil.Galat != null)
+            {
+                // Galat yang sama berulang dalam semenit (orang menekan "Cek" lagi
+                // karena jaringan sedang putus) cukup dicatat sekali di log.
+                bool ulang = hasil.Galat == _galatCekTerakhir
+                             && (DateTime.UtcNow - _galatCekWaktu).TotalSeconds < 60;
+                _galatCekTerakhir = hasil.Galat;
+                _galatCekWaktu = DateTime.UtcNow;
+                if (!ulang) Say("Cek pembaruan: " + hasil.Galat);
+            }
+            else
+            {
+                _galatCekTerakhir = null;
+                if (hasil.LebihBaru) Say("Pembaruan tersedia: Phoron " + hasil.Versi + ".");
+                else Say("Phoron " + AppInfo.Version + " sudah versi terbaru.");
+            }
             return hasil;
         }
 

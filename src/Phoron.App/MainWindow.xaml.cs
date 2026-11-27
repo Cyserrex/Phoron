@@ -99,6 +99,7 @@ namespace Phoron.App
                     case "tentang": teks.Text = Lang.T("Tentang"); break;
                 }
             }
+            TxtKeluar.Text = Lang.T("Keluar");
             BtnKeluar.ToolTip = Lang.T("Tutup Phoron sepenuhnya dan matikan semua layanan");
             RefreshStatus();
 
@@ -233,9 +234,7 @@ namespace Phoron.App
             DotDb.ToolTip = TxtProfil.Text + Environment.NewLine + TxtDb.Text;
 
             bool anyRunning = web == ServiceState.Jalan || db == ServiceState.Jalan;
-            // Ikon putar/henti; kalimatnya di tooltip - rail terlalu sempit untuk teks.
-            IkonPower.Text = anyRunning ? "" : "";
-            BtnPower.ToolTip = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
+            TxtPower.Text = Lang.T(anyRunning ? "Matikan semua" : "Nyalakan semua");
             // Merah saat tombolnya berarti "matikan": warnanya harus menyatakan
             // akibat penekanan, bukan sekadar menonjol. Biru untuk aksi yang
             // menghidupkan dan untuk aksi yang mematikan membuat keduanya
@@ -265,11 +264,6 @@ namespace Phoron.App
         public void TutupUntukPembaruan()
         {
             Pengendali.Ini.Keluar();
-        }
-
-        void BtnRingkas_Click(object sender, RoutedEventArgs e)
-        {
-            Pengendali.Ini.TampilkanRingkas();
         }
 
         void BtnKeluar_Click(object sender, RoutedEventArgs e)

@@ -143,29 +143,24 @@
                         <TextBlock x:Name="TxtProfil" Visibility="Collapsed"/>
                         <TextBlock x:Name="TxtWeb" Visibility="Collapsed"/>
                         <TextBlock x:Name="TxtDb" Visibility="Collapsed"/>
-                        <!-- Daya, tampilan ringkas, dan keluar dalam satu baris: rail
-                             harus muat di jendela setinggi 600 px tanpa menggulir.
-                             Keluar ditaruh di sini, bukan hanya di menu baki sistem:
-                             menutup aplikasi tidak seharusnya menuntut orang mencari
-                             ikon tersembunyi lalu klik kanan. -->
-                        <UniformGrid Columns="3">
-                            <ui:Button x:Name="BtnPower" Appearance="Primary" Margin="0,0,2,0" Padding="0,7"
-                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                       Click="BtnPower_Click">
-                                <TextBlock x:Name="IkonPower" Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
-                            </ui:Button>
-                            <ui:Button x:Name="BtnRingkas" Margin="1,0,1,0" Padding="0,7"
-                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                       ToolTip="{loc:T 'Tampilan ringkas'}" Click="BtnRingkas_Click">
-                                <TextBlock Text="&#xE73F;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
-                            </ui:Button>
-                            <ui:Button x:Name="BtnKeluar" Margin="2,0,0,0" Padding="0,7"
-                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                       ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
-                                       Click="BtnKeluar_Click">
-                                <TextBlock Text="&#xE7E8;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
-                            </ui:Button>
-                        </UniformGrid>
+                        <!-- Tombol berteks, bukan ikon: "Nyalakan semua" dan "Keluar"
+                             adalah aksi terpenting di jendela ini, dan ikon putar/daya
+                             tanpa tulisan membuat orang menebak. Teks yang tidak muat
+                             satu baris dilipat. Keluar ditaruh di sini, bukan hanya di
+                             menu baki: menutup aplikasi tidak seharusnya menuntut orang
+                             mencari ikon tersembunyi lalu klik kanan. -->
+                        <ui:Button x:Name="BtnPower" Appearance="Primary" Padding="4,6"
+                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                   Click="BtnPower_Click">
+                            <TextBlock x:Name="TxtPower" Text="{loc:T 'Nyalakan semua'}" FontSize="12"
+                                       TextWrapping="Wrap" TextAlignment="Center"/>
+                        </ui:Button>
+                        <ui:Button x:Name="BtnKeluar" Margin="0,6,0,0" Padding="4,6"
+                                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                   ToolTip="{loc:T 'Tutup Phoron sepenuhnya dan matikan semua layanan'}"
+                                   Click="BtnKeluar_Click">
+                            <TextBlock x:Name="TxtKeluar" Text="{loc:T 'Keluar'}" FontSize="12" TextAlignment="Center"/>
+                        </ui:Button>
                     </StackPanel>
                 </Grid>
             </Border>
