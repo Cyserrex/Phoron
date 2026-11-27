@@ -234,7 +234,33 @@ namespace Phoron.Core
 
         public void Save()
         {
+            // Mode daemon: phoron.ini hanya ditulis daemon, supaya dua proses
+            // tidak saling menimpa setelan. Setelan ini dikirim utuh lewat pipe.
+            var jarak = PenyimpanJarak;
+            if (jarak != null) { jarak(this); return; }
             lock (_kunciSimpan) { SimpanInti(); }
+        }
+
+        /// <summary>Diisi Engine mode daemon; null = tulis phoron.ini sendiri seperti biasa.</summary>
+        internal Action<Settings> PenyimpanJarak;
+
+        /// <summary>
+        /// Salin seluruh isi setelan lain ke objek INI, tanpa mengganti objeknya.
+        /// Halaman memegang rujukan ke Engine.Settings; mengganti objeknya saat
+        /// daemon mengabarkan phoron.ini berubah akan membuat suntingan mereka
+        /// mendarat di objek yatim.
+        /// </summary>
+        internal void SalinDari(Settings lain)
+        {
+            if (lain == null || ReferenceEquals(lain, this)) return;
+            foreach (var f in typeof(Settings).GetFields(System.Reflection.BindingFlags.Instance
+                     | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic))
+            {
+                if (typeof(Delegate).IsAssignableFrom(f.FieldType)) continue;
+                var v = f.GetValue(lain);
+                var daftar = v as List<string>;
+                f.SetValue(this, daftar != null ? new List<string>(daftar) : v);
+            }
         }
 
         void SimpanInti()

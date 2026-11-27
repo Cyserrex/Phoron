@@ -85,6 +85,7 @@ namespace Phoron.Core
             ini.Save(FilePath,
                 "Proyek Node/TypeScript yang terdaftar di Phoron.\n" +
                 "Nama seksi = folder proyeknya. Boleh disunting tangan.");
+            Jarak.BerkasPengguna.Tandai();
         }
     }
 
