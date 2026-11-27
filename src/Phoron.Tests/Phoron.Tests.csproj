@@ -10,6 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Untuk uji asap antarmuka (build.bat ui). -->
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Phoron.Core\Phoron.Core.csproj" />
   </ItemGroup>
 

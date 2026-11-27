@@ -12,8 +12,13 @@ profile and press **Switch**: every generated config file — `httpd.conf`,
 `php.ini`, `my.ini`, virtual hosts, the Windows hosts file — is rewritten, and the
 services restart.
 
-![Home](docs/beranda.png)
-![Profiles](docs/profil.png)
+Phoron opens as a small control panel — Apache, MySQL and your Node projects,
+each with its own button — and the full window is one click away in its drawer.
+
+![Compact panel with the drawer open](docs/panel.png)
+
+![Home in the full window](docs/beranda.png)
+![Sites](docs/situs.png)
 
 ---
 
@@ -155,11 +160,20 @@ both of which would need admin rights.
 2. On first launch Phoron scans its `bin` folders — its own **and**
    `C:\laragon\bin` if present — and creates one profile per PHP version, each
    already paired with a compatible Apache.
-3. Choose a profile on the **Home** page and press **Start all**.
+3. Phoron opens as a compact panel. Choose a profile and press **Start all**.
 4. Open `http://localhost/`.
 
 To change versions, pick another profile and press **Switch**. If services are
 running, Phoron stops them, rewrites the configuration and starts them again.
+
+**Full menu** opens a drawer with every page (Sites, Databases, Node, Profiles,
+Versions, PHP extensions, Logs, Settings) and the last lines of activity; each
+button opens the full window right on that page. The ⤡ button at the bottom of
+its rail goes back to the compact panel. The full window starts at 960×640, never
+more than about 70% × 82% of the screen, and remembers the size you give it.
+
+Right-click the tray icon to start and stop services, **run a Node project**,
+open a recently used PHP site, or switch profile — without opening a window.
 
 ---
 
@@ -329,6 +343,12 @@ Run Next.js, Astro, Vite and other Node projects from any folder — not just
 server's own output (ports shift when taken, so guessing would be wrong), and the
 whole process tree stops when Phoron closes.
 
+A project can have a fixed **port** on the Node page: Next.js and Nuxt get it as
+`PORT`, Vite, Astro, SvelteKit and Remix as `--port`. If a project stops because
+its port is already taken, its card offers **Run on port N** with the next free
+port. The last three lines of each project's output stay on the Home card and in
+the compact panel even while the Node page is closed.
+
 ### PHP extensions
 
 Tick extensions per profile, plus the `php.ini` settings people change most. **Test:
@@ -348,9 +368,13 @@ sqlite3, zip) filtered to the DLLs the build actually contains.
 
 ### Pages
 
-- **Home** — choose a profile, **Switch & Run**, start/stop, shortcuts (www,
-  localhost, a terminal with the profile's PHP on `PATH`, `phpinfo()`, Apache config
-  test, SSL certificate).
+- **Compact panel** — the window Phoron opens with: profile, one row each for the
+  web server, MySQL and up to four Node projects, shortcuts, **Start all**, and
+  the **Full menu** drawer.
+- **Home** — a one-line PHP status (details folded away, opened automatically
+  when something fails), Node project cards with their latest output, recently
+  opened PHP sites, and a "…" menu of shortcuts (www, localhost, a terminal with
+  the profile's PHP on `PATH`, `phpinfo()`, Apache config test, SSL certificate).
 - **Profiles** — versions, ports, project folders, site suffix.
 - **Versions** — everything installed; add bin folders; download new PHP builds
   straight from windows.php.net, or Apache/MySQL/Nginx from `etc\catalog.ini`.
@@ -522,8 +546,9 @@ Windows 10/11).
 ```
 build.bat              Release build -> dist\Phoron.exe (single file, ~3 MB)
 build.bat run          Debug build, then run it
-build.bat test         test harness (683 tests)
+build.bat test         test harness (835 tests)
 build.bat live         end-to-end: starts real Apache & MySQL
+build.bat ui           UI smoke test: drives the real Phoron.exe through UI Automation
 build.bat clean
 build_installer.bat    exe + installer (needs Inno Setup 6; downloads HeidiSQL)
 set_version.bat 1.2.0  bump the version in every file at once
@@ -541,7 +566,10 @@ The tests are deliberately not pure unit tests. `build.bat test` has the **real
 generated `php.ini` (`php -m`, `php -l`). `build.bat live` goes further: it starts
 Apache for every PHP + Apache combination available, fetches a PHP page over HTTP,
 checks that the version answering is exactly the one the profile asked for, then
-starts MySQL from an empty data folder and runs `SELECT VERSION()`.
+starts MySQL from an empty data folder and runs `SELECT VERSION()`. `build.bat ui`
+starts the real `Phoron.exe` in a sandbox and presses its buttons through UI
+Automation — compact panel, drawer, full window and back, then a clean exit. It
+needs a desktop session and no other Phoron running, so it is not part of CI.
 
 HeidiSQL is not stored in the repository. `installer\ambil_heidisql.ps1` downloads a
 pinned version and refuses it unless its SHA-256 matches. HeidiSQL is GPL-2.0 and

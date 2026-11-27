@@ -4,6 +4,7 @@ rem   build.bat          - build Release, salin Phoron.exe ke dist\
 rem   build.bat debug    - build Debug
 rem   build.bat test     - build lalu jalankan harness uji
 rem   build.bat live     - uji ujung-ke-ujung (menyalakan Apache sungguhan)
+rem   build.bat ui       - uji asap antarmuka lewat UI Automation (tutup Phoron lain dulu)
 rem   build.bat run      - build Debug lalu jalankan aplikasinya
 rem   build.bat clean    - buang bin/obj/dist
 setlocal
@@ -26,6 +27,7 @@ if /i not "%1"=="clean" (
 if /i "%1"=="clean" goto :clean
 if /i "%1"=="test" goto :test
 if /i "%1"=="live" goto :live
+if /i "%1"=="ui" goto :ui
 if /i "%1"=="run" goto :run
 if /i "%1"=="debug" goto :debug
 
@@ -59,6 +61,12 @@ goto :done
 :live
 dotnet build "src\Phoron.Tests\Phoron.Tests.csproj" -c Debug --nologo || goto :err
 "src\Phoron.Tests\bin\Debug\net48\Phoron.Tests.exe" live || goto :err
+goto :done
+
+:ui
+rem Phoron.exe sungguhan dikendalikan lewat UI Automation; Phoron lain harus tertutup.
+dotnet build "Phoron.sln" -c Debug --nologo || goto :err
+"src\Phoron.Tests\bin\Debug\net48\Phoron.Tests.exe" ui || goto :err
 goto :done
 
 :run
