@@ -232,17 +232,24 @@ namespace Phoron.Core
         /// <summary>Terisi bila berkas yang cacat terpaksa dikarantina saat menyimpan.</summary>
         public static string KeluhanTerakhir = "";
 
-        public void Save()
+        /// <summary>
+        /// Simpan setelan. Mode lama: tulis phoron.ini (melempar bila gagal),
+        /// selalu true. Mode daemon: hanya medan yang berubah dikirim ke daemon
+        /// tanpa menunggu jawabannya, TIDAK pernah melempar; false bila jelas
+        /// tidak terkirim (sudah dicatat di log, perubahan lokal tetap berlaku).
+        /// </summary>
+        public bool Save()
         {
             // Mode daemon: phoron.ini hanya ditulis daemon, supaya dua proses
-            // tidak saling menimpa setelan. Setelan ini dikirim utuh lewat pipe.
+            // tidak saling menimpa setelan.
             var jarak = PenyimpanJarak;
-            if (jarak != null) { jarak(this); return; }
+            if (jarak != null) return jarak(this);
             lock (_kunciSimpan) { SimpanInti(); }
+            return true;
         }
 
         /// <summary>Diisi Engine mode daemon; null = tulis phoron.ini sendiri seperti biasa.</summary>
-        internal Action<Settings> PenyimpanJarak;
+        internal Func<Settings, bool> PenyimpanJarak;
 
         /// <summary>
         /// Salin seluruh isi setelan lain ke objek INI, tanpa mengganti objeknya.

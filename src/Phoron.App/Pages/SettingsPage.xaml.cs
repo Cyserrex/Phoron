@@ -52,7 +52,7 @@ namespace Phoron.App.Pages
             TxtDbPengguna.Text = string.IsNullOrEmpty(s.DbPengguna) ? "root" : s.DbPengguna;
             TxtDbSandi.Password = s.DbSandi ?? "";
 
-            bool admin = HostsFile.IsAdmin();
+            bool admin = _e.HakAdmin;
             TxtAdmin.Text = admin
                 ? Lang.T("Phoron berjalan sebagai Administrator. Berkas hosts dan pemasangan sertifikat bisa dilakukan.")
                 : Lang.T("Phoron berjalan tanpa hak Administrator. Menyunting berkas hosts dan memasang sertifikat ke Trusted Root tidak akan berhasil.");

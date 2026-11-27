@@ -70,6 +70,25 @@ namespace Phoron.Core.Jarak
         volatile bool _ditolak;
         int _menyambungUlang;
         DateTime _terakhirMenjalankan = DateTime.MinValue;
+        /// <summary>Tick UTC sampai kapan daemon diharapkan menjalankan ulang dirinya (mulai_ulang_admin).</summary>
+        long _mulaiUlangSampai;
+
+        /// <summary>
+        /// Daemon akan menjalankan ulang dirinya (mulai_ulang_admin). Selama
+        /// <paramref name="lama"/>: kabar pamit dari daemon lama TIDAK
+        /// menghentikan sambung ulang (dan tidak diteruskan sebagai kabar,
+        /// supaya UI tidak ikut keluar), dan klien tidak menjalankan phorond
+        /// sendiri - itu akan membuat daemon kedua tanpa hak Administrator
+        /// yang berebut pipe dengan daemon barunya.
+        /// </summary>
+        public void HarapkanMulaiUlang(TimeSpan lama)
+        {
+            Interlocked.Exchange(ref _mulaiUlangSampai, (DateTime.UtcNow + lama).Ticks);
+        }
+
+        public void BatalMulaiUlang() { Interlocked.Exchange(ref _mulaiUlangSampai, 0); }
+
+        bool MenungguMulaiUlang { get { return DateTime.UtcNow.Ticks < Interlocked.Read(ref _mulaiUlangSampai); } }
 
         public KlienDaemon() : this(null) { }
 
@@ -306,7 +325,7 @@ namespace Phoron.Core.Jarak
                         Lang.T("Daemon Phoron tidak menjawab perintah {0} dalam {1} detik.",
                                perintah, (int)waktu.TotalSeconds)));
             }, TaskScheduler.Default);
-            tcs.Task.ContinueWith(_ => cts.Cancel(), TaskScheduler.Default);
+            tcs.Task.ContinueWith(_ => { cts.Cancel(); cts.Dispose(); }, TaskScheduler.Default);
             return tcs.Task;
         }
 
@@ -341,7 +360,14 @@ namespace Phoron.Core.Jarak
                     {
                         var jenis = Protokol.Teks(d, "kabar");
                         if (jenis == null) continue;
-                        if (jenis == "pamit") _pamit = true;
+                        if (jenis == "pamit")
+                        {
+                            // Daemon lama yang keluar untuk dijalankan ulang
+                            // ber-Administrator: sambungan ke penggantinya
+                            // menyusul, UI tidak ikut keluar.
+                            if (MenungguMulaiUlang) continue;
+                            _pamit = true;
+                        }
                         var h = Kabar;
                         if (h != null)
                         {
@@ -414,22 +440,34 @@ namespace Phoron.Core.Jarak
                     int coba = 0;
                     while (!_dibuang && !_pamit && !_ditolak && !Aktif)
                     {
+                        bool sibuk = false;
                         try
                         {
-                            NamedPipeClientStream pipe;
+                            NamedPipeClientStream pipe = null;
                             lock (_kunciSambung)
                             {
                                 if (Aktif) break;
-                                pipe = BukaPipe(TimeSpan.FromMilliseconds(500));
-                                // Daemon yang mati sendiri (crash) dihidupkan
-                                // lagi - itulah pemilik Apache dan MySQL.
-                                if (pipe == null && coba >= 2 && JalankanDaemon())
-                                    pipe = BukaPipe(BatasTungguDaemon);
-                                if (pipe != null) Pasang(pipe);
+                                // Pipe terpasang tapi belum siap: Sambung() sedang
+                                // berjabat tangan, atau pembacanya belum selesai
+                                // membereskan pipe yang putus. Pipe kedua akan
+                                // menimpa _pipe dan meninggalkan pembaca yatim.
+                                if (_pipe != null) sibuk = true;
+                                else
+                                {
+                                    pipe = BukaPipe(TimeSpan.FromMilliseconds(500));
+                                    // Daemon yang mati sendiri (crash) dihidupkan
+                                    // lagi - itulah pemilik Apache dan MySQL.
+                                    // Kecuali daemon sedang menjalankan ulang
+                                    // dirinya: penggantinya sedang naik.
+                                    if (pipe == null && coba >= 2 && !MenungguMulaiUlang && JalankanDaemon())
+                                        pipe = BukaPipe(BatasTungguDaemon);
+                                    if (pipe != null) Pasang(pipe);
+                                }
                             }
                             if (pipe != null) { JabatTangan(); break; }
                         }
                         catch { }
+                        if (sibuk) { Thread.Sleep(100); continue; }
                         coba++;
                         Thread.Sleep(Math.Min(2000, 200 * coba));
                     }
