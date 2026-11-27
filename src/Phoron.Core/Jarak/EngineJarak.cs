@@ -34,6 +34,18 @@ namespace Phoron.Core
         public bool AdminDaemon { get; private set; }
 
         /// <summary>
+        /// Hak Administrator milik proses yang benar-benar menulis hosts dan
+        /// sertifikat: daemon dalam mode jarak, proses ini dalam mode lama.
+        /// Halaman memakai ini, bukan HostsFile.IsAdmin(): dalam mode daemon
+        /// hak UI tidak menentukan apa pun.
+        /// </summary>
+        public bool HakAdmin { get { return ModeJarak ? AdminDaemon : HostsFile.IsAdmin(); } }
+
+        /// <summary>Keluhan muat dari daemon (Keadaan.masalah_muat), sudah diterjemahkan.</summary>
+        public List<string> MasalahDaemon { get { return _masalahDaemon; } }
+        volatile List<string> _masalahDaemon = new List<string>();
+
+        /// <summary>
         /// Menjalankan pekerjaan di utas layar. Kabar datang di utas pembaca
         /// pipe, sedangkan memuat ulang profil mengganti daftar yang sedang
         /// digambar layar. Null = jalankan di tempat (uji).
@@ -61,6 +73,7 @@ namespace Phoron.Core
             // phoron.ini TIDAK ditulis di sini walau belum ada: daemon yang
             // membuatnya, dan daemon satu-satunya penulisnya.
             Settings.PenyimpanJarak = SimpanSetelanJarak;
+            PotretSetelan();
             Packages = new List<BinPackage>();
             Profiles = new List<Profile>();
             Sites = new List<Site>();
@@ -83,11 +96,25 @@ namespace Phoron.Core
             BerkasPengguna.Berubah -= BerkasPenggunaBerubah;
         }
 
+        /// <summary>Banyaknya jabat tangan sesudah Engine dibuat (sambung ulang).</summary>
+        int _jumlahSambung;
+
         void SesudahSambungUlang()
         {
+            Interlocked.Increment(ref _jumlahSambung);
             // Daemon yang baru dihidupkan lagi tidak tahu apa yang dilihat UI;
-            // ambil ulang seluruh keadaannya.
-            ThreadPool.QueueUserWorkItem(delegate { try { Sinkronkan(); } catch { } });
+            // ambil ulang seluruh keadaannya. Yang tertunda selama pipe putus -
+            // profil yang disimpan, setelan yang gagal terkirim - dikirim lagi.
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                try
+                {
+                    if (Interlocked.Exchange(ref _muatUlangSaatSambung, 0) == 1) BerkasPenggunaBerubah();
+                    if (_setelanTertunda) Settings.Save();
+                    Sinkronkan();
+                }
+                catch { }
+            });
         }
 
         /// <summary>Keadaan lengkap dan riwayat log dari daemon.</summary>
@@ -138,6 +165,7 @@ namespace Phoron.Core
             _perluRestartWebJarak = Protokol.Benar(d, "perlu_restart_web");
             _perluRestartDbJarak = Protokol.Benar(d, "perlu_restart_db");
             AdminDaemon = Protokol.Benar(d, "admin");
+            _masalahDaemon = Protokol.DaftarPesan(Protokol.Ambil(d, "masalah_muat")).Select(p => p.Teks()).ToList();
             LastBuild = HasilTerapan(Protokol.DaftarPesan(Protokol.Ambil(d, "peringatan_terapkan")).Select(p => p.Teks()));
         }
 
@@ -154,7 +182,18 @@ namespace Phoron.Core
                 if (php != null) r.PhpIniDir = ConfigWriter.FolderPhpIni(php, Settings.PhpIniKeFolderPhp);
             }
             catch { }
-            r.Warnings.AddRange(peringatan);
+            // Keluhan muat ikut tampil seperti Apply() mode lama: keluhan UI
+            // sendiri (berkas yang ia baca) digabung dengan keluhan daemon.
+            // Keduanya membaca berkas yang sama, jadi kalimat yang sama cukup
+            // muncul sekali.
+            string[] lokal;
+            try { lokal = MasalahMuat.ToArray(); } catch { lokal = new string[0]; }
+            var dilihat = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var p in peringatan.Concat(lokal).Concat(_masalahDaemon))
+            {
+                if (string.IsNullOrWhiteSpace(p)) continue;
+                if (dilihat.Add(p.Trim())) r.Warnings.Add(p);
+            }
             return r;
         }
 
@@ -197,14 +236,13 @@ namespace Phoron.Core
                     if (b != null) SayLokal(b);
                     break;
                 case "node":
-                    _nodeJarak.TerapkanStatus(data);
+                    _nodeJarak.TerapkanKabar(data);
                     break;
                 case "node_keluaran":
                     _nodeJarak.TerapkanKeluaran(data);
                     break;
                 case "perlu_muat_ulang":
-                    if (AksiSendiriBaruSaja()) break;
-                    Jadwalkan(MuatUlangDariDaemon);
+                    KabarPerluMuatUlang();
                     break;
                 case "pamit":
                     var h = Pamit;
@@ -227,48 +265,116 @@ namespace Phoron.Core
         /// </summary>
         public void MuatUlangDariDaemon()
         {
-            try { Settings.SalinDari(Core.Settings.Load()); } catch { }
+            try
+            {
+                Settings.SalinDari(Core.Settings.Load());
+                // Salinan baru inilah pembanding Save berikutnya. Perubahan
+                // lokal yang belum terkirim ikut tertimpa SalinDari, jadi tidak
+                // ada lagi yang tertunda.
+                PotretSetelan();
+                _setelanTertunda = false;
+            }
+            catch { }
             Reload();
             var h = BerubahDariLuar;
             if (h != null) h();
         }
 
-        // Kabar perlu_muat_ulang yang menyusul perintah UI ini sendiri (simpan
-        // setelan, muat ulang, ganti profil) TIDAK memuat ulang lagi: Reload
-        // mengganti objek profil, dan halaman Profil yang sedang menyunting
-        // akan menunjuk objek yatim - alasan yang sama kenapa halaman itu
-        // sengaja tidak memanggil Reload sesudah menyimpan.
-        int _aksiBerjalan;
-        long _aksiSelesaiTick;
+        // Kabar perlu_muat_ulang yang menyusul perintah UI ini sendiri (ubah
+        // setelan, muat ulang, ganti profil) - "gema" - TIDAK memuat ulang
+        // lagi: Reload mengganti objek profil, dan halaman Profil yang sedang
+        // menyunting akan menunjuk objek yatim - alasan yang sama kenapa
+        // halaman itu sengaja tidak memanggil Reload sesudah menyimpan.
+        //
+        // Tetapi kabar yang tiba selama aksi itu berjalan bisa juga datang
+        // dari luar (menu baki, klien lain), dan aksinya boleh berjalan
+        // sampai sepuluh menit. Jadi kabar itu DITAHAN, bukan dibuang: begitu
+        // semua aksi penyebab selesai, tiap aksi yang berhasil menebus satu
+        // kabar (gemanya); sisanya berarti ada perubahan dari luar dan UI
+        // memuat ulang. Gema yang belum tiba saat aksinya selesai ditunggu
+        // sebentar (BatasGema). Aksi yang bukan penyebab (menyalakan layanan,
+        // terapkan) tidak menahan apa pun: kabarnya langsung dimuat.
+        readonly object _kunciMuat = new object();
+        int _penyebabBerjalan;
+        int _kabarTertahan;
+        int _gemaDitunggu;
+        long _gemaSampaiTick;
+        static readonly TimeSpan BatasGema = TimeSpan.FromSeconds(2);
 
-        void MulaiAksi() { Interlocked.Increment(ref _aksiBerjalan); }
-
-        void SelesaiAksi()
+        void MulaiPenyebab()
         {
-            Interlocked.Exchange(ref _aksiSelesaiTick, DateTime.UtcNow.Ticks);
-            Interlocked.Decrement(ref _aksiBerjalan);
+            lock (_kunciMuat)
+            {
+                // Gema kumpulan aksi sebelumnya yang tidak pernah datang sudah
+                // basi; tanpa ini ia akan menebus kabar dari luar berikutnya.
+                if (_penyebabBerjalan == 0 && DateTime.UtcNow.Ticks >= _gemaSampaiTick) _gemaDitunggu = 0;
+                _penyebabBerjalan++;
+            }
         }
 
-        bool AksiSendiriBaruSaja()
+        /// <summary><paramref name="berhasil"/>: daemon menjalankannya, jadi gemanya akan (atau sudah) datang.</summary>
+        void SelesaiPenyebab(bool berhasil)
         {
-            if (Volatile.Read(ref _aksiBerjalan) > 0) return true;
-            var selesai = new DateTime(Interlocked.Read(ref _aksiSelesaiTick), DateTimeKind.Utc);
-            return (DateTime.UtcNow - selesai).TotalMilliseconds < 1500;
+            bool muat = false;
+            lock (_kunciMuat)
+            {
+                _penyebabBerjalan = Math.Max(0, _penyebabBerjalan - 1);
+                if (berhasil) _gemaDitunggu++;
+                if (_penyebabBerjalan == 0)
+                {
+                    int tebus = Math.Min(_gemaDitunggu, _kabarTertahan);
+                    _gemaDitunggu -= tebus;
+                    _kabarTertahan -= tebus;
+                    muat = _kabarTertahan > 0;
+                    _kabarTertahan = 0;
+                    _gemaSampaiTick = (DateTime.UtcNow + BatasGema).Ticks;
+                }
+            }
+            if (muat) Jadwalkan(MuatUlangDariDaemon);
+        }
+
+        void KabarPerluMuatUlang()
+        {
+            lock (_kunciMuat)
+            {
+                if (_penyebabBerjalan > 0) { _kabarTertahan++; return; }
+                if (_gemaDitunggu > 0)
+                {
+                    if (DateTime.UtcNow.Ticks < _gemaSampaiTick) { _gemaDitunggu--; return; }
+                    _gemaDitunggu = 0;
+                }
+            }
+            Jadwalkan(MuatUlangDariDaemon);
         }
 
         // --------------------------------------------------------- Kirim aksi
 
         Task _muatUlangTertunda;
 
+        /// <summary>1 = profil/apps.ini disimpan saat pipe putus; muat_ulang dikirim begitu tersambung lagi.</summary>
+        int _muatUlangSaatSambung;
+
         void BerkasPenggunaBerubah()
         {
-            if (!_klien.Aktif) return;
+            if (!_klien.Aktif)
+            {
+                // Daemon yang hanya kehilangan sambungan (tidak restart) masih
+                // memegang profil lama; ia harus diberi tahu begitu tersambung.
+                Interlocked.Exchange(ref _muatUlangSaatSambung, 1);
+                return;
+            }
             // Langsung dikirim, dan aksi berikutnya menunggu jawabannya: daemon
             // harus sudah membaca profil baru sebelum diminta menerapkannya.
-            MulaiAksi();
+            MulaiPenyebab();
             var t = _klien.KirimAsync("muat_ulang");
             _muatUlangTertunda = t;
-            t.ContinueWith(x => { SelesaiAksi(); var _ = x.Exception; }, TaskScheduler.Default);
+            t.ContinueWith(x =>
+            {
+                bool ok = x.Status == TaskStatus.RanToCompletion && x.Result.Ok;
+                if (!ok) Interlocked.Exchange(ref _muatUlangSaatSambung, 1);
+                SelesaiPenyebab(ok);
+                var _ = x.Exception;
+            }, TaskScheduler.Default);
         }
 
         void TungguMuatUlang()
@@ -291,13 +397,16 @@ namespace Phoron.Core
         /// peringatan, sama seperti layanan yang gagal di mode lama berakhir
         /// sebagai keadaan Gagal, bukan pengecualian di tangan tombol.
         /// </summary>
-        async Task<List<string>> AksiJarakAsync(string perintah, object data, TimeSpan batas)
+        /// <param name="penyebab">Daemon menyiarkan perlu_muat_ulang sesudah perintah ini (gema).</param>
+        async Task<List<string>> AksiJarakAsync(string perintah, object data, TimeSpan batas, bool penyebab = false)
         {
             await TungguMuatUlangAsync();
-            MulaiAksi();
+            if (penyebab) MulaiPenyebab();
+            bool ok = false;
             try
             {
                 var j = await _klien.KirimAsync(perintah, data, batas);
+                ok = j.Ok;
                 var hasil = j.Peringatan.Select(p => p.Teks()).ToList();
                 if (!j.Ok)
                 {
@@ -314,7 +423,7 @@ namespace Phoron.Core
             }
             finally
             {
-                SelesaiAksi();
+                if (penyebab) SelesaiPenyebab(ok);
                 await SegarkanKeadaanAsync();
             }
         }
@@ -322,7 +431,6 @@ namespace Phoron.Core
         Jawaban AksiJarak(string perintah, object data, TimeSpan batas, out string galat)
         {
             TungguMuatUlang();
-            MulaiAksi();
             try
             {
                 var j = _klien.Kirim(perintah, data, batas);
@@ -334,7 +442,6 @@ namespace Phoron.Core
                 galat = g.Message;
                 return null;
             }
-            finally { SelesaiAksi(); }
         }
 
         async Task<bool> NyalakanJarakAsync(string perintah, ServiceKind jenis)
@@ -368,11 +475,13 @@ namespace Phoron.Core
             {
                 { "file_name", nama },
                 { "restart", restartIfRunning },
-            }, BatasLama);
+            }, BatasLama, true);
             // Daemon sudah menulis profil_aktif ke phoron.ini; salinan di memori
-            // disamakan tanpa menyimpan lagi.
+            // disamakan tanpa menyimpan lagi - termasuk potretnya, supaya Save
+            // berikutnya tidak mengirim ulang profil ini.
             Active = profile;
             Settings.ActiveProfile = nama;
+            SamakanPotret("active_profile");
             RefreshSites();
             var hasil = HasilTerapan(peringatan);
             LastBuild = hasil;
@@ -381,21 +490,35 @@ namespace Phoron.Core
 
         string JalankanNodeJarak(NodeApp app, int portSekali)
         {
-            string galat;
-            var j = AksiJarak("jalankan_node", new Dictionary<string, object>
+            TungguMuatUlang();
+            var path = app.Path ?? "";
+            // Status "berjalan" dari jawaban diterapkan DI UTAS PEMBACA, urut
+            // dengan kabar - dan hanya bila belum ada kabar node untuk proyek
+            // ini sejak permintaannya dikirim. Proses yang langsung mati
+            // dikabarkan {berjalan:false} lebih dulu; jawaban yang menyusul
+            // tidak boleh menghidupkannya lagi di layar.
+            long versi = _nodeJarak.VersiKabar(path);
+            Task<Jawaban> t;
+            try
             {
-                { "path", app.Path ?? "" },
-                { "port_sekali", Math.Max(0, Math.Min(65535, portSekali)) },
-            }, TimeSpan.FromSeconds(60), out galat);
-            if (galat != null) return galat;
-            var url = j.Hasil as string;
-            _nodeJarak.TerapkanStatus(new Dictionary<string, object>
-            {
-                { "path", app.Path ?? "" },
-                { "berjalan", true },
-                { "url", url },
-            });
-            return null;
+                t = _klien.KirimAsync("jalankan_node", new Dictionary<string, object>
+                {
+                    { "path", path },
+                    { "port_sekali", Math.Max(0, Math.Min(65535, portSekali)) },
+                }, TimeSpan.FromSeconds(60), j =>
+                {
+                    if (!j.Ok) return;
+                    _nodeJarak.TerapkanStatusBilaTetap(new Dictionary<string, object>
+                    {
+                        { "path", path },
+                        { "berjalan", true },
+                        { "url", j.Hasil as string },
+                    }, versi);
+                });
+                var jawab = t.GetAwaiter().GetResult();
+                return jawab.Ok ? null : jawab.PesanGalat();
+            }
+            catch (GalatDaemon g) { return g.Message; }
         }
 
         List<PortCheck.Usage> SisaProsesJarak()
@@ -422,6 +545,9 @@ namespace Phoron.Core
 
         void CatatSitusJarak(string path)
         {
+            // Daemon mencatatnya sendiri; daftar lokal yang sama tidak perlu
+            // ikut terkirim di Save berikutnya.
+            SamakanPotret("situs_terakhir");
             _klien.KirimAsync("catat_situs_dibuka", new Dictionary<string, object> { { "path", path } })
                   .ContinueWith(t => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
         }
@@ -451,16 +577,189 @@ namespace Phoron.Core
             if (h != null) h(b.Teks);
         }
 
-        void SimpanSetelanJarak(Settings s)
+        // ----------------------------------------------------------- Setelan
+
+        // Potret = bentuk JSON tiap medan setelan sebagaimana terakhir dimuat
+        // dari, atau terkirim ke, daemon. Save hanya mengirim medan yang
+        // berbeda dari potret (ubah_setelan), jadi salinan UI yang basi tidak
+        // menimpa perubahan dari menu baki atau klien lain.
+        readonly object _kunciPotret = new object();
+        Dictionary<string, string> _potret = new Dictionary<string, string>();
+        /// <summary>Ada perubahan setelan yang belum sampai ke daemon; dikirim lagi saat tersambung.</summary>
+        volatile bool _setelanTertunda;
+        /// <summary>Isi potret untuk medan yang pengirimannya gagal: tidak pernah sama dengan nilai mana pun.</summary>
+        const string BelumTerkirim = "\u0001belum-terkirim";
+
+        static Dictionary<string, string> JsonMedan(Settings s)
         {
-            MulaiAksi();
+            return SetelanJson.KeJson(s).ToDictionary(kv => kv.Key, kv => Protokol.Tulis(kv.Value));
+        }
+
+        void PotretSetelan()
+        {
+            var baru = JsonMedan(Settings);
+            lock (_kunciPotret) _potret = baru;
+        }
+
+        /// <summary>Samakan potret satu medan dengan nilai lokalnya (daemon sudah tahu nilai itu).</summary>
+        void SamakanPotret(string medan)
+        {
+            string json;
+            if (!JsonMedan(Settings).TryGetValue(medan, out json)) return;
+            lock (_kunciPotret) _potret[medan] = json;
+        }
+
+        /// <summary>
+        /// Settings.Save mode jarak: kirim HANYA medan yang berubah sejak potret
+        /// lewat ubah_setelan, tanpa menunggu jawabannya - utas layar tidak
+        /// boleh tertahan oleh pipe. Tidak pernah melempar. False bila jelas
+        /// tidak terkirim (pipe putus); perubahan lokal tetap berlaku dan
+        /// dikirim lagi saat tersambung. Kegagalan yang baru ketahuan sesudah
+        /// jawaban datang dicatat di log.
+        /// </summary>
+        bool SimpanSetelanJarak(Settings s)
+        {
+            Dictionary<string, object> perubahan;
+            Dictionary<string, string> terkirim;
             try
             {
-                _klien.Kirim("simpan_setelan", new Dictionary<string, object> { { "setelan", SetelanJson.KeJson(s) } },
-                             TimeSpan.FromSeconds(15)).Pastikan();
+                var nilai = SetelanJson.KeJson(s);
+                lock (_kunciPotret)
+                {
+                    perubahan = new Dictionary<string, object>();
+                    terkirim = new Dictionary<string, string>();
+                    foreach (var kv in nilai)
+                    {
+                        var json = Protokol.Tulis(kv.Value);
+                        string dulu;
+                        if (_potret.TryGetValue(kv.Key, out dulu) && dulu == json) continue;
+                        perubahan[kv.Key] = kv.Value;
+                        terkirim[kv.Key] = json;
+                    }
+                    if (perubahan.Count == 0) { _setelanTertunda = false; return true; }
+                    if (!_klien.Aktif)
+                    {
+                        _setelanTertunda = true;
+                        perubahan = null;
+                    }
+                    else
+                    {
+                        // Dianggap terkirim sekarang: Save kedua yang menyusul
+                        // sebelum jawaban datang hanya mengirim yang baru lagi.
+                        foreach (var kv in terkirim) _potret[kv.Key] = kv.Value;
+                    }
+                }
             }
-            catch (GalatDaemon g) { throw new IOException(g.Message, g); }
-            finally { SelesaiAksi(); }
+            catch (Exception ex)
+            {
+                Say(Lang.T("Setelan gagal dikirim ke daemon Phoron: {0}", ex.Message));
+                return false;
+            }
+
+            if (perubahan == null)
+            {
+                Say(Lang.T("Setelan belum tersimpan: tidak tersambung ke daemon Phoron. Perubahan dikirim lagi begitu tersambung."));
+                return false;
+            }
+
+            MulaiPenyebab();
+            Task<Jawaban> t;
+            try
+            {
+                t = _klien.KirimAsync("ubah_setelan", new Dictionary<string, object> { { "perubahan", perubahan } },
+                                      TimeSpan.FromSeconds(15));
+            }
+            catch (Exception ex) { t = Task.FromException<Jawaban>(ex); }
+            t.ContinueWith(x =>
+            {
+                string galat = null;
+                if (x.IsFaulted)
+                {
+                    var g = x.Exception.InnerException;
+                    galat = g != null ? g.Message : x.Exception.Message;
+                }
+                else if (x.IsCanceled) galat = Lang.T("Tidak tersambung ke daemon Phoron.");
+                else if (!x.Result.Ok) galat = x.Result.PesanGalat();
+
+                if (galat != null)
+                {
+                    lock (_kunciPotret)
+                    {
+                        // Hanya medan yang potretnya masih nilai kiriman ini:
+                        // yang sudah diubah lagi sesudahnya ikut kiriman baru.
+                        foreach (var kv in terkirim)
+                        {
+                            string kini;
+                            if (_potret.TryGetValue(kv.Key, out kini) && kini == kv.Value)
+                                _potret[kv.Key] = BelumTerkirim;
+                        }
+                    }
+                    _setelanTertunda = true;
+                    Say(Lang.T("Setelan gagal dikirim ke daemon Phoron: {0}", galat));
+                }
+                SelesaiPenyebab(galat == null);
+            }, TaskScheduler.Default);
+            return true;
         }
+
+        // ------------------------------------------------- Hak Administrator
+
+        /// <summary>
+        /// Minta daemon menjalankan ulang dirinya dengan hak Administrator
+        /// (dialog UAC muncul dari daemon). UI ini sendiri TIDAK dinaikkan
+        /// haknya: hosts dan sertifikat ditulis daemon. Daemon lama berpamitan
+        /// lalu keluar; pamit itu bukan alasan UI keluar - klien menyambung ke
+        /// daemon baru, lalu keadaannya disegarkan.
+        ///
+        /// Null bila berhasil; selain itu pesan untuk orang (mis. UAC dibatalkan).
+        /// </summary>
+        public async Task<string> MulaiUlangAdminAsync()
+        {
+            if (!ModeJarak) return Lang.T("Daemon Phoron belum berjalan sebagai Administrator.");
+            int sambungAwal = Volatile.Read(ref _jumlahSambung);
+            // Lama: dialog UAC menunggu orangnya menjawab.
+            _klien.HarapkanMulaiUlang(BatasJawabUac + BatasSambungAdmin);
+            Jawaban j = null;
+            try { j = await _klien.KirimAsync("mulai_ulang_admin", null, BatasJawabUac); }
+            catch (GalatDaemon g)
+            {
+                // Terputus bisa berarti daemon lama keluar tepat sesudah
+                // menjawab: tunggu daemon barunya. Galat lain berarti gagal.
+                if (g.Jenis != "terputus")
+                {
+                    _klien.BatalMulaiUlang();
+                    Say(g.Message);
+                    return g.Message;
+                }
+            }
+            if (j != null && !j.Ok)
+            {
+                _klien.BatalMulaiUlang();
+                var pesan = j.PesanGalat();
+                Say(pesan);
+                return pesan;
+            }
+
+            _klien.HarapkanMulaiUlang(BatasSambungAdmin);
+            var sampai = DateTime.UtcNow + BatasSambungAdmin;
+            while (DateTime.UtcNow < sampai)
+            {
+                if (Volatile.Read(ref _jumlahSambung) != sambungAwal && _klien.Aktif)
+                {
+                    await SegarkanKeadaanAsync();
+                    if (AdminDaemon) break;
+                }
+                await Task.Delay(200);
+            }
+            _klien.BatalMulaiUlang();
+            if (AdminDaemon) return null;
+            var belum = Lang.T("Daemon Phoron belum berjalan sebagai Administrator.");
+            Say(belum);
+            return belum;
+        }
+
+        static readonly TimeSpan BatasJawabUac = TimeSpan.FromMinutes(5);
+        /// <summary>Lama menunggu daemon ber-Administrator tersambung sesudah jawaban ok.</summary>
+        public TimeSpan BatasSambungAdmin = TimeSpan.FromSeconds(30);
     }
 }

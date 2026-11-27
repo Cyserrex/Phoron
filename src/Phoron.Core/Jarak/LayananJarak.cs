@@ -147,7 +147,10 @@ namespace Phoron.Core.Jarak
                             Queue<string> q;
                             _riwayat.TryGetValue(k, out q);
                             var baru = new Queue<string>(dulu);
-                            if (q != null) foreach (var b in q) baru.Enqueue(b);
+                            // Baris yang tiba sebagai kabar sebelum jawaban ini
+                            // bisa sudah ada di ekor riwayat daemon; bagian yang
+                            // tumpang tindih cukup sekali.
+                            if (q != null) foreach (var b in q.Skip(Tumpang(dulu, q.ToList()))) baru.Enqueue(b);
                             while (baru.Count > NodeRunner.BatasRiwayat) baru.Dequeue();
                             _riwayat[k] = baru;
                         }
@@ -160,6 +163,19 @@ namespace Phoron.Core.Jarak
                 Queue<string> q;
                 return _riwayat.TryGetValue(k, out q) ? new List<string>(q) : new List<string>();
             }
+        }
+
+        /// <summary>Panjang terpanjang ekor <paramref name="dulu"/> yang sama dengan awal <paramref name="kini"/>.</summary>
+        public static int Tumpang(IList<string> dulu, IList<string> kini)
+        {
+            for (int k = Math.Min(dulu.Count, kini.Count); k > 0; k--)
+            {
+                bool sama = true;
+                for (int i = 0; i < k && sama; i++)
+                    sama = string.Equals(dulu[dulu.Count - k + i], kini[i], StringComparison.Ordinal);
+                if (sama) return k;
+            }
+            return 0;
         }
 
         public void Sisipkan(string folder, string baris) { Tambah(folder, baris); }
@@ -181,12 +197,55 @@ namespace Phoron.Core.Jarak
             if (h != null) h(folder, baris);
         }
 
-        /// <summary>Kabar node_keluaran: {path, baris}.</summary>
+        /// <summary>
+        /// Kabar node_keluaran: {path, baris, pesan?}. Baris buatan Phoron
+        /// sendiri ("-- dihentikan --", galat keluar, HSTS) membawa pesan dan
+        /// ditampilkan dalam bahasa UI; baris dari prosesnya apa adanya.
+        /// </summary>
         public void TerapkanKeluaran(object data)
         {
             var d = Protokol.Objek(data);
             if (d == null) return;
-            Tambah(Protokol.Teks(d, "path"), Protokol.Teks(d, "baris") ?? "");
+            var p = Pesan.Dari(Protokol.Ambil(d, "pesan"));
+            var baris = p != null && !string.IsNullOrEmpty(p.Kunci) ? p.Teks() : Protokol.Teks(d, "baris") ?? "";
+            Tambah(Protokol.Teks(d, "path"), baris);
+        }
+
+        /// <summary>Banyaknya kabar node per proyek; dipakai jawaban jalankan_node yang menyusul.</summary>
+        readonly Dictionary<string, long> _versiKabar = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+        public long VersiKabar(string folder)
+        {
+            long v;
+            lock (_kunci) return _versiKabar.TryGetValue(Kunci(folder), out v) ? v : 0;
+        }
+
+        /// <summary>Kabar node dari daemon: status terbaru proyek itu.</summary>
+        public void TerapkanKabar(object data)
+        {
+            var folder = Protokol.Teks(Protokol.Objek(data), "path");
+            if (!string.IsNullOrEmpty(folder))
+            {
+                lock (_kunci)
+                {
+                    long v;
+                    _versiKabar.TryGetValue(Kunci(folder), out v);
+                    _versiKabar[Kunci(folder)] = v + 1;
+                }
+            }
+            TerapkanStatus(data);
+        }
+
+        /// <summary>
+        /// Terapkan status hanya bila belum ada kabar node untuk proyek itu
+        /// sejak <paramref name="versiAwal"/> diambil. Dipanggil di utas
+        /// pembaca, jadi pemeriksaan dan penerapannya urut dengan kabar.
+        /// </summary>
+        public void TerapkanStatusBilaTetap(object data, long versiAwal)
+        {
+            var folder = Protokol.Teks(Protokol.Objek(data), "path");
+            if (VersiKabar(folder) != versiAwal) return;
+            TerapkanStatus(data);
         }
 
         /// <summary>Kabar node atau satu StatusNode dari keadaan: {path, berjalan, url?, port_bentrok?}.</summary>

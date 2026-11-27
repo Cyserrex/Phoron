@@ -258,6 +258,10 @@ namespace Phoron.App
                 reason + "\n\n" + Phoron.Core.Lang.T("Jalankan ulang Phoron sebagai Administrator sekarang?"),
                 Phoron.Core.Lang.T("Perlu hak Administrator"), MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (jawab != MessageBoxResult.Yes) return false;
+            // Mode daemon: hosts dan sertifikat ditulis phorond, jadi DAEMON yang
+            // dijalankan ulang ber-Administrator. UI ini tetap jalan apa adanya.
+            var mesin = AppState.Engine;
+            if (mesin != null && mesin.ModeJarak) { NaikkanDaemon(mesin); return false; }
             try
             {
                 var psi = new ProcessStartInfo(Assembly.GetEntryAssembly().Location)
@@ -291,6 +295,25 @@ namespace Phoron.App
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Kirim mulai_ulang_admin, tunggu daemon barunya tersambung, lalu
+        /// segarkan halaman. Tidak menahan utas layar: dialog UAC milik daemon
+        /// bisa menunggu orangnya lama.
+        /// </summary>
+        static async void NaikkanDaemon(Phoron.Core.Engine mesin)
+        {
+            string galat;
+            try { galat = await mesin.MulaiUlangAdminAsync(); }
+            catch (Exception ex) { galat = ex.Message; }
+            AppState.RaiseChanged();
+            if (Pengendali.Ini != null) Pengendali.Ini.SegarkanStatus();
+            // UAC yang dibatalkan juga sampai di sini sebagai galat dari
+            // daemon; pesannya dari daemon, bukan tebakan UI.
+            if (galat != null)
+                MessageBox.Show(Phoron.Core.Lang.T("Gagal menaikkan hak akses: {0}", galat), "Phoron",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         static void AmbilMutexLagi()

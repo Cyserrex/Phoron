@@ -175,6 +175,13 @@ namespace Phoron.Tests
             return syarat();
         }
 
+        /// <summary>Syarat yang harus TETAP benar sesudah jeda singkat (sesuatu yang tidak boleh terjadi).</summary>
+        static bool SetelahJeda(Func<bool> syarat, int ms = 300)
+        {
+            Thread.Sleep(ms);
+            return syarat();
+        }
+
         /// <summary>
         /// UI sebagai klien phorond (tahap E): KlienDaemon dan Engine mode jarak
         /// diuji terhadap daemon tiruan.
@@ -210,6 +217,32 @@ namespace Phoron.Tests
                     iLain = beres.IndexOf("else"), iStop = beres.IndexOf("_engine.Services.StopAll()");
                 Ok("Mode daemon: membereskan UI tidak mematikan layanan",
                    iMode >= 0 && iMode < iLepas && iLepas < iLain && iLain < iStop);
+                // Event Phoron.KeluarSekarang milik daemon: satu-satunya tempat
+                // UI membuatnya adalah PasangSinyalKeluar, yang hanya dipanggil
+                // di mode lama. UI mode daemon ikut keluar lewat kabar pamit.
+                int sebut = System.Text.RegularExpressions.Regex.Matches(pg, "\"Phoron\\.KeluarSekarang\"").Count;
+                int panggil = System.Text.RegularExpressions.Regex.Matches(pg, @"PasangSinyalKeluar\(\);").Count;
+                Ok("Mode daemon: UI tidak membuat atau menunggu event Phoron.KeluarSekarang",
+                   sebut == 1 && panggil == 1 && Potong(pg, "void PasangSinyalKeluar()", "void PasangSinyalTampil()").Contains("\"Phoron.KeluarSekarang\""),
+                   "sebut " + sebut + ", panggil " + panggil);
+                Ok("Mode daemon: kabar pamit membuat UI keluar",
+                   pg.Contains("_engine.Pamit += () => d.BeginInvoke(new Action(KeluarUi));"));
+            }
+            foreach (var hal in new[] { "DashboardPage.xaml.cs", "SettingsPage.xaml.cs", "AboutPage.xaml.cs" })
+            {
+                var isi = BacaSumber("Phoron.App", "Pages", hal);
+                if (isi == null) continue;
+                Ok("Hak Administrator di " + hal + " dari Engine.HakAdmin, bukan proses UI",
+                   !isi.Contains("HostsFile.IsAdmin()") && isi.Contains("_e.HakAdmin"));
+            }
+            var prog = BacaSumber("Phoron.App", "Program.cs");
+            if (prog != null)
+            {
+                var restart = Potong(prog, "public static bool RestartAsAdmin", "\n        }\n");
+                int iJarak = restart.IndexOf("mesin.ModeJarak"), iRunas = restart.IndexOf("Verb = \"runas\"");
+                Ok("RestartAsAdmin mode daemon menaikkan daemon, bukan UI",
+                   iJarak >= 0 && iJarak < iRunas && restart.Contains("NaikkanDaemon(mesin); return false;")
+                   && Potong(prog, "static async void NaikkanDaemon", "\n        }\n").Contains("MulaiUlangAdminAsync()"));
             }
 
             // --------------------------------------------------- Setelan JSON
@@ -229,6 +262,11 @@ namespace Phoron.Tests
                kunciRust.All(json.ContainsKey) && json.Count == kunciRust.Length,
                string.Join(",", json.Keys));
             Ok("Nilai setelan terpetakan", (string)json["bahasa"] == "en" && (bool)json["auto_vhost"]);
+
+            Ok("Riwayat node: ekor daemon yang sama dengan kabar awal digabung sekali",
+               NodeJarak.Tumpang(new[] { "a", "b", "c" }, new[] { "b", "c", "d" }) == 2
+               && NodeJarak.Tumpang(new[] { "a" }, new[] { "b" }) == 0
+               && NodeJarak.Tumpang(new string[0], new[] { "b" }) == 0);
 
             var pesan = new Pesan("Menghentikan {0}", "httpd");
             Ok("Pesan diterjemahkan lewat Lang.T(kunci, args)", pesan.Teks() == "Menghentikan httpd", pesan.Teks());
@@ -341,10 +379,39 @@ namespace Phoron.Tests
                 string web = "Jalan", db = "Berhenti";
                 bool perluRestart = true;
                 object peringatanTerakhir = new object[] { new Pesan("Peringatan dari daemon").KeJson() };
+                bool admin = false, batalUac = false, tolakUbah = false, nodeMati = false;
+                int tundaNyalakan = 0, tundaGanti = 0;
+                object masalahDaemon = new object[0];
                 daemon.Jawab = (perintah, data) =>
                 {
                     switch (perintah)
                     {
+                        case "nyalakan_semua":
+                            if (tundaNyalakan > 0) Thread.Sleep(tundaNyalakan);
+                            return null;
+                        case "ganti_profil":
+                            if (tundaGanti > 0) Thread.Sleep(tundaGanti);
+                            return null;
+                        case "ubah_setelan":
+                            return tolakUbah
+                                ? DaemonPalsu.Galat(new Dictionary<string, object>
+                                  { { "jenis", "gagal" }, { "pesan", new Pesan("Setelan ditolak uji").KeJson() } })
+                                : null;
+                        case "mulai_ulang_admin":
+                            if (batalUac)
+                                return DaemonPalsu.Galat(new Dictionary<string, object>
+                                  { { "jenis", "gagal" }, { "pesan", new Pesan("Dibatalkan di dialog UAC.").KeJson() } });
+                            // Seperti phorond: jawab ok, pamit, keluar; penggantinya
+                            // ber-Administrator dan menerima sambungan baru.
+                            new Thread(() =>
+                            {
+                                Thread.Sleep(150);
+                                daemon.Kabar("pamit");
+                                Thread.Sleep(50);
+                                admin = true;
+                                daemon.PutuskanSemua();
+                            }) { IsBackground = true }.Start();
+                            return null;
                         case "keadaan":
                             return new Dictionary<string, object>
                             {
@@ -357,7 +424,8 @@ namespace Phoron.Tests
                                         { "perlu_restart_web", perluRestart },
                                         { "perlu_restart_db", false },
                                         { "peringatan_terapkan", peringatanTerakhir },
-                                        { "admin", false },
+                                        { "masalah_muat", masalahDaemon },
+                                        { "admin", admin },
                                     } },
                             };
                         case "riwayat_log":
@@ -381,6 +449,10 @@ namespace Phoron.Tests
                                 { "peringatan", new object[] { new Pesan("Peringatan uji {0}", "satu").KeJson() } },
                             };
                         case "jalankan_node":
+                            // Proses yang langsung mati: kabarnya mendahului jawaban.
+                            if (nodeMati)
+                                daemon.Kabar("node", new Dictionary<string, object>
+                                    { { "path", Protokol.Teks(data, "path") }, { "berjalan", false } });
                             return new Dictionary<string, object> { { "status", "ok" }, { "hasil", "http://localhost:5173" } };
                         case "sisa_proses":
                             return new Dictionary<string, object>
@@ -482,14 +554,43 @@ namespace Phoron.Tests
                    TungguSampai(() => Protokol.Teks(daemon.Terakhir("catat_situs_dibuka"), "path") == @"C:\www\toko"));
                 Ok("Situs terakhir langsung tampil di UI", e.Settings.SitusTerakhir.FirstOrDefault() == @"C:\www\toko");
 
-                // Settings.Save -> simpan_setelan, bukan berkas
+                // Settings.Save -> ubah_setelan berisi medan yang berubah saja.
+                // Profil aktif (ganti_profil) dan situs terakhir (catat_situs_dibuka)
+                // sudah diketahui daemon, jadi tidak ikut.
                 e.Settings.Bahasa = "en";
                 e.Settings.JendelaLebar = 1234;
-                e.Settings.Save();
-                var setelan = Protokol.Objek(Protokol.Ambil(daemon.Terakhir("simpan_setelan"), "setelan"));
-                Ok("Settings.Save mengirim simpan_setelan",
-                   setelan != null && Protokol.Teks(setelan, "bahasa") == "en" && Protokol.Angka(setelan, "jendela_lebar") == 1234);
+                var mulaiSimpan = DateTime.UtcNow;
+                bool tersimpan = e.Settings.Save();
+                var lamaSimpan = (DateTime.UtcNow - mulaiSimpan).TotalMilliseconds;
+                Ok("Settings.Save mengirim ubah_setelan", TungguSampai(() => daemon.Hitung("ubah_setelan") == 1));
+                var ubah = Protokol.Objek(Protokol.Ambil(daemon.Terakhir("ubah_setelan"), "perubahan"));
+                Ok("ubah_setelan hanya berisi medan yang berubah, dengan nama medan Rust",
+                   tersimpan && ubah != null && ubah.Count == 2 && Protokol.Teks(ubah, "bahasa") == "en"
+                   && Protokol.Angka(ubah, "jendela_lebar") == 1234,
+                   ubah != null ? string.Join(",", ubah.Keys) : "(kosong)");
+                Ok("Settings.Save tidak menunggu jawaban daemon", lamaSimpan < 500, lamaSimpan + " ms");
+                Ok("Settings.Save tidak lagi mengirim simpan_setelan utuh", daemon.Hitung("simpan_setelan") == 0);
+                bool tanpaUbah = e.Settings.Save();
+                Thread.Sleep(200);
+                Ok("Save tanpa perubahan tidak mengirim apa pun", tanpaUbah && daemon.Hitung("ubah_setelan") == 1);
                 Ok("Settings.Save tidak menulis phoron.ini sendiri", !File.Exists(Paths.SettingsFile));
+
+                // Ditolak daemon: tidak melempar, dicatat, dan medannya ikut lagi
+                // di Save berikutnya.
+                tolakUbah = true;
+                e.Settings.Tema = "gelap";
+                bool melempar = false;
+                try { e.Settings.Save(); } catch { melempar = true; }
+                Ok("Save yang ditolak daemon tidak melempar ke pemanggil", !melempar);
+                Ok("Penolakan simpan dicatat di log",
+                   TungguSampai(() => daemon.Diterima.Any(x => x.Key == "catat"
+                       && (Protokol.Teks(Protokol.Objek(Protokol.Ambil(x.Value, "pesan")), "kunci") ?? "").Contains("Setelan ditolak uji"))));
+                tolakUbah = false;
+                e.Settings.Save();
+                Ok("Medan yang gagal terkirim dikirim lagi di Save berikutnya",
+                   TungguSampai(() => daemon.Hitung("ubah_setelan") == 3)
+                   && Protokol.Teks(Protokol.Objek(Protokol.Ambil(daemon.Terakhir("ubah_setelan"), "perubahan")), "tema") == "gelap");
+                Ok("Perubahan lokal tetap berlaku", e.Settings.Tema == "gelap");
 
                 // Node
                 var app = new NodeApp { Path = @"C:\proyek\vite", Name = "vite", Script = "dev", Manager = "npm" };
@@ -517,23 +618,133 @@ namespace Phoron.Tests
                 Ok("Node.Stop dan StopAll jadi perintah",
                    TungguSampai(() => daemon.Hitung("hentikan_node") == 1 && daemon.Hitung("hentikan_semua_node") == 1));
 
-                // perlu_muat_ulang dari luar -> Reload + event
+                daemon.Kabar("node_keluaran", new Dictionary<string, object>
+                {
+                    { "path", app.Path }, { "baris", "-- dihentikan --" },
+                    { "pesan", new Pesan("Proyek {0} dihentikan uji.", "vite").KeJson() },
+                });
+                Ok("node_keluaran dengan pesan ditampilkan lewat Lang.T(kunci, args)",
+                   TungguSampai(() => keluaran == "Proyek vite dihentikan uji.")
+                   && e.Node.Riwayat(app.Path).Contains("Proyek vite dihentikan uji."), keluaran ?? "");
+
+                var mati = new NodeApp { Path = @"C:\proyek\mati", Name = "mati", Script = "dev", Manager = "npm" };
+                nodeMati = true;
+                var errMati = e.JalankanNode(mati, 0);
+                nodeMati = false;
+                Ok("Kabar node berhenti yang mendahului jawaban jalankan_node tidak tertimpa",
+                   errMati == null && !e.Node.IsRunning(mati.Path), errMati ?? "");
+
+                // masalah_muat dari daemon digabung dengan keluhan muat UI, tanpa dobel.
+                masalahDaemon = new object[]
+                {
+                    new Pesan("phoron.ini: baris {0} tidak terbaca", "3").KeJson(),
+                    new Pesan("Profil {0} dilewati uji", "rusak.ini").KeJson(),
+                };
+                e.MasalahMuat.Add("phoron.ini: baris 3 tidak terbaca");
+                daemon.Kabar("status", new Dictionary<string, object> { { "web", web }, { "db", db } });
+                Ok("masalah_muat dari Keadaan terbaca", TungguSampai(() => e.MasalahDaemon.Count == 2));
+                var periksa = e.Apply();
+                Ok("masalah_muat ikut ditampilkan, digabung tanpa dobel",
+                   periksa.Count(x => x == "phoron.ini: baris 3 tidak terbaca") == 1
+                   && periksa.Contains("Profil rusak.ini dilewati uji") && periksa.Contains("Peringatan uji satu"),
+                   string.Join(" | ", periksa));
+                masalahDaemon = new object[0];
+                e.MasalahMuat.Remove("phoron.ini: baris 3 tidak terbaca");
+
+                // ------------------------------------------- perlu_muat_ulang
                 int dariLuar = 0;
                 e.BerubahDariLuar += () => Interlocked.Increment(ref dariLuar);
-                e.Apply();   // aksi sendiri yang baru saja selesai
+                Thread.Sleep(2200);   // gema aksi-aksi di atas kedaluwarsa
+
+                // Gema aksi sendiri (ganti_profil) tidak memuat ulang.
+                e.SwitchAsync(aktif, false).Wait();
                 daemon.Kabar("perlu_muat_ulang");
                 Thread.Sleep(300);
-                Ok("perlu_muat_ulang sesaat sesudah aksi sendiri tidak memuat ulang", dariLuar == 0);
-                Thread.Sleep(1500);
-                File.WriteAllText(Paths.SettingsFile, "[umum]\r\nbahasa=jv\r\n");
-                daemon.Kabar("perlu_muat_ulang");
-                Ok("perlu_muat_ulang dari luar memuat ulang dan dikabarkan", TungguSampai(() => dariLuar == 1));
+                Ok("Gema perlu_muat_ulang dari aksi sendiri tidak memuat ulang", dariLuar == 0, "dimuat " + dariLuar);
+
+                // Kabar dari luar SELAMA aksi penyebab berjalan: ditahan, lalu
+                // dimuat begitu aksinya selesai - tidak dibuang.
+                Thread.Sleep(2200);
+                File.WriteAllText(Paths.SettingsFile, "[umum]\r\nbahasa=jv\r\nprofil_aktif=uji-jarak\r\n");
+                tundaGanti = 800;
+                var tg = e.SwitchAsync(aktif, false);
+                Thread.Sleep(250);
+                daemon.Kabar("perlu_muat_ulang");   // dari menu baki
+                Thread.Sleep(250);
+                bool ditahan = dariLuar == 0 && !tg.IsCompleted;
+                tg.Wait();
+                tundaGanti = 0;
+                daemon.Kabar("perlu_muat_ulang");   // gema ganti_profil
+                Ok("Kabar dari luar selama aksi penyebab ditahan", ditahan);
+                Ok("Kabar yang ditahan dimuat ulang sesudah aksinya selesai", TungguSampai(() => dariLuar == 1), "dimuat " + dariLuar);
                 Ok("Setelan dimuat ulang ke objek yang sama", e.Settings.Bahasa == "jv", e.Settings.Bahasa);
+                Thread.Sleep(300);
+                Ok("Kabar dari luar dan gema dimuat sekali saja", dariLuar == 1, "dimuat " + dariLuar);
+
+                // Aksi yang bukan penyebab (nyalakan_semua bisa sepuluh menit):
+                // kabarnya langsung dimuat, tidak menunggu aksinya.
+                Thread.Sleep(2200);
+                File.WriteAllText(Paths.SettingsFile, "[umum]\r\nbahasa=bjn\r\nprofil_aktif=uji-jarak\r\n");
+                tundaNyalakan = 1500;
+                var tn = e.StartAllAsync();
+                Thread.Sleep(200);
+                daemon.Kabar("perlu_muat_ulang");
+                Ok("perlu_muat_ulang selama aksi bukan penyebab langsung dimuat",
+                   TungguSampai(() => dariLuar == 2, 1000) && !tn.IsCompleted && e.Settings.Bahasa == "bjn",
+                   "dimuat " + dariLuar + ", selesai " + tn.IsCompleted);
+                tn.Wait();
+                tundaNyalakan = 0;
+                Ok("Potret setelan ikut dimuat ulang: Save sesudahnya tidak mengirim apa pun",
+                   e.Settings.Save() && SetelahJeda(() => daemon.Hitung("ubah_setelan") == 3));
+
+                // ---------------------------------------- Hak Administrator
+                Ok("HakAdmin mode jarak = hak daemon", !e.HakAdmin && !e.AdminDaemon);
+                batalUac = true;
+                var hasilBatal = e.MulaiUlangAdminAsync().Result;
+                batalUac = false;
+                Ok("UAC dibatalkan: pesannya dari galat daemon", hasilBatal == "Dibatalkan di dialog UAC." && !e.AdminDaemon,
+                   hasilBatal ?? "(null)");
+                bool ikutKeluar = false;
+                Action saatPamit = () => ikutKeluar = true;
+                e.Pamit += saatPamit;
+                int haloSebelum = daemon.Hitung("halo");
+                e.BatasSambungAdmin = TimeSpan.FromSeconds(10);
+                var hasilNaik = e.MulaiUlangAdminAsync().Result;
+                Ok("mulai_ulang_admin: daemon baru tersambung dan keadaannya disegarkan",
+                   hasilNaik == null && daemon.Hitung("mulai_ulang_admin") == 2 && e.AdminDaemon && e.HakAdmin
+                   && daemon.Hitung("halo") > haloSebelum && klien.Aktif, hasilNaik ?? "");
+                Ok("Pamit daemon lama saat mulai ulang admin tidak membuat UI keluar", !ikutKeluar);
+                e.Pamit -= saatPamit;
 
                 bool pamit = false;
                 e.Pamit += () => pamit = true;
                 daemon.Kabar("pamit");
                 Ok("Kabar pamit sampai ke Engine", TungguSampai(() => pamit));
+
+                // Save saat pipe putus: false, tidak melempar, tidak menahan
+                // utas pemanggil, dan perubahan lokalnya tetap.
+                using (var d2 = new DaemonPalsu())
+                using (var k2 = new KlienDaemon(d2.Nama))
+                {
+                    k2.Sambung();
+                    var e2 = new Engine(k2);
+                    try
+                    {
+                        d2.Dispose();
+                        Ok("Daemon uji kedua putus", TungguSampai(() => !k2.Aktif));
+                        e2.Settings.Tema = "terang";
+                        bool hasilPutus = true, lemparPutus = false;
+                        var t0 = DateTime.UtcNow;
+                        try { hasilPutus = e2.Settings.Save(); } catch { lemparPutus = true; }
+                        var ms = (DateTime.UtcNow - t0).TotalMilliseconds;
+                        Ok("Save saat pipe putus mengembalikan false tanpa melempar dan tanpa menahan",
+                           !hasilPutus && !lemparPutus && ms < 500, ms + " ms");
+                        Ok("Perubahan lokal tetap berlaku walau belum terkirim", e2.Settings.Tema == "terang");
+                        Ok("Kegagalan simpan dicatat di riwayat",
+                           e2.Riwayat().Any(b => b.Teks.Contains("Setelan belum tersimpan")));
+                    }
+                    finally { e2.Lepas(); }
+                }
 
                 // Mode lama tidak berubah.
                 var lama = new Engine();

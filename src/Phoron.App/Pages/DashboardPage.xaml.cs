@@ -355,7 +355,7 @@ namespace Phoron.App.Pages
             // dan kalimatnya harus mengatakan begitu - lalu menunjukkan bahwa
             // cukup sekali izin, tidak selamanya.
             var belumDaftar = BelumDaftar();
-            if (_e.Settings.ManageHosts && !HostsFile.IsAdmin() && belumDaftar.Count > 0)
+            if (_e.Settings.ManageHosts && !_e.HakAdmin && belumDaftar.Count > 0)
             {
                 pesan.Add(barisHosts = Lang.T("Phoron jalan tanpa hak Administrator - itu wajar, Windows selalu begitu untuk aplikasi yang menyala sendiri saat boot. Akibatnya {0} nama situs .test belum terdaftar di berkas hosts. Alamat http://localhost/proyek/ tetap jalan normal. Daftarkan sekali saja, sesudah itu tidak perlu Administrator lagi.",
                           belumDaftar.Count));
@@ -383,7 +383,7 @@ namespace Phoron.App.Pages
             TxtPeringatan.Text = string.Join(Environment.NewLine, tampil);
             PanelPeringatan.Visibility = tampil.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             BtnRestartKonfig.Visibility = terlihat(barisRestart) ? Visibility.Visible : Visibility.Collapsed;
-            BtnAdmin.Visibility = perluAdmin && !HostsFile.IsAdmin() && barisAdmin.Any(terlihat)
+            BtnAdmin.Visibility = perluAdmin && !_e.HakAdmin && barisAdmin.Any(terlihat)
                 ? Visibility.Visible : Visibility.Collapsed;
             BtnDaftarHosts.Visibility = (barisHosts != null ? terlihat(barisHosts) : belumDaftar.Count > 0)
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -462,7 +462,7 @@ namespace Phoron.App.Pages
         List<string> BelumDaftar()
         {
             if (_belumDaftar != null) return _belumDaftar;
-            if (!_e.Settings.ManageHosts || HostsFile.IsAdmin())
+            if (!_e.Settings.ManageHosts || _e.HakAdmin)
                 return _belumDaftar = new List<string>();
             try { _belumDaftar = HostsTool.BelumTerdaftar(); }
             catch { _belumDaftar = new List<string>(); }
