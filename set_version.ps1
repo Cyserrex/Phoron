@@ -38,6 +38,10 @@ $edits = @(
     @{ File = 'build_installer.bat'
        Pattern = '(set "VERSION=)\d+\.\d+\.\d+(")'
        Replace = "`${1}$Version`${2}" }
+    # Versi daemon Rust, dilaporkan phorond saat jabat tangan dengan UI.
+    @{ File = 'daemon\inti\src\lib.rs'
+       Pattern = '(pub const VERSI: &str = ")\d+\.\d+\.\d+(")'
+       Replace = "`${1}$Version`${2}" }
 )
 
 $utf8 = New-Object System.Text.UTF8Encoding($false)

@@ -61,7 +61,7 @@ namespace Phoron.App.Pages
             Baris("Windows", Environment.OSVersion.Version.ToString()
                              + (Environment.Is64BitOperatingSystem ? " (64-bit)" : " (32-bit)"));
             Baris(Lang.T("Status hak akses"),
-                  HostsFile.IsAdmin() ? "Administrator" : Lang.T("pengguna biasa"));
+                  _e.HakAdmin ? "Administrator" : Lang.T("pengguna biasa"));
         }
 
         static string Paket(BinPackage p)
@@ -121,7 +121,7 @@ namespace Phoron.App.Pages
             sb.AppendLine("Windows: " + Environment.OSVersion.Version
                           + (Environment.Is64BitOperatingSystem ? " (64-bit)" : " (32-bit)"));
             sb.AppendLine(".NET   : " + Environment.Version);
-            sb.AppendLine("Admin  : " + (HostsFile.IsAdmin() ? "ya" : "tidak"));
+            sb.AppendLine("Admin  : " + (_e.HakAdmin ? "ya" : "tidak"));
             try
             {
                 Clipboard.SetText(sb.ToString());

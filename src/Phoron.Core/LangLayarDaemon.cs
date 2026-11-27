@@ -1,0 +1,73 @@
+namespace Phoron.Core
+{
+    public static partial class Lang
+    {
+        /// <summary>Sambungan UI ke daemon phorond (Jarak\): { id, en, jv, bjn }.</summary>
+        static string[][] BarisDaemon()
+        {
+            return new[]
+            {
+                new[] { "Phoron tidak bisa tersambung ke daemonnya (phorond.exe).",
+                        "Phoron can't connect to its daemon (phorond.exe).",
+                        "Phoron ora bisa nyambung menyang daemone (phorond.exe).",
+                        "Phoron kada kawa basambung ka daemonnya (phorond.exe)." },
+                new[] { "phorond.exe tidak ditemukan di {0}.",
+                        "phorond.exe was not found in {0}.",
+                        "phorond.exe ora ketemu ing {0}.",
+                        "phorond.exe kada tadapat di {0}." },
+                new[] { "Daemon Phoron (phorond.exe) tidak menjawab.",
+                        "The Phoron daemon (phorond.exe) is not responding.",
+                        "Daemon Phoron (phorond.exe) ora mangsuli.",
+                        "Daemon Phoron (phorond.exe) kada manyahut." },
+                new[] { "Versi Phoron ({0}) dan daemonnya tidak sepadan (protokol {1} dan {2}). Phoron perlu dipasang ulang.",
+                        "This Phoron ({0}) and its daemon don't match (protocol {1} and {2}). Phoron needs to be reinstalled.",
+                        "Versi Phoron ({0}) lan daemone ora cocog (protokol {1} lan {2}). Phoron kudu dipasang maneh.",
+                        "Versi Phoron ({0}) wan daemonnya kada cocok (protokol {1} wan {2}). Phoron parlu dipasang pulang." },
+                new[] { "Versi Phoron dan daemonnya tidak sepadan. Phoron perlu dipasang ulang.",
+                        "Phoron and its daemon don't match. Phoron needs to be reinstalled.",
+                        "Versi Phoron lan daemone ora cocog. Phoron kudu dipasang maneh.",
+                        "Versi Phoron wan daemonnya kada cocok. Phoron parlu dipasang pulang." },
+                new[] { "Tidak tersambung ke daemon Phoron.",
+                        "Not connected to the Phoron daemon.",
+                        "Ora nyambung menyang daemon Phoron.",
+                        "Kada basambung ka daemon Phoron." },
+                new[] { "Sambungan ke daemon Phoron terputus.",
+                        "The connection to the Phoron daemon was lost.",
+                        "Sambungan menyang daemon Phoron pedhot.",
+                        "Sambungan ka daemon Phoron taputus." },
+                new[] { "Daemon Phoron tidak menjawab perintah {0} dalam {1} detik.",
+                        "The Phoron daemon did not answer {0} within {1} seconds.",
+                        "Daemon Phoron ora mangsuli prentah {0} sajrone {1} detik.",
+                        "Daemon Phoron kada manyahut parintah {0} dalam {1} detik." },
+                new[] { "Perintah {0} tidak boleh ditunggu dari utas pembaca pipe.",
+                        "Command {0} must not be awaited from the pipe reader thread.",
+                        "Prentah {0} ora kena dienteni saka utas pamaca pipe.",
+                        "Parintah {0} kada bulih ditunggu matan utas pambaca pipe." },
+                new[] { "Daemon Phoron menolak perintah ini.",
+                        "The Phoron daemon refused this command.",
+                        "Daemon Phoron nolak prentah iki.",
+                        "Daemon Phoron manulak parintah ini." },
+                new[] { "Daemon Phoron belum bisa menjalankan perintah {0}.",
+                        "The Phoron daemon can't run {0} yet.",
+                        "Daemon Phoron durung bisa nglakokake prentah {0}.",
+                        "Daemon Phoron balum kawa manjalanakan parintah {0}." },
+                new[] { "Setelan gagal dikirim ke daemon Phoron: {0}",
+                        "Settings could not be sent to the Phoron daemon: {0}",
+                        "Setelan gagal dikirim menyang daemon Phoron: {0}",
+                        "Setelan gagal dikirim ka daemon Phoron: {0}" },
+                new[] { "Setelan belum tersimpan: tidak tersambung ke daemon Phoron. Perubahan dikirim lagi begitu tersambung.",
+                        "Settings not saved yet: not connected to the Phoron daemon. The change will be sent once connected.",
+                        "Setelan durung kasimpen: ora nyambung menyang daemon Phoron. Owahane dikirim maneh yen wis nyambung.",
+                        "Setelan balum tasimpan: kada basambung ka daemon Phoron. Parubahannya dikirim pulang amun sudah basambung." },
+                new[] { "Daemon Phoron belum berjalan sebagai Administrator.",
+                        "The Phoron daemon is not running as Administrator yet.",
+                        "Daemon Phoron durung mlaku dadi Administrator.",
+                        "Daemon Phoron balum bajalan jadi Administrator." },
+                new[] { "Daemon Phoron tidak memahami perintah ini: {0}",
+                        "The Phoron daemon did not understand this command: {0}",
+                        "Daemon Phoron ora mudheng prentah iki: {0}",
+                        "Daemon Phoron kada paham parintah ini: {0}" },
+            };
+        }
+    }
+}

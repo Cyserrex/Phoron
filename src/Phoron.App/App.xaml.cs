@@ -149,6 +149,9 @@ namespace Phoron.App
             {
                 var e = AppState.Engine;
                 if (e == null) return;
+                // Mode daemon: layanan milik phorond, dan justru itulah intinya -
+                // UI yang galat tidak ikut mematikan Apache dan MySQL.
+                if (e.ModeJarak) return;
                 try { e.Services.StopAll(); } catch { }
                 try { e.Node.StopAll(); } catch { }
             }

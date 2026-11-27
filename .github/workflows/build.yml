@@ -43,6 +43,7 @@ jobs:
               'src/Phoron.Tests/Phoron.Tests.csproj' = "<Version>$version</Version>"
               'installer/setup.iss'                  = "#define MyAppVersion `"$version`""
               'build_installer.bat'                  = "set `"VERSION=$version`""
+              'daemon/inti/src/lib.rs'               = "pub const VERSI: &str = `"$version`";"
           }
           $bad = @()
           foreach ($file in $expected.Keys) {
@@ -71,6 +72,12 @@ jobs:
       # kombinasi versi yang benar-benar dipakai orang.
       - name: Jalankan tes
         run: dotnet run --project src/Phoron.Tests -c Release --nologo
+
+      # Daemon Rust (daemon/). Uji yang butuh Apache/PHP/MySQL sungguhan
+      # melewati diri sendiri di runner, sama seperti harness C#.
+      - name: Jalankan tes daemon Rust
+        working-directory: daemon
+        run: cargo test --release
 
   build:
     name: Bangun exe + installer
@@ -103,6 +110,7 @@ jobs:
           path: |
             dist/Phoron.exe
             dist/Phoron.exe.config
+            dist/phorond.exe
 
       - name: Unggah installer
         uses: actions/upload-artifact@v7
@@ -200,7 +208,7 @@ jobs:
         shell: pwsh
         run: |
           $baris = @()
-          foreach ($f in @(Get-ChildItem dist/Phoron.exe, installer/Output/*.exe)) {
+          foreach ($f in @(Get-ChildItem dist/Phoron.exe, dist/phorond.exe, installer/Output/*.exe)) {
               $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
               $baris += "$h  $($f.Name)"
           }
@@ -234,6 +242,7 @@ jobs:
           files: |
             dist/Phoron.exe
             dist/Phoron.exe.config
+            dist/phorond.exe
             installer/Output/*.exe
             installer/Output/SHA256SUMS.txt
           generate_release_notes: true

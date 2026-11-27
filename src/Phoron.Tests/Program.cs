@@ -28,6 +28,17 @@ namespace Phoron.Tests
                 return LiveTest.Jalankan();
             if (args.Length > 0 && args[0].Equals("ui", StringComparison.OrdinalIgnoreCase))
                 return UjiAsapUi.Jalankan();
+            if (args.Length > 1 && args[0].Equals("setara", StringComparison.OrdinalIgnoreCase))
+                return UjiSetara.Jalankan(args[1]);
+            // Bahan uji setara per fitur daemon Rust: kelas UjiSetara_<nama>
+            // dengan metode statis Jalankan(string folder). Lewat refleksi supaya
+            // fitur baru cukup menambah berkasnya sendiri, tanpa menyunting di sini.
+            if (args.Length > 2 && args[0].Equals("setara-modul", StringComparison.OrdinalIgnoreCase))
+            {
+                var t = typeof(Program).Assembly.GetType("Phoron.Tests.UjiSetara_" + args[1]);
+                if (t == null) { Console.WriteLine("tidak ada kelas UjiSetara_" + args[1]); return 2; }
+                return (int)t.GetMethod("Jalankan").Invoke(null, new object[] { args[2] });
+            }
 
             // Dipanggil oleh UjiObjekAntarProses: harness ini menjalankan dirinya
             // sendiri dengan hak Low, dan anak itu melapor lewat kode keluar.
@@ -75,6 +86,7 @@ namespace Phoron.Tests
                 UjiBeranda();
                 UjiHalamanSambutan();
                 UjiKonfigurasiApache();
+                UjiLogVendor();
                 UjiHosts();
                 UjiHostsAman();
                 UjiPortCheck();
@@ -137,6 +149,7 @@ namespace Phoron.Tests
                 UjiBerandaD(sandbox);
                 UjiSatuJendela();
                 UjiHostDanPort(sandbox);
+                UjiKlienDaemon();
             }
             catch (Exception ex)
             {

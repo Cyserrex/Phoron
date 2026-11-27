@@ -212,6 +212,11 @@ namespace Phoron.App
 
         public void RefreshStatus()
         {
+            // Penjaga utas: dalam mode daemon kabar datang dari utas pembaca
+            // pipe, dan satu jalur saja yang lupa pindah ke utas layar sudah
+            // cukup membuat Phoron mati saat dibuka. Dipindahkan di sini, di
+            // titik masuk, bukan di tiap pemanggil.
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshStatus)); return; }
             var web = _engine.Services.WebState;
             var db = _engine.Services.DbState;
             var webName = _engine.Active != null && _engine.Active.WebServer == "nginx" ? "Nginx" : "Apache";

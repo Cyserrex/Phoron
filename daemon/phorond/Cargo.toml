@@ -1,0 +1,25 @@
+[package]
+name = "phorond"
+description = "Daemon Phoron: pipe server, ikon baki, siklus hidup layanan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+phoron_inti = { path = "../inti" }
+serde = "1.0.229"
+serde_json = "1.0.154"
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_IO",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

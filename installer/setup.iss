@@ -21,7 +21,7 @@
 ; ============================================================================
 
 #define MyAppName "Phoron"
-#define MyAppVersion "1.41.3"
+#define MyAppVersion "1.42.0"
 #define MyAppExeName "Phoron.exe"
 #define MyAppPublisher "Phoron"
 
@@ -85,7 +85,7 @@ LanguageDetectionMethod=none
 ; itu, penutupannya dialihkan jadi "mengecil ke baki sistem", prosesnya
 ; dihentikan paksa, dan layanan tertinggal hidup sambil memegang port 80.
 CloseApplications=yes
-CloseApplicationsFilter=Phoron.exe
+CloseApplicationsFilter=Phoron.exe,phorond.exe
 RestartApplications=no
 
 [Languages]
@@ -127,6 +127,9 @@ Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; Tanpa itu, di komputer yang hanya punya 4.0-4.7 aplikasinya tetap mulai lalu
 ; gagal di tengah dengan galat yang tidak menjelaskan apa pun.
 Source: "..\dist\{#MyAppExeName}.config"; DestDir: "{app}"; Flags: ignoreversion
+; Daemon Rust: ikon baki dan layanan. Kehadirannya di samping Phoron.exe yang
+; membuat UI berjalan sebagai klien daemon (lihat daemon\PROTOKOL.md).
+Source: "..\dist\phorond.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 ; HeidiSQL - pengelola basis data grafis, program TERSENDIRI berlisensi GPL-2.0.
 ; Phoron menjalankannya sebagai proses lain dan tidak menautnya, jadi ini
@@ -170,7 +173,7 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; \
-    ValueName: "Phoron"; ValueData: """{app}\{#MyAppExeName}"" --tray"; \
+    ValueName: "Phoron"; ValueData: """{app}\phorond.exe"" --baki"; \
     Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
@@ -537,17 +540,32 @@ const
 function TungguPhoronBerakhir(detik: Integer): Boolean;
 var
   i: Integer;
+  h: LongWord;
 begin
   for i := 1 to detik * 4 do
   begin
-    if not CheckForMutexes('Phoron.SingleInstance') then
+    { Phoron.Daemon = phorond.exe (mode daemon); Phoron.SingleInstance = UI. }
+    if not CheckForMutexes('Phoron.SingleInstance,Phoron.Daemon') then
     begin
       Result := True;
       Exit;
     end;
+    { Event-nya AUTO-reset: satu SetEvent hanya membangunkan satu penunggu.
+      Dalam mode daemon hanya phorond yang menunggu, tapi Phoron lama (tanpa
+      daemon) yang kebetulan masih hidup juga menunggu - jadi sinyalnya
+      diulang tiap detik sampai semuanya keluar. }
+    if (i mod 4) = 0 then
+    begin
+      h := OpenEvent(EVENT_MODIFY_STATE, False, 'Phoron.KeluarSekarang');
+      if h <> 0 then
+      begin
+        SetEvent(h);
+        CloseHandle(h);
+      end;
+    end;
     Sleep(250);
   end;
-  Result := not CheckForMutexes('Phoron.SingleInstance');
+  Result := not CheckForMutexes('Phoron.SingleInstance,Phoron.Daemon');
 end;
 
 /// Tutup Phoron: minta baik-baik dulu, paksa kalau perlu.
@@ -578,6 +596,8 @@ begin
        memuat karakter TAB di tempat "\t" seharusnya berada, sehingga jalur
        yang dijalankan menunjuk berkas yang tidak pernah ada - dan jalur paksa
        ini diam-diam tidak berbuat apa-apa selama beberapa rilis. }
+  Exec(ExpandConstant('{sys}') + '\taskkill.exe', '/IM phorond.exe /T /F',
+       '', SW_HIDE, ewWaitUntilTerminated, kode);
   Exec(ExpandConstant('{sys}') + '\taskkill.exe', '/IM Phoron.exe /T /F',
        '', SW_HIDE, ewWaitUntilTerminated, kode);
   Result := TungguPhoronBerakhir(10);
@@ -683,7 +703,7 @@ var
 begin
   Result := '';
 
-  if CheckForMutexes('Phoron.SingleInstance') then
+  if CheckForMutexes('Phoron.SingleInstance,Phoron.Daemon') then
   begin
     port := PortPhoronTerpakai();
     if port = '' then
