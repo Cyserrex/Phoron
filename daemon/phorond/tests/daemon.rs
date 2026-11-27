@@ -574,7 +574,12 @@ fn periksa_sddl(s: &str, label: &str) {
         let medan: Vec<&str> = ace.trim_end_matches(')').split(';').collect();
         assert_eq!(medan[0], "A", "{s}");
         let sid = *medan.last().unwrap();
-        assert!(sid == "SY" || sid == "BA" || sid.starts_with("S-1-5-21-") || sid.starts_with("S-1-12-"), "SID tak terduga {sid}: {s}");
+        // "LA" = akun Administrator bawaan (RID 500) dalam singkatan SDDL;
+        // runner CI GitHub berjalan sebagai akun itu.
+        assert!(
+            sid == "SY" || sid == "BA" || sid == "LA" || sid.starts_with("S-1-5-21-") || sid.starts_with("S-1-12-"),
+            "SID tak terduga {sid}: {s}"
+        );
     }
     assert!(!dacl.contains(";WD)") && !dacl.contains(";AN)"), "{s}");
     assert!(sacl.contains(&format!("(ML;;NW;;;{label})")), "label bukan {label}: {s}");

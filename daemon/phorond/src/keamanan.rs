@@ -161,6 +161,35 @@ pub fn baca_sddl(h: HANDLE) -> Option<String> {
     }
 }
 
+#[cfg(test)]
+/// SID dalam bentuk penuh ("S-1-5-21-...-500") dari bentuk apa pun yang bisa
+/// muncul di SDDL, termasuk singkatan dua huruf. Windows menulis SID terkenal
+/// sebagai singkatan: akun Administrator bawaan (RID 500) menjadi "LA" - dan
+/// itulah akun yang dipakai runner CI GitHub.
+pub fn sid_penuh(s: &str) -> Option<String> {
+    use windows_sys::Win32::Security::Authorization::ConvertStringSidToSidW;
+    let w = lebar(s);
+    unsafe {
+        let mut psid: windows_sys::Win32::Security::PSID = std::ptr::null_mut();
+        if ConvertStringSidToSidW(w.as_ptr(), &mut psid) == 0 || psid.is_null() {
+            return None;
+        }
+        let mut teks: windows_sys::core::PWSTR = std::ptr::null_mut();
+        let ok = ConvertSidToStringSidW(psid, &mut teks) != 0 && !teks.is_null();
+        let hasil = if ok {
+            let n = (0..).take_while(|&i| *teks.add(i) != 0).count();
+            Some(String::from_utf16_lossy(std::slice::from_raw_parts(teks, n)))
+        } else {
+            None
+        };
+        if !teks.is_null() {
+            LocalFree(teks as _);
+        }
+        LocalFree(psid as _);
+        hasil
+    }
+}
+
 /// Periksa SDDL hasil baca: hanya pengguna/SYSTEM/Administrators yang
 /// diizinkan, tanpa Everyone/anonymous, dan labelnya sesuai. `Err` berisi
 /// alasannya. Dipakai uji unit dan uji integrasi (salinan di tests/).
@@ -183,7 +212,7 @@ pub fn periksa_sddl(s: &str, sid: &str, label: Label) -> Result<(), String> {
         }
         match pemilik {
             "SY" | "BA" => {}
-            p if p == sid => ada_pengguna = true,
+            p if p == sid || sid_penuh(p).as_deref() == Some(sid) => ada_pengguna = true,
             lain => return Err(format!("SID tak terduga {lain} di {s}")),
         }
     }
@@ -210,6 +239,18 @@ mod uji {
 
     fn nama(jenis: &str) -> Vec<u16> {
         lebar(&format!("Phoron.UjiKeamanan.{jenis}-{}", std::process::id()))
+    }
+
+    #[test]
+    fn singkatan_sid_dikenali() {
+        // Kasus runner CI: pengguna = Administrator bawaan, ditulis "LA".
+        let la = sid_penuh("LA").expect("LA harus dikenali");
+        assert!(la.starts_with("S-1-5-21-") && la.ends_with("-500"), "{la}");
+        let s = format!("D:P(A;;GA;;;LA)(A;;GA;;;SY)(A;;GA;;;BA)S:(ML;;NW;;;ME)");
+        periksa_sddl(&s, &la, Label::Sedang).unwrap();
+        // SID lengkap tetap dikenali seperti sebelumnya.
+        assert_eq!(sid_penuh("S-1-5-18").as_deref(), Some("S-1-5-18"));
+        assert_eq!(sid_penuh("bukan sid"), None);
     }
 
     #[test]
