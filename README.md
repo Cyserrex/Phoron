@@ -491,7 +491,10 @@ hosts file, and starts and stops Apache, Nginx, PHP, MySQL and Node projects.
 `\\.\pipe\phoron` (one JSON message per line, described in
 [`daemon/PROTOKOL.md`](daemon/PROTOKOL.md)). The window reads profiles and sites
 itself but sends every action to the daemon, and the daemon is the only writer of
-`phoron.ini`, so the two never overwrite each other's settings. Every file
+`phoron.ini`, so the two never overwrite each other's settings. The list of
+installed versions in `bin` also comes from the daemon, which
+has already scanned `bin`, so opening the window from the tray does not scan the
+disk a second time. Every file
 Phoron writes — `phoron.ini`, profiles, `apps.ini`, `httpd.conf`, `php.ini`,
 `my.ini`, virtual hosts, the hosts block — is byte-for-byte identical to what the
 C# version wrote, so you can move between 1.41 and 1.42 without losing anything.
@@ -575,7 +578,7 @@ Windows 10/11) and a Rust toolchain (`cargo`) for the daemon.
 ```
 build.bat              Release build -> dist\Phoron.exe (~3 MB) + dist\phorond.exe (~1.5 MB)
 build.bat run          Debug build, then run it
-build.bat test         C# test harness (945 tests)
+build.bat test         C# test harness (996 tests)
 build.bat live         end-to-end: starts real Apache & MySQL
 build.bat ui           UI smoke test: drives the real Phoron.exe through UI Automation
 build.bat clean
@@ -583,7 +586,7 @@ build_installer.bat    exe + installer (needs Inno Setup 6; downloads HeidiSQL)
 set_version.bat 1.2.0  bump the version in every file at once (daemon included)
 
 cd daemon
-cargo test                                       daemon tests (212), real Apache/MySQL/Node from Laragon if present
+cargo test                                       daemon tests (215), real Apache/MySQL/Node from Laragon if present
 powershell -File uji_setara.ps1                  C# and Rust must write identical files
 powershell -File uji_setara_modul.ps1 config     same, for one feature (config, hosts, proses)
 ```
