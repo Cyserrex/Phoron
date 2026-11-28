@@ -614,7 +614,7 @@ fn panik_di_start_berakhir_gagal() {
     for jenis in [ServiceKind::Web, ServiceKind::Db] {
         let l2 = l.clone();
         let hasil = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            l2.antre(jenis, |_| {
+            l2.antre(jenis, None, |_| {
                 l2.ubah(jenis, ServiceState::Menyalakan, None);
                 panic!("panik uji");
             })
@@ -631,7 +631,7 @@ fn panik_di_start_berakhir_gagal() {
         let (tx, rx) = mpsc::channel();
         let l3 = l.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(l3.antre(jenis, |_| Ok(true)));
+            let _ = tx.send(l3.antre(jenis, None, |_| Ok(true)));
         });
         assert_eq!(rx.recv_timeout(Duration::from_secs(5)), Ok(true), "start sesudah panik macet");
     }
@@ -647,7 +647,7 @@ fn start_basi_tidak_dipakai_ulang() {
     let (lepas_tx, lepas_rx) = mpsc::channel::<()>();
     let l1 = l.clone();
     let t1 = std::thread::spawn(move || {
-        l1.antre(ServiceKind::Web, |_| {
+        l1.antre(ServiceKind::Web, None, |_| {
             mulai_tx.send(()).unwrap();
             lepas_rx.recv().unwrap();
             Ok(false)
@@ -656,12 +656,12 @@ fn start_basi_tidak_dipakai_ulang() {
     mulai_rx.recv().unwrap();
     // Giliran sama: menunggu dan menerima hasil start pertama.
     let l2 = l.clone();
-    let t2 = std::thread::spawn(move || l2.antre(ServiceKind::Web, |_| Ok(true)));
+    let t2 = std::thread::spawn(move || l2.antre(ServiceKind::Web, None, |_| Ok(true)));
     std::thread::sleep(Duration::from_millis(100));
     // Sesudah stop: start baru menunggu yang lama berbenah, lalu jalan sendiri.
     l.naikkan_giliran(ServiceKind::Web);
     let l3 = l.clone();
-    let t3 = std::thread::spawn(move || l3.antre(ServiceKind::Web, |_| Ok(true)));
+    let t3 = std::thread::spawn(move || l3.antre(ServiceKind::Web, None, |_| Ok(true)));
     std::thread::sleep(Duration::from_millis(100));
     assert!(!t3.is_finished(), "start baru tidak menunggu start lama selesai berbenah");
     lepas_tx.send(()).unwrap();
