@@ -88,13 +88,22 @@ namespace Phoron.App
             // baki milik daemon; UI hanya hidup selama jendelanya terbuka.
             bool modeDaemon = Phoron.Core.Jarak.ModeDaemon.Aktif;
             Phoron.Core.Jarak.KlienDaemon klien = null;
-            if (modeDaemon)
+            // Sambung di utas latar, BERSAMAAN dengan WPF menyiapkan App dan
+            // kamus Wpf.Ui di bawah: keduanya tidak saling membutuhkan, dan dulu
+            // jendela menunggu jabat tangan pipe (sekitar 100 ms, termasuk JIT
+            // klien dan serializer JSON) sebelum WPF sempat mulai. Kotak pesan
+            // kegagalannya tetap ditampilkan di utas ini, lewat TungguDaemon.
+            var sambung = modeDaemon
+                ? System.Threading.Tasks.Task.Run(() => SambungDaemonLatar())
+                : null;
+            if (modeDaemon && keTray)
             {
-                klien = SambungDaemon();
-                if (klien == null) return KeluarGalat;
                 // Entri autostart lama (Phoron.exe --tray): cukup pastikan
                 // daemonnya hidup - ikon baki memang miliknya.
-                if (keTray) { klien.Dispose(); return 0; }
+                klien = TungguDaemon(sambung);
+                if (klien == null) return KeluarGalat;
+                klien.Dispose();
+                return 0;
             }
 
             var app = new App();
@@ -110,6 +119,11 @@ namespace Phoron.App
             // terbuka sama sekali, dan WPF akan menutup aplikasinya seketika.
             // Penutupan sekarang jadi urusan Pengendali yang memanggil Shutdown().
             app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            if (modeDaemon)
+            {
+                klien = TungguDaemon(sambung);
+                if (klien == null) return KeluarGalat;
+            }
             // Engine dibuat DI SINI, bukan sebagai penginisialisasi medan di
             // MainWindow. Penginisialisasi medan jalan sebelum badan konstruktor
             // mana pun, jadi tidak ada satu pun tempat yang bisa menangkapnya:
@@ -152,12 +166,11 @@ namespace Phoron.App
         }
 
         /// <summary>
-        /// Sambung ke phorond, menjalankannya bila belum hidup. Null (sesudah
-        /// kotak pesan) bila tidak bisa - UI tanpa daemon tidak punya apa pun
-        /// untuk dikendalikan, dan diam-diam memegang layanan sendiri justru
-        /// membuat dua pemilik Apache.
+        /// Sambung ke phorond, menjalankannya bila belum hidup. Dijalankan di
+        /// utas latar; kegagalan dilempar ke <see cref="TungguDaemon"/>, yang
+        /// menampilkannya di utas layar.
         /// </summary>
-        static Phoron.Core.Jarak.KlienDaemon SambungDaemon()
+        static Phoron.Core.Jarak.KlienDaemon SambungDaemonLatar()
         {
             var klien = new Phoron.Core.Jarak.KlienDaemon(Phoron.Core.Jarak.ModeDaemon.NamaPipe)
             {
@@ -169,9 +182,23 @@ namespace Phoron.App
                 klien.Sambung();
                 return klien;
             }
-            catch (Exception ex)
+            catch
             {
                 klien.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Hasil <see cref="SambungDaemonLatar"/>. Null (sesudah kotak pesan) bila
+        /// tidak bisa - UI tanpa daemon tidak punya apa pun untuk dikendalikan,
+        /// dan diam-diam memegang layanan sendiri justru membuat dua pemilik Apache.
+        /// </summary>
+        static Phoron.Core.Jarak.KlienDaemon TungguDaemon(System.Threading.Tasks.Task<Phoron.Core.Jarak.KlienDaemon> sambung)
+        {
+            try { return sambung.GetAwaiter().GetResult(); }
+            catch (Exception ex)
+            {
                 // Bahasa belum diterapkan di titik ini (setelan belum dimuat).
                 MessageBox.Show(
                     Phoron.Core.Lang.T("Phoron tidak bisa tersambung ke daemonnya (phorond.exe).")
