@@ -281,7 +281,9 @@ namespace Phoron.Core
         /// <summary>Pindai ulang versi dan muat profil. Aman dipanggil berkali-kali.</summary>
         public void Reload()
         {
-            Packages = BinScanner.ScanAll(Settings.BinRoots);
+            // Mode daemon: daftar milik daemon (lihat PaketDariDaemon); daemon
+            // lama yang belum mengenal "paket" membuat UI memindai sendiri.
+            Packages = (ModeJarak ? PaketDariDaemon() : null) ?? BinScanner.ScanAll(Settings.BinRoots);
             NodeAppsList = NodeAppStore.LoadAll();
             MasalahMuat.RemoveAll(x => x.StartsWith("Profil "));
             Profiles = ProfileStore.LoadAll(MasalahMuat);
@@ -293,6 +295,17 @@ namespace Phoron.Core
             Active = Profiles.FirstOrDefault(p => p.FileName == Settings.ActiveProfile)
                      ?? ProfilBawaan();
             RefreshSites();
+        }
+
+        /// <summary>
+        /// Pindai ulang folder bin dan situs: tombol Pindai ulang, dan sesudah
+        /// paket diunduh ke bin. Di mode daemon daemon yang memindai ulang -
+        /// Reload saja hanya meminta daftar yang sudah dipegangnya.
+        /// </summary>
+        public void PindaiUlang()
+        {
+            if (ModeJarak) PindaiUlangJarak();
+            else Reload();
         }
 
         /// <summary>
@@ -570,8 +583,11 @@ namespace Phoron.Core
 
                 if (restartIfRunning && (webWasRunning || dbWasRunning))
                 {
-                    if (dbWasRunning) await StartDbAsync();
-                    if (webWasRunning) await StartWebAsync();
+                    // Sesudah stop milik ganti profil sendiri: Stop dari
+                    // pengguna selagi MySQL menyala lagi membatalkan web juga.
+                    int gw = _svc.GiliranKini(ServiceKind.Web), gd = _svc.GiliranKini(ServiceKind.Db);
+                    if (dbWasRunning) await StartDbAsync(gd);
+                    if (webWasRunning) await StartWebAsync(gw);
                 }
                 return warnings;
             }
@@ -823,7 +839,11 @@ namespace Phoron.Core
 
         // -------------------------------------------------------------- Layanan
 
-        public Task<bool> StartWebAsync()
+        public Task<bool> StartWebAsync() { return StartWebAsync(null); }
+
+        /// <param name="awal">Giliran web saat aksi pengguna dimulai (lihat
+        /// ServiceManager.GiliranKini); Stop sesudahnya membatalkan start ini.</param>
+        Task<bool> StartWebAsync(int? awal)
         {
             if (ModeJarak) return NyalakanJarakAsync("nyalakan_web", ServiceKind.Web);
             if (Active == null) return Task.FromResult(false);
@@ -847,7 +867,7 @@ namespace Phoron.Core
             // yang bukan miliknya adalah kesalahan yang paling sulit dilacak.
             Apply();
             return CatatSaatNyala(ServiceKind.Web, ConfigWriter.VersiKonfigWeb,
-                                  _svc.StartWebAsync(Active, WebPackage, Php, LastBuild));
+                                  _svc.StartWebAsync(Active, WebPackage, Php, LastBuild, awal));
         }
 
         // Versi konfigurasi yang dibaca layanan saat ia terakhir menyala - lihat
@@ -892,7 +912,9 @@ namespace Phoron.Core
 
         public Task StopWebAsync() { return ModeJarak ? AksiJarakAsync("matikan_web", null, BatasLama) : _svc.StopWebAsync(); }
 
-        public Task<bool> StartDbAsync()
+        public Task<bool> StartDbAsync() { return StartDbAsync(null); }
+
+        Task<bool> StartDbAsync(int? awal)
         {
             if (ModeJarak) return NyalakanJarakAsync("nyalakan_db", ServiceKind.Db);
             if (Active == null) return Task.FromResult(false);
@@ -903,7 +925,7 @@ namespace Phoron.Core
             }
             Apply();   // lihat alasannya di StartWebAsync
             return CatatSaatNyala(ServiceKind.Db, ConfigWriter.VersiKonfigDb,
-                                  _svc.StartDbAsync(Active, MySql));
+                                  _svc.StartDbAsync(Active, MySql, awal));
         }
 
         public Task StopDbAsync() { return ModeJarak ? AksiJarakAsync("matikan_db", null, BatasLama) : _svc.StopDbGracefullyAsync(Active, MySql); }
@@ -911,8 +933,11 @@ namespace Phoron.Core
         public async Task StartAllAsync()
         {
             if (ModeJarak) { await AksiJarakAsync("nyalakan_semua", null, BatasLama); return; }
-            await StartDbAsync();
-            await StartWebAsync();
+            // Dipotret sebelum MySQL: "Matikan semua" selagi MySQL masih
+            // menyala dulu membatalkan MySQL lalu tetap menyalakan Apache.
+            int gw = _svc.GiliranKini(ServiceKind.Web), gd = _svc.GiliranKini(ServiceKind.Db);
+            await StartDbAsync(gd);
+            await StartWebAsync(gw);
         }
 
         public async Task StopAllAsync()

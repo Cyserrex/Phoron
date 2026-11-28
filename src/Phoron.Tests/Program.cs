@@ -639,6 +639,33 @@ namespace Phoron.Tests
             Ok("Selalu ada tepat satu yang menang",
                takAdaYangMenang == 0, takAdaYangMenang + " putaran tanpa pemenang");
 
+            Bagian("Stop membatalkan start yang belum sempat antre");
+            // "Nyalakan semua" lalu "Matikan semua" selagi MySQL masih menyala:
+            // giliran web dipotret di awal aksi, Stop menaikkannya, dan start
+            // web yang datang sesudah MySQL harus batal tanpa menyentuh apa pun.
+            // Paket web null sengaja: start yang SUNGGUH berjalan berakhir Gagal
+            // ("Profil belum menunjuk web server"), jadi Berhenti = dibatalkan.
+            {
+                var svc = new ServiceManager();
+                int awal = svc.GiliranKini(ServiceKind.Web);
+                svc.StopWebAsync().Wait();
+                bool hasilBasi = svc.StartWebAsync(new Profile(), null, null, null, awal).Result;
+                Ok("Start dengan giliran basi batal dan keadaannya tetap Berhenti",
+                   !hasilBasi && svc.WebState == ServiceState.Berhenti, svc.WebState.ToString());
+
+                int kini = svc.GiliranKini(ServiceKind.Web);
+                svc.StartWebAsync(new Profile(), null, null, null, kini).Wait();
+                Ok("Start dengan giliran terkini tetap dijalankan",
+                   svc.WebState == ServiceState.Gagal, svc.WebState.ToString());
+
+                var db = new ServiceManager();
+                int awalDb = db.GiliranKini(ServiceKind.Db);
+                db.StopDbGracefullyAsync(null, null).Wait();
+                Ok("Start MySQL dengan giliran basi juga batal",
+                   !db.StartDbAsync(new Profile(), null, awalDb).Result && db.DbState == ServiceState.Berhenti,
+                   db.DbState.ToString());
+            }
+
             // StopAll harus mengosongkan ketiganya, bukan sebagian.
             sm.PasangWeb(proses);
             sm.StopAll();

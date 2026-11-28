@@ -336,6 +336,7 @@ namespace Phoron.Tests
 
             UjiKlienDasar();
             UjiEngineJarak();
+            UjiPaketDariDaemon();
         }
 
         static void UjiKlienDasar()
@@ -397,6 +398,105 @@ namespace Phoron.Tests
                 d.PutuskanSemua();
                 Thread.Sleep(600);
                 Ok("Sesudah pamit tidak disambung ulang", d.Hitung("halo") == 2, "halo " + d.Hitung("halo"));
+            }
+        }
+
+        /// <summary>
+        /// Paket dari daemon: jendela mode daemon tidak memindai bin sendiri
+        /// (menjalankan php/httpd/mysqld XAMPP tiap dibuka = sekitar dua detik).
+        /// Bentuk JSON-nya persis serde BinPackage di daemon/inti/src/model.rs.
+        /// </summary>
+        static void UjiPaketDariDaemon()
+        {
+            Bagian("Paket dari daemon");
+            var dulu = Paths.Root;
+            var akar = Path.Combine(Path.GetTempPath(), "phoron-paket-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            var binKosong = Path.Combine(akar, "bin-kosong");
+            Directory.CreateDirectory(binKosong);
+            Paths.Root = akar;
+            var daemon = new DaemonPalsu();
+            var klien = new KlienDaemon(daemon.Nama);
+            Engine e = null;
+            try
+            {
+                bool daemonLama = false;
+                Func<string, string, string, bool, string, Dictionary<string, object>> paket =
+                    (kind, id, path, kembar, kunci) => new Dictionary<string, object>
+                    {
+                        { "kind", kind }, { "id", id }, { "path", path }, { "version", "10.1.38" },
+                        { "compiler", "" }, { "arch", "x86" }, { "thread_safe", false },
+                        { "main_exe", path + @"\bin\mysqld.exe" }, { "apache_module_dll", "" },
+                        { "source_root", @"D:\xampp" }, { "kunci", kunci }, { "kembar", kembar },
+                    };
+                daemon.Jawab = (perintah, data) =>
+                {
+                    switch (perintah)
+                    {
+                        case "keadaan":
+                            return new Dictionary<string, object>
+                            {
+                                { "status", "ok" },
+                                { "hasil", new Dictionary<string, object>
+                                    {
+                                        { "status", new Dictionary<string, object> { { "web", "Berhenti" }, { "db", "Berhenti" } } },
+                                        { "profil_aktif", "" }, { "node", new object[0] },
+                                        { "perlu_restart_web", false }, { "perlu_restart_db", false }, { "admin", false },
+                                    } },
+                            };
+                        case "paket":
+                            if (daemonLama)
+                                return DaemonPalsu.Galat(new Dictionary<string, object>
+                                    { { "jenis", "belum_ada" }, { "perintah", "paket" } });
+                            return new Dictionary<string, object>
+                            {
+                                { "status", "ok" },
+                                { "hasil", new object[]
+                                    {
+                                        paket("MySql", "mysql", @"D:\xampp\mysql", true, ""),
+                                        paket("MySql", "mysql", @"C:\xampp\mysql", true, "mysql@C-xampp"),
+                                    } },
+                            };
+                    }
+                    return null;
+                };
+                klien.Sambung();
+                e = new Engine(klien);
+                e.Settings.BinRoots = new List<string> { binKosong };
+
+                e.Reload();
+                Ok("Reload mode daemon memakai daftar paket daemon",
+                   e.Packages.Count == 2 && daemon.Hitung("paket") == 1, e.Packages.Count + " paket");
+                var kedua = e.Packages.Count == 2 ? e.Packages[1] : null;
+                Ok("Medan paket terurai: jenis, kunci kembar, jalur",
+                   kedua != null && kedua.Kind == BinKind.MySql && kedua.Kembar
+                   && kedua.Kunci == "mysql@C-xampp" && kedua.Path == @"C:\xampp\mysql" && kedua.Arch == "x86");
+                Ok("Kunci kosong dari daemon = Id, seperti di Rust",
+                   e.Packages.Count == 2 && e.Packages[0].Kunci == "mysql");
+
+                Ok("Hasil yang tidak terbaca ditolak utuh, bukan daftar bolong",
+                   Engine.UraiPaket(new object[] { new Dictionary<string, object> { { "kind", "Perl" }, { "id", "x" }, { "path", "y" } } }) == null
+                   && Engine.UraiPaket(null) == null);
+
+                int sebelum = daemon.Diterima.Count;
+                e.PindaiUlang();
+                var urutan = daemon.Diterima.Skip(sebelum).Select(x => x.Key)
+                                   .Where(x => x == "muat_ulang" || x == "paket").ToList();
+                Ok("Pindai ulang meminta daemon memindai dulu, baru meminta paketnya",
+                   urutan.SequenceEqual(new[] { "muat_ulang", "paket" }), string.Join(",", urutan));
+
+                daemonLama = true;
+                e.Reload();
+                Ok("Daemon lama (belum_ada): UI memindai bin sendiri seperti dulu",
+                   e.Packages.Count == 0, e.Packages.Count + " paket");
+            }
+            catch (Exception ex) { Ok("Paket dari daemon tanpa galat", false, ex.Message); }
+            finally
+            {
+                if (e != null) e.Lepas();
+                klien.Dispose();
+                daemon.Dispose();
+                Paths.Root = dulu;
+                try { Directory.Delete(akar, true); } catch { }
             }
         }
 

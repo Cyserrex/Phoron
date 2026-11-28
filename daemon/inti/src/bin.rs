@@ -58,10 +58,15 @@ fn nama_folder(p: &str) -> &str {
 }
 
 /// Subfolder langsung, dalam urutan yang diberikan Windows; galat = kosong.
+///
+/// `e.path().is_dir()`, bukan `e.file_type().is_dir()`: di Windows yang kedua
+/// bernilai false untuk junction (`mklink /J`) dan symlink folder, padahal
+/// `Directory.GetDirectories` di C# mengembalikannya. Paket PHP yang ditaruh
+/// lewat junction dulu hilang dari daftar dan profil jatuh ke versi lain.
 fn subfolder(dir: &str) -> Vec<String> {
     let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
     rd.filter_map(|e| e.ok())
-        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter(|e| e.path().is_dir())
         .map(|e| gabung(dir, &e.file_name().to_string_lossy()))
         .collect()
 }

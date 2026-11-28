@@ -75,7 +75,20 @@ fn daftar_situs(k: &config::Kolam) -> String {
 impl Layanan {
     /// Nyalakan web server profil. Start yang masih berjalan dipakai ulang.
     pub fn start_web(&self, profile: &Profile, web: Option<&BinPackage>, php: Option<&BinPackage>, cfg: &Hasil) -> bool {
-        self.antre(ServiceKind::Web, |g| self.mulai_web(profile, web, php, cfg, g))
+        self.start_web_sejak(profile, web, php, cfg, None)
+    }
+
+    /// `start_web` yang batal bila web server di-Stop sejak giliran `awal`
+    /// (dari `giliran_kini`) dipotret.
+    pub fn start_web_sejak(
+        &self,
+        profile: &Profile,
+        web: Option<&BinPackage>,
+        php: Option<&BinPackage>,
+        cfg: &Hasil,
+        awal: Option<u64>,
+    ) -> bool {
+        self.antre(ServiceKind::Web, awal, |g| self.mulai_web(profile, web, php, cfg, g))
     }
 
     fn mulai_web(

@@ -376,6 +376,29 @@ fn port_terpakai_disebut_pemegangnya() {
     drop(l0);
 }
 
+/// "Nyalakan semua" lalu "Matikan semua" selagi MySQL masih menyala: giliran
+/// dipotret di awal aksi, Stop menaikkannya, dan start yang datang sesudahnya
+/// batal tanpa menyentuh apa pun. Paket web None sengaja: start yang SUNGGUH
+/// berjalan berakhir dengan galat "Profil belum menunjuk web server".
+#[test]
+fn stop_membatalkan_start_yang_belum_antre() {
+    let (l, r) = rekam();
+    let awal = l.giliran_kini(ServiceKind::Web);
+    l.stop_web();
+    assert!(!l.start_web_sejak(&Profile::default(), None, None, &config::Hasil::default(), Some(awal)));
+    assert_eq!(l.web_state(), ServiceState::Berhenti);
+    assert!(l.status().galat_web.is_none());
+
+    let kini = l.giliran_kini(ServiceKind::Web);
+    assert!(!l.start_web_sejak(&Profile::default(), None, None, &config::Hasil::default(), Some(kini)));
+    assert_eq!(l.status().galat_web.unwrap().kunci, "Profil belum menunjuk web server.");
+
+    let awal_db = l.giliran_kini(ServiceKind::Db);
+    l.stop_db(None, None);
+    assert!(!l.start_db_sejak(&Profile::default(), None, Some(awal_db)));
+    assert!(!ada_log(&r, "Profil belum menunjuk versi MySQL."));
+}
+
 #[test]
 fn tanpa_paket_dan_stop_tanpa_proses() {
     let (l, r) = rekam();

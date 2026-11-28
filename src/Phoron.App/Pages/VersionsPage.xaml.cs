@@ -97,7 +97,10 @@ namespace Phoron.App.Pages
 
         void BtnPindai_Click(object sender, RoutedEventArgs e)
         {
-            _e.Reload();
+            // PindaiUlang, bukan Reload: di mode daemon Reload hanya meminta
+            // daftar yang sudah dipegang daemon - folder yang baru disalin ke
+            // bin tidak akan terlihat.
+            _e.PindaiUlang();
             AppState.RaiseChanged();
             IsiDaftar();
             _e.Say("Pindai ulang selesai: " + _e.Packages.Count + " paket ditemukan.");
@@ -217,7 +220,7 @@ namespace Phoron.App.Pages
                 if (err != null) { TxtStatus.Text = err; AppState.Warn(err); return; }
                 TxtStatus.Text = Lang.T("{0} terpasang.", pkg.Name);
                 _e.Say("Paket " + pkg.Name + " dipasang ke folder bin Phoron.");
-                _e.Reload();
+                _e.PindaiUlang();   // daemon belum tahu ada folder baru di bin
                 AppState.RaiseChanged();
                 IsiRoots();
                 IsiDaftar();

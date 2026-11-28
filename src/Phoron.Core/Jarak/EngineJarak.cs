@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -134,6 +135,82 @@ namespace Phoron.Core
             Tunggu(KirimKeadaanAsync());
             Tunggu(_klien.KirimAsync("riwayat_log", null, TimeSpan.FromSeconds(15),
                                      j => { if (j.Ok) TerapkanRiwayat(j.Hasil); }));
+        }
+
+        /// <summary>
+        /// Paket dari daemon (perintah <c>paket</c>), atau null bila daemon
+        /// tidak bisa menjawabnya: daemon 1.42.0-1.42.2 belum mengenalnya
+        /// (belum_ada), pipe putus, atau hasilnya tidak terbaca. Null berarti
+        /// pemanggil memindai sendiri seperti dulu.
+        ///
+        /// Kenapa tidak memindai sendiri saja: folder yang namanya tidak memuat
+        /// versi (XAMPP) harus diselidiki dengan menjalankan php/httpd/mysqld,
+        /// dan singgahan BinProbe hanya hidup selama proses ini. UI mode daemon
+        /// lahir baru tiap jendela dibuka, jadi itu terulang setiap kali - sekitar
+        /// dua detik dengan dua XAMPP. Singgahan daemon hidup terus.
+        /// </summary>
+        List<BinPackage> PaketDariDaemon()
+        {
+            if (_klien == null || !_klien.Aktif) return null;
+            try
+            {
+                // Kirim, bukan KirimAsync().Wait(): dipanggil dari utas pembaca
+                // pipe (kabar perlu_muat_ulang tanpa penjadwal UI) ia langsung
+                // gagal, alih-alih menunggu jawaban yang hanya bisa dibaca utas
+                // itu sendiri.
+                var j = _klien.Kirim("paket", null, TimeSpan.FromSeconds(15));
+                return j != null && j.Ok ? UraiPaket(j.Hasil) : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// Hasil <c>paket</c> (BinPackage Rust, nama medan snake_case) jadi
+        /// BinPackage C#. Null bila ada satu saja yang tidak terbaca - lebih baik
+        /// memindai sendiri daripada menampilkan daftar yang bolong.
+        /// </summary>
+        public static List<BinPackage> UraiPaket(object hasil)
+        {
+            if (!(hasil is IEnumerable) || hasil is string) return null;
+            var daftar = new List<BinPackage>();
+            foreach (var o in Protokol.Larik(hasil))
+            {
+                var d = Protokol.Objek(o);
+                BinKind jenis;
+                if (d == null || !Enum.TryParse(Protokol.Teks(d, "kind") ?? "", false, out jenis)) return null;
+                var id = Protokol.Teks(d, "id");
+                var path = Protokol.Teks(d, "path");
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(path)) return null;
+                daftar.Add(new BinPackage
+                {
+                    Kind = jenis,
+                    Id = id,
+                    Path = path,
+                    Version = Protokol.Teks(d, "version") ?? "",
+                    Compiler = Protokol.Teks(d, "compiler") ?? "",
+                    Arch = Protokol.Teks(d, "arch") ?? "",
+                    ThreadSafe = Protokol.Benar(d, "thread_safe"),
+                    MainExe = Protokol.Teks(d, "main_exe") ?? "",
+                    ApacheModuleDll = Protokol.Teks(d, "apache_module_dll") ?? "",
+                    SourceRoot = Protokol.Teks(d, "source_root") ?? "",
+                    // Kosong = sama dengan Id, aturan yang sama di kedua sisi.
+                    Kunci = Protokol.Teks(d, "kunci") ?? "",
+                    Kembar = Protokol.Benar(d, "kembar"),
+                });
+            }
+            return daftar;
+        }
+
+        /// <summary>
+        /// Minta daemon memindai ulang bin dan situs, lalu muat ulang di sini.
+        /// Dipakai tombol Pindai ulang dan sesudah paket diunduh ke bin:
+        /// pindaian daemon tidak berjalan sendiri saat isi folder bin berubah.
+        /// </summary>
+        void PindaiUlangJarak()
+        {
+            BerkasPenggunaBerubah();   // muat_ulang, ditandai sebagai penyebab
+            TungguMuatUlang();
+            Reload();
         }
 
         static void Tunggu(Task t)

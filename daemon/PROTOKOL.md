@@ -49,6 +49,7 @@ kunci `data`.
 | `halo` | `{versi_ui, protokol: 2}` | `{versi_daemon, protokol, akar}`; UI menolak bila `akar` bukan folder akarnya sendiri (kosong = daemon 1.42.0, diterima) |
 | `keadaan` | - | `Keadaan` |
 | `muat_ulang` | - | - (membaca ulang profil dan apps.ini, memindai ulang paket dan situs; phoron.ini TIDAK dibaca ulang - setelan di memori daemon sumber kebenaran) |
+| `paket` | - | `[BinPackage, ...]` hasil pindaian terakhir daemon (medan snake_case seperti `model.rs`; `kunci` kosong = sama dengan `id`). UI mode daemon memakainya alih-alih memindai bin sendiri: memindai berarti menjalankan php/httpd/mysqld untuk folder tanpa versi di namanya (XAMPP), dan singgahan versinya hanya hidup selama proses. Untuk daftar segar sesudah isi bin berubah, kirim `muat_ulang` dulu pada sambungan yang sama. Aditif sejak 1.42.3: daemon lama menjawab `belum_ada` dan UI memindai sendiri |
 | `simpan_setelan` | `{setelan: Settings}` | - (`active_profile` dan `situs_terakhir` di dalamnya diabaikan) |
 | `ubah_setelan` | `{perubahan: {medan: nilai, ...}}` hanya medan yang diubah | - (dipakai UI; mencegah menimpa perubahan dari menu baki). Menyebut `active_profile` = `gagal` "Profil aktif diganti lewat Ganti profil, bukan lewat setelan."; `situs_terakhir` juga ditolak (pakai `catat_situs_dibuka`) |
 | `mulai_ulang_admin` | - | - (daemon baru ber-Administrator; layanan hidup dinyalakan lagi; lihat Siklus hidup). UAC dibatalkan = `gagal` "Hak Administrator tidak diberikan." |

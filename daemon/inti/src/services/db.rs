@@ -89,7 +89,13 @@ pub fn minta_mysql_berhenti(pid: u32) -> bool {
 impl Layanan {
     /// Nyalakan MySQL profil. Start yang masih berjalan dipakai ulang.
     pub fn start_db(&self, profile: &Profile, mysql: Option<&BinPackage>) -> bool {
-        self.antre(ServiceKind::Db, |g| self.mulai_db(profile, mysql, g))
+        self.start_db_sejak(profile, mysql, None)
+    }
+
+    /// `start_db` yang batal bila MySQL di-Stop sejak giliran `awal` (dari
+    /// `giliran_kini`) dipotret.
+    pub fn start_db_sejak(&self, profile: &Profile, mysql: Option<&BinPackage>, awal: Option<u64>) -> bool {
+        self.antre(ServiceKind::Db, awal, |g| self.mulai_db(profile, mysql, g))
     }
 
     fn mulai_db(&self, profile: &Profile, mysql: Option<&BinPackage>, g: u64) -> Lanjut<bool> {

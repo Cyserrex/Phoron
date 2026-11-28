@@ -723,6 +723,7 @@ fn tangani_semua_perintah() {
     let semua = vec![
         Perintah::Keadaan,
         Perintah::MuatUlang,
+        Perintah::Paket,
         Perintah::SimpanSetelan { setelan: e.settings() },
         Perintah::Terapkan,
         Perintah::GantiProfil { file_name: "tidak-ada".into(), restart: false },
@@ -782,6 +783,14 @@ fn tangani_semua_perintah() {
         j => panic!("{j:?}"),
     }
     assert_eq!(e.settings().situs_terakhir, [r"D:\www\toko"]);
+    // paket: daftar yang sama dengan yang dipegang Engine, bisa diurai balik.
+    match tangani(&e, Perintah::Paket) {
+        IsiJawaban::Ok { hasil, .. } => {
+            let p: Vec<BinPackage> = serde_json::from_value(hasil).unwrap();
+            assert_eq!(p, e.packages());
+        }
+        j => panic!("{j:?}"),
+    }
     let _ = fs::remove_dir_all(&d);
 }
 

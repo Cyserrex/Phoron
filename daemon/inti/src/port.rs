@@ -154,8 +154,10 @@ fn nama_proses(pid: u32) -> String {
         }
         CloseHandle(snap);
         // Seperti Process.ProcessName: tanpa ".exe".
+        // get(i..), bukan [i..]: potongan di tengah karakter multibyte (nama
+        // exe beraksara non-Latin) membuat [i..] panik.
         match hasil.len().checked_sub(4) {
-            Some(i) if hasil[i..].eq_ignore_ascii_case(".exe") => hasil[..i].to_string(),
+            Some(i) if hasil.get(i..).is_some_and(|a| a.eq_ignore_ascii_case(".exe")) => hasil[..i].to_string(),
             _ => hasil,
         }
     }

@@ -160,12 +160,27 @@ namespace Phoron.Core
             else System.Threading.Interlocked.Increment(ref _giliranDb);
         }
 
-        Task<bool> Antre(ServiceKind jenis, Func<int, Task<bool>> kerja)
+        /// <summary>
+        /// Giliran sekarang, dipotret di awal aksi yang menyalakan lebih dari
+        /// satu hal (Nyalakan semua, ganti profil) lalu diberikan ke
+        /// StartWebAsync/StartDbAsync sebagai <c>awal</c>: Stop di antaranya
+        /// membatalkan start itu.
+        /// </summary>
+        public int GiliranKini(ServiceKind jenis) { return Giliran(jenis); }
+
+        /// <param name="awal">
+        /// Giliran saat aksi pengguna dimulai. Bila sudah berganti, ada Stop
+        /// sesudahnya dan start ini batal tanpa menyentuh apa pun. Dulu giliran
+        /// baru dibaca di sini, sesudah MySQL selesai: "Matikan semua" selagi
+        /// MySQL masih menyala membatalkan MySQL, lalu Apache tetap dinyalakan.
+        /// </param>
+        Task<bool> Antre(ServiceKind jenis, int? awal, Func<int, Task<bool>> kerja)
         {
             TaskCompletionSource<bool> tcs;
             int giliran;
             lock (_lock)
             {
+                if (awal.HasValue && awal.Value != Giliran(jenis)) return Task.FromResult(false);
                 var berjalan = jenis == ServiceKind.Web ? _mulaiWeb : _mulaiDb;
                 if (berjalan != null && !berjalan.IsCompleted) return berjalan;
                 tcs = new TaskCompletionSource<bool>();
@@ -201,9 +216,9 @@ namespace Phoron.Core
         // ------------------------------------------------------------- Web server
 
         public Task<bool> StartWebAsync(Profile profile, BinPackage web, BinPackage php,
-                                        ConfigWriter.Result cfg)
+                                        ConfigWriter.Result cfg, int? awal = null)
         {
-            return Antre(ServiceKind.Web, g => MulaiWebAsync(profile, web, php, cfg, g));
+            return Antre(ServiceKind.Web, awal, g => MulaiWebAsync(profile, web, php, cfg, g));
         }
 
         async Task<bool> MulaiWebAsync(Profile profile, BinPackage web, BinPackage php,
@@ -660,9 +675,9 @@ namespace Phoron.Core
         BinPackage _dbPaket;
         int _dbPort;
 
-        public Task<bool> StartDbAsync(Profile profile, BinPackage mysql)
+        public Task<bool> StartDbAsync(Profile profile, BinPackage mysql, int? awal = null)
         {
-            return Antre(ServiceKind.Db, g => MulaiDbAsync(profile, mysql, g));
+            return Antre(ServiceKind.Db, awal, g => MulaiDbAsync(profile, mysql, g));
         }
 
         async Task<bool> MulaiDbAsync(Profile profile, BinPackage mysql, int g)

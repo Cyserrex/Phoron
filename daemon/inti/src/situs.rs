@@ -110,7 +110,9 @@ pub fn scan(profile: Option<&Profile>, nama_di_hosts: &HashSet<String>, warnings
         let mut dirs: Vec<String> = match std::fs::read_dir(&root) {
             Ok(rd) => rd
                 .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                // Ikuti junction/symlink seperti C# (lihat bin::subfolder):
+                // proyek yang ditautkan ke folder lain tetap jadi situs.
+                .filter(|e| e.path().is_dir())
                 .map(|e| gabung(&root, &e.file_name().to_string_lossy()))
                 .collect(),
             Err(e) => {

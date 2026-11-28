@@ -230,8 +230,10 @@ fn jalankan(arg: Argumen) {
     }
     // Setelan "nyalakan layanan saat Phoron dibuka". Tidak dipakai bila daemon
     // ini pengganti ber-Administrator: daftar --nyalakan sudah menyebut persis
-    // apa yang tadi hidup.
-    if nyala_otomatis && arg.nyalakan.is_empty() {
+    // apa yang tadi hidup. Penandanya --tunggu-pid, bukan daftar yang kosong:
+    // daftar memang kosong bila tadi tidak ada yang hidup, dan dulu pengganti
+    // lalu menyalakan semua layanan yang sengaja dimatikan pengguna.
+    if nyala_otomatis && arg.nyalakan.is_empty() && arg.tunggu_pid.is_none() {
         let p = pelaksana.clone();
         let _ = std::thread::Builder::new().name("nyala-otomatis".into()).spawn(move || {
             if !siklus::gerbang_tertutup() {

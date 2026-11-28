@@ -72,6 +72,18 @@ pub enum Perintah {
     /// Baca ulang phoron.ini, profil, apps.ini, dan pindai ulang bin/situs
     /// (Engine.Reload). Dikirim UI sesudah menulis profil/apps.ini.
     MuatUlang,
+    /// Paket hasil pindaian terakhir daemon. Hasil: daftar `BinPackage`.
+    ///
+    /// Pengecualian dari "UI membaca berkas sendiri" di atas: memindai bin
+    /// berarti menjalankan php/httpd/mysqld untuk folder yang namanya tidak
+    /// memuat versi (XAMPP), dan singgahan versinya hanya hidup selama
+    /// prosesnya. Daemon hidup terus, UI tidak - di 1.42.0 setiap jendela
+    /// yang dibuka menghabiskan sekitar dua detik untuk itu. Sesudah perintah
+    /// lain pada sambungan yang sama (`muat_ulang`, `ubah_setelan`) hasilnya
+    /// sudah memuat pindaian barunya: perintah satu klien dijalankan berurutan.
+    /// Perintah aditif: protokol tetap v2, dan UI yang mendapat `BelumAda`
+    /// dari daemon lama memindai sendiri seperti dulu.
+    Paket,
     /// Simpan setelan global seutuhnya; daemon menulis phoron.ini lalu memuat
     /// ulang. UI sebaiknya memakai `UbahSetelan`: salinan utuh yang basi akan
     /// menimpa perubahan dari menu baki atau klien lain (lost update).

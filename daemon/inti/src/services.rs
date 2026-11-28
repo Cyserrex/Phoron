@@ -606,6 +606,14 @@ impl Layanan {
         self.giliran_ref(jenis).fetch_add(1, Ordering::SeqCst);
     }
 
+    /// Giliran sekarang, untuk dipotret di awal aksi yang menyalakan lebih
+    /// dari satu hal (Nyalakan semua, ganti profil) atau yang lebih dulu
+    /// menulis config. Diberikan lagi ke `start_web_sejak`/`start_db_sejak`:
+    /// Stop yang datang di antaranya membatalkan start itu.
+    pub fn giliran_kini(&self, jenis: ServiceKind) -> u64 {
+        self.giliran(jenis)
+    }
+
     /// Jalankan badan start, atau ikut menunggu start yang masih berjalan pada
     /// giliran yang sama. MENJAMIN keadaannya tidak tertinggal di Menyalakan
     /// bila badan start berakhir dengan galat tak terduga ATAU panik.
@@ -615,10 +623,19 @@ impl Layanan {
     /// menerima hasil `false` milik start yang dibatalkan dan tidak menyalakan
     /// apa pun. Start baru menunggu start lama selesai berbenah, lalu mulai
     /// sendiri.
-    fn antre(&self, jenis: ServiceKind, kerja: impl FnOnce(u64) -> Lanjut<bool>) -> bool {
+    ///
+    /// `awal`: giliran yang dipotret pemanggil di awal aksinya. Bila sudah
+    /// berubah, ada Stop sesudah aksi itu dimulai dan start ini batal tanpa
+    /// menyentuh apa pun. Dulu giliran baru dibaca di sini, SESUDAH Terapkan
+    /// dan sesudah MySQL selesai: "Matikan semua" selagi MySQL masih menyala
+    /// membatalkan MySQL, lalu Apache tetap dinyalakan sesudahnya.
+    fn antre(&self, jenis: ServiceKind, awal: Option<u64>, kerja: impl FnOnce(u64) -> Lanjut<bool>) -> bool {
         let (mulai, g) = loop {
             let mut d = self.data();
             let g = self.giliran(jenis);
+            if awal.is_some_and(|a| a != g) {
+                return false;
+            }
             let slot = match jenis {
                 ServiceKind::Web => &mut d.mulai_web,
                 ServiceKind::Db => &mut d.mulai_db,

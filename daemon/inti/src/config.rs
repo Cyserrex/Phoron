@@ -1234,7 +1234,8 @@ pub fn available_extensions(php: Option<&BinPackage>) -> Vec<String> {
     let Ok(rd) = fs::read_dir(gabung(&php.path, "ext")) else { return Vec::new() };
     let mut v: Vec<String> = Vec::new();
     for e in rd.flatten() {
-        if !e.file_type().is_ok_and(|t| t.is_file()) {
+        // path().is_file() mengikuti symlink, seperti Directory.GetFiles di C#.
+        if !e.path().is_file() {
             continue;
         }
         let nama = e.file_name().to_string_lossy().into_owned();

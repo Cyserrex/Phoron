@@ -30,7 +30,15 @@ use windows_sys::Win32::UI::Shell::{
 };
 
 /// Batas tunggu daemon baru atas daemon lama.
-pub const BATAS_TUNGGU_PID: Duration = Duration::from_secs(30);
+///
+/// Harus lebih lama dari penutupan daemon lama yang terburuk: `Engine::tutup`
+/// menunggu start/ganti profil yang berjalan sampai `BATAS_TUTUP` (60 dtk),
+/// lalu MySQL dimatikan rapi (mysqladmin 15 dtk + tunggu keluar 12 dtk). Dulu
+/// 30 dtk: restart admin yang ditekan selagi MySQL masih menyala membuat
+/// daemon baru menemukan mutex masih dipegang, lalu keluar diam-diam - tidak
+/// ada daemon sama sekali dan layanan yang tadi hidup tidak dinyalakan lagi.
+pub const BATAS_TUNGGU_PID: Duration =
+    Duration::from_secs(phoron_inti::engine::BATAS_TUTUP.as_secs() + 60);
 
 pub const PESAN_UAC_BATAL: &str = "Hak Administrator tidak diberikan.";
 pub const PESAN_RUNAS_GAGAL: &str = "Phoron tidak bisa dijalankan ulang sebagai Administrator (kode {0}).";

@@ -128,7 +128,7 @@
 //!   berkas profil TERKINI, bukan salinan memori (profiles\*.ini milik UI).
 
 use crate::config::{self, Hasil, Kolam, Opsi};
-use crate::model::{BinKind, BinPackage, Profile, ServiceState, Site, Versi};
+use crate::model::{BinKind, BinPackage, Profile, ServiceKind, ServiceState, Site, Versi};
 use crate::node_apps::{self, NodeApp};
 use crate::node_runner::{self, BarisNode, NodeRunner};
 use crate::port::{self, Usage};
@@ -1147,13 +1147,16 @@ impl Engine {
             w.push(galat_io("Setelan tidak bisa disimpan: {0}", &e));
         }
         if restart {
+            // Dipotret sesudah semua yang dimatikan ganti profil sendiri: Stop
+            // dari pengguna selagi MySQL menyala lagi membatalkan web juga.
+            let (gw, gd) = self.giliran_kini();
             if db_hidup {
-                if let Err(e) = self.nyalakan_db_inti() {
+                if let Err(e) = self.nyalakan_db_inti(Some(gd)) {
                     galat.get_or_insert(e);
                 }
             }
             if web_hidup {
-                if let Err(e) = self.nyalakan_web_inti() {
+                if let Err(e) = self.nyalakan_web_inti(Some(gw)) {
                     galat.get_or_insert(e);
                 }
             }
@@ -1190,11 +1193,22 @@ impl Engine {
     pub fn nyalakan_web(&self) -> Result<bool, Pesan> {
         self.gerbang()?;
         let _p = self.profil_baca();
-        self.nyalakan_web_inti()
+        let (gw, _) = self.giliran_kini();
+        self.nyalakan_web_inti(Some(gw))
     }
 
-    /// `nyalakan_web` tanpa kunci profil - pemanggil memegangnya.
-    fn nyalakan_web_inti(&self) -> Result<bool, Pesan> {
+    /// Giliran (web, MySQL) sekarang. Dipotret SESUDAH kunci profil didapat:
+    /// Start yang menunggu di belakang ganti profil tidak ikut batal karena
+    /// ganti profil itu mematikan layanan.
+    fn giliran_kini(&self) -> (u64, u64) {
+        let l = &self.inti.layanan;
+        (l.giliran_kini(ServiceKind::Web), l.giliran_kini(ServiceKind::Db))
+    }
+
+    /// `nyalakan_web` tanpa kunci profil - pemanggil memegangnya. `awal`:
+    /// giliran web saat aksi pengguna dimulai; Stop sesudahnya - selagi config
+    /// ditulis atau MySQL masih menyala - membatalkan start ini.
+    fn nyalakan_web_inti(&self, awal: Option<u64>) -> Result<bool, Pesan> {
         self.gerbang()?;
         let Some(a) = self.active() else { return Ok(false) };
         // Tidak memakai web server adalah pilihan, bukan kegagalan: tidak ada
@@ -1213,7 +1227,7 @@ impl Engine {
         let Some((a, hasil, _)) = self.terapkan_inti()? else { return Ok(false) };
         let pk = PaketProfil::dari(&self.baca().packages, &a);
         let versi = tulis::versi_konfig_web();
-        let ok = self.inti.layanan.start_web(&a, pk.web(&a), pk.php.as_ref(), &hasil);
+        let ok = self.inti.layanan.start_web_sejak(&a, pk.web(&a), pk.php.as_ref(), &hasil, awal);
         if ok && !sudah_jalan {
             self.inti.versi_web_nyala.store(versi, Ordering::SeqCst);
         }
@@ -1228,11 +1242,13 @@ impl Engine {
     pub fn nyalakan_db(&self) -> Result<bool, Pesan> {
         self.gerbang()?;
         let _p = self.profil_baca();
-        self.nyalakan_db_inti()
+        let (_, gd) = self.giliran_kini();
+        self.nyalakan_db_inti(Some(gd))
     }
 
-    /// `nyalakan_db` tanpa kunci profil - pemanggil memegangnya.
-    fn nyalakan_db_inti(&self) -> Result<bool, Pesan> {
+    /// `nyalakan_db` tanpa kunci profil - pemanggil memegangnya. `awal`
+    /// seperti pada `nyalakan_web_inti`.
+    fn nyalakan_db_inti(&self, awal: Option<u64>) -> Result<bool, Pesan> {
         self.gerbang()?;
         let Some(a) = self.active() else { return Ok(false) };
         if !a.pakai_mysql() {
@@ -1243,7 +1259,7 @@ impl Engine {
         let Some((a, _, _)) = self.terapkan_inti()? else { return Ok(false) };
         let pk = PaketProfil::dari(&self.baca().packages, &a);
         let versi = tulis::versi_konfig_db();
-        let ok = self.inti.layanan.start_db(&a, pk.mysql.as_ref());
+        let ok = self.inti.layanan.start_db_sejak(&a, pk.mysql.as_ref(), awal);
         if ok && !sudah_jalan {
             self.inti.versi_db_nyala.store(versi, Ordering::SeqCst);
         }
@@ -1261,8 +1277,12 @@ impl Engine {
         // Satu kunci untuk keduanya: kunci baca yang diambil dua kali di
         // utas yang sama bisa buntu bila ada ganti profil yang menunggu.
         let _p = self.profil_baca();
-        self.nyalakan_db_inti()?;
-        self.nyalakan_web_inti()?;
+        // Dipotret sebelum MySQL: "Matikan semua" selagi MySQL masih menyala
+        // (pemulihan InnoDB bisa lama) dulu membatalkan MySQL lalu tetap
+        // menyalakan Apache sesudahnya.
+        let (gw, gd) = self.giliran_kini();
+        self.nyalakan_db_inti(Some(gd))?;
+        self.nyalakan_web_inti(Some(gw))?;
         Ok(())
     }
 
@@ -1610,6 +1630,7 @@ pub fn tangani(e: &Engine, perintah: Perintah) -> IsiJawaban {
             e.muat_ulang();
             kosong()
         }
+        Perintah::Paket => ok(json(e.packages()), Vec::new()),
         Perintah::SimpanSetelan { setelan } => selesai(e.simpan_setelan(setelan)),
         Perintah::UbahSetelan { perubahan } => selesai(e.ubah_setelan(perubahan)),
         // Ditangani phorond sendiri (menjalankan ulang dirinya lewat UAC).
